@@ -10,11 +10,7 @@
     "dev:desktop": "node scripts/run-desktop.js",
     "dev:electron": "npm run dev:desktop",
     "ensure:env": "node scripts/setup-env.js",
-    "build": "node scripts/vercel-prepare-db.js && next build",
-    "build:desktop": "npm run build && electron-builder",
-    "package:mac": "npm run build && electron-builder --mac",
-    "package:win": "npm run build && electron-builder --win",
-    "package:linux": "npm run build && electron-builder --linux",
+    "build": "prisma generate && next build",
     "start": "next start",
     "start:prod": "node scripts/start-prod.js",
     "lint": "next lint",
@@ -37,7 +33,7 @@
     "framer-motion": "^11.11.17",
     "highlight.js": "^11.10.0",
     "lucide-react": "^0.460.0",
-    "next": "^15.5.9",
+    "next": "15.5.9",
     "nodemailer": "^10.0.0",
     "prisma": "^6.1.0",
     "react": "19.0.0",
@@ -57,8 +53,6 @@
     "@types/topojson-client": "^3.1.5",
     "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.20",
-    "electron": "^39.0.0",
-    "electron-builder": "^25.1.6",
     "eslint": "^9.17.0",
     "eslint-config-next": "15.1.0",
     "postcss": "^8.4.49",
@@ -81,59 +75,5 @@
     "low-code"
   ],
   "author": "Claudable Team",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yourusername/claudable.git"
-  },
-  "build": {
-    "appId": "com.claudable.desktop",
-    "productName": "Claudable",
-    "files": [
-      "index.js",
-      "electron/**/*",
-      ".next/standalone/**/*",
-      ".next/static/**/*",
-      "public/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": ".next/static",
-        "to": ".next/static"
-      },
-      {
-        "from": "public",
-        "to": "public"
-      }
-    ],
-    "asar": true,
-    "directories": {
-      "buildResources": "resources",
-      "output": "dist"
-    },
-    "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
-      "category": "public.app-category.developer-tools"
-    },
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        }
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage"
-      ],
-      "category": "Development"
-    }
-  }
+  "license": "MIT"
 }

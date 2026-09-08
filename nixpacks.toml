@@ -1,4 +1,5 @@
 [variables]
+NIXPACKS_NODE_VERSION = "20"
 CI = "1"
 SKIP_ENV_SETUP = "1"
 ELECTRON_SKIP_BINARY_DOWNLOAD = "1"
@@ -7,14 +8,11 @@ NPM_CONFIG_FUND = "false"
 NEXT_TELEMETRY_DISABLED = "1"
 DATABASE_URL = "file:./data/cc.db"
 
-[phases.setup]
-nixPkgs = ["nodejs_20", "openssl"]
-
 [phases.install]
 cmds = ["npm ci --ignore-scripts"]
 
 [phases.build]
-cmds = ["mkdir -p data", "npx prisma generate", "npx next build"]
+cmds = ["mkdir -p data", "npm run build"]
 
 [start]
-cmd = "node scripts/start-prod.js"
+cmd = "npm run start:prod"

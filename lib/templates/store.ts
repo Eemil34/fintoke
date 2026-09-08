@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { createBlankTemplate } from './blank';
-import { WEBSITE_TEMPLATES } from './catalog';
+import { WEBSITE_TEMPLATES, WEBSITE_TEMPLATES_BY_ID } from './catalog';
 import { hostnameFromUrl, parsePublicHttpUrl } from './cloneUrl';
 import {
   deleteProjectSnapshot,
@@ -380,8 +380,6 @@ export async function deleteManagedTemplate(id: string): Promise<{ reset: boolea
       await writeStore(store);
       return { reset: false };
     }
-
-    throw new Error('Template not found');
 
     throw new Error('Template not found');
   });

@@ -65,6 +65,10 @@ export interface MailSettings {
   resendApiKey: string;
 }
 
+export type MailSettingsPatch = Partial<Omit<MailSettings, 'smtp'>> & {
+  smtp?: Partial<MailSmtpSettings>;
+};
+
 export interface PublicMailSettings {
   configured: boolean;
   provider: MailProvider;

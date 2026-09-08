@@ -251,7 +251,7 @@ export default function ChatInput({
         fileInputRef.current.value = '';
       }
     }
-  }, [projectId, supportsImageUpload, preferredCli]);
+  }, [projectId]);
 
   useEffect(() => {
     adjustTextareaHeight();

@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import nodemailer from 'nodemailer';
-import type { MailProvider, MailSettings, MailSmtpSettings, PublicMailSettings } from '@/types/workspace';
+import type { MailProvider, MailSettings, MailSettingsPatch, MailSmtpSettings, PublicMailSettings } from '@/types/workspace';
 import { dataFile } from '@/lib/server/paths';
 
 const SETTINGS_PATH = dataFile('mail.json');
@@ -44,7 +44,7 @@ function asPort(value: unknown, fallback: number): number {
   return parsed;
 }
 
-function envSettings(): Partial<MailSettings> {
+function envSettings(): MailSettingsPatch {
   const host = clean(process.env.SMTP_HOST);
   const user = clean(process.env.SMTP_USER || process.env.SMTP_USERNAME);
   const password = clean(process.env.SMTP_PASS || process.env.SMTP_PASSWORD);
@@ -68,12 +68,12 @@ function envSettings(): Partial<MailSettings> {
     ...(fromName ? { fromName } : {}),
     ...(fromEmail ? { fromEmail } : {}),
     ...(replyTo ? { replyTo } : {}),
-    ...(smtpPatch ? { smtp: smtpPatch as MailSmtpSettings } : {}),
+    ...(smtpPatch ? { smtp: smtpPatch } : {}),
     ...(resendApiKey ? { resendApiKey } : {}),
   };
 }
 
-function mergeSettings(base: MailSettings, patch: Partial<MailSettings>): MailSettings {
+function mergeSettings(base: MailSettings, patch: MailSettingsPatch): MailSettings {
   return {
     provider: patch.provider === 'resend' || patch.provider === 'smtp' ? patch.provider : base.provider,
     fromName: patch.fromName !== undefined ? clean(patch.fromName) : base.fromName,
@@ -98,7 +98,7 @@ function mergeSettings(base: MailSettings, patch: Partial<MailSettings>): MailSe
 async function readStoredSettings(): Promise<MailSettings> {
   try {
     const raw = await fs.readFile(SETTINGS_PATH, 'utf8');
-    const parsed = JSON.parse(raw) as Partial<MailSettings>;
+    const parsed = JSON.parse(raw) as MailSettingsPatch;
     return mergeSettings(DEFAULT_SETTINGS, parsed);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -143,7 +143,7 @@ export async function getPublicMailSettings(): Promise<PublicMailSettings> {
   return toPublicMailSettings(await loadMailSettings());
 }
 
-export async function updateMailSettings(input: Partial<MailSettings>): Promise<PublicMailSettings> {
+export async function updateMailSettings(input: MailSettingsPatch): Promise<PublicMailSettings> {
   return enqueue(async () => {
     const current = await readStoredSettings();
     const smtpPatch = input.smtp

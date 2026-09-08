@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const next = searchParams.get('next') || '/studio';
+  const next = searchParams?.get('next') || '/studio';
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);

@@ -1,4 +1,5 @@
 import fs from 'fs/promises';
+import type { Dirent } from 'fs';
 import path from 'path';
 import {
   allLibraryPhotoIds,
@@ -488,9 +489,9 @@ const SOURCE_FILE = /\.(tsx|ts|jsx|js|mjs|cjs)$/;
 const SKIP_DIR = new Set(['node_modules', '.next', '.git', 'dist', 'build', '.turbo', '.vercel']);
 
 async function collectSourceFiles(dir: string, out: string[] = []): Promise<string[]> {
-  let entries: Awaited<ReturnType<typeof fs.readdir>> = [];
+  let entries: Dirent[] = [];
   try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
+    entries = await fs.readdir(dir, { encoding: 'utf8', withFileTypes: true });
   } catch {
     return out;
   }

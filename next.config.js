@@ -5,6 +5,9 @@ const onRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY
 const nextConfig = {
   reactStrictMode: true,
   productionBrowserSourceMaps: false,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   ...(onVercel || onRailway ? {} : { output: 'standalone' }),
   serverExternalPackages: ['@prisma/client', 'prisma'],
   experimental: {

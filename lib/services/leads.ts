@@ -82,11 +82,18 @@ function normalizeLead(raw: Partial<WorkspaceLead> & { id?: string }): Workspace
 async function readStore(): Promise<LeadStore> {
   try {
     const raw = await fs.readFile(STORE_PATH, 'utf8');
-    const parsed = JSON.parse(raw) as Partial<LeadStore> & WorkspaceLead[];
-    const rows = Array.isArray(parsed) ? parsed : parsed.leads;
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return {
+        openaiApiKey: '',
+        leads: parsed.map((row) => normalizeLead(row as Partial<WorkspaceLead>)),
+      };
+    }
+    const object = parsed && typeof parsed === 'object' ? (parsed as Partial<LeadStore>) : {};
+    const rows = Array.isArray(object.leads) ? object.leads : [];
     return {
-      openaiApiKey: Array.isArray(parsed) ? '' : clean(parsed.openaiApiKey),
-      leads: Array.isArray(rows) ? rows.map((row) => normalizeLead(row as Partial<WorkspaceLead>)) : [],
+      openaiApiKey: clean(object.openaiApiKey),
+      leads: rows.map((row) => normalizeLead(row as Partial<WorkspaceLead>)),
     };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
