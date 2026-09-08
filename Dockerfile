@@ -1,36 +1,27 @@
-# syntax=docker/dockerfile:1
-
-FROM node:20-bookworm-slim AS deps
+FROM node:20-bookworm AS deps
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates openssl \
-  && rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json ./
 ENV CI=1
 ENV SKIP_ENV_SETUP=1
+COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
-FROM node:20-bookworm-slim AS builder
+FROM node:20-bookworm AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates openssl \
-  && rm -rf /var/lib/apt/lists/*
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-ENV NEXT_TELEMETRY_DISABLED=1
-ENV DATABASE_URL=file:./data/cc.db
 ENV CI=1
 ENV SKIP_ENV_SETUP=1
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV DATABASE_URL=file:./data/cc.db
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 RUN mkdir -p data \
   && npx prisma generate \
   && npx next build
 
-FROM node:20-bookworm-slim AS runner
+FROM node:20-bookworm AS runner
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates python3 openssl \
-  && rm -rf /var/lib/apt/lists/* \
-  && npm install -g @anthropic-ai/claude-code \
-  && npm cache clean --force
-
 ENV NODE_ENV=production
+ENV CI=1
+ENV SKIP_ENV_SETUP=1
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
