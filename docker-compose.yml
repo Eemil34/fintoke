@@ -1,0 +1,20 @@
+services:
+  web:
+    build: .
+    ports:
+      - '3000:3000'
+    env_file:
+      - .env
+    environment:
+      PORT: '3000'
+      HOSTNAME: 0.0.0.0
+      DATABASE_URL: file:/app/data/cc.db
+      PROJECTS_DIR: /app/data/projects
+      SETTINGS_DIR: /app/data
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+    volumes:
+      - fintoke-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  fintoke-data:
