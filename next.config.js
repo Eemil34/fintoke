@@ -6,9 +6,6 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   ...(onVercel ? {} : { output: 'standalone' }),
   serverExternalPackages: ['@prisma/client', 'prisma'],
-  outputFileTracingIncludes: {
-    '/*': ['./prisma/vercel.db'],
-  },
   experimental: {
     optimizeCss: false,
     scrollRestoration: true,

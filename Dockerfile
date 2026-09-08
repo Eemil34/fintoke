@@ -2,19 +2,23 @@
 
 FROM node:20-bookworm-slim AS deps
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates openssl \
   && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
-RUN npm ci
+ENV CI=1
+ENV SKIP_ENV_SETUP=1
+RUN npm ci --ignore-scripts
 
 FROM node:20-bookworm-slim AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ git ca-certificates openssl \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DATABASE_URL=file:./data/cc.db
+ENV CI=1
+ENV SKIP_ENV_SETUP=1
 RUN mkdir -p data \
   && npx prisma generate \
   && npx next build

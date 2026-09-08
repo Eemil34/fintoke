@@ -177,8 +177,8 @@ async function findAvailablePort(rangeStart, rangeEnd, preferredPort) {
 }
 
 async function ensureEnvironment(options = {}) {
-  if (process.env.VERCEL) {
-    console.log('Skipping local environment bootstrap on Vercel.');
+  if (process.env.VERCEL || process.env.CI || process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
+    console.log('Skipping local environment bootstrap in CI.');
     return { port: Number(process.env.PORT) || 3000, url: process.env.NEXT_PUBLIC_APP_URL || '' };
   }
 

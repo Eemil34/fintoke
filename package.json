@@ -27,7 +27,7 @@
     "setup": "npm install && prisma generate && prisma db push",
     "check-cli": "node scripts/check-claude-cli.js",
     "mcp": "node scripts/claudable-mcp.js",
-    "postinstall": "npm run ensure:env"
+    "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.68",
