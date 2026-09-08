@@ -2,6 +2,7 @@ FROM node:20-bookworm AS deps
 WORKDIR /app
 ENV CI=1
 ENV SKIP_ENV_SETUP=1
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 

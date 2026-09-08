@@ -1,10 +1,11 @@
 const onVercel = Boolean(process.env.VERCEL);
+const onRailway = Boolean(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   productionBrowserSourceMaps: false,
-  ...(onVercel ? {} : { output: 'standalone' }),
+  ...(onVercel || onRailway ? {} : { output: 'standalone' }),
   serverExternalPackages: ['@prisma/client', 'prisma'],
   experimental: {
     optimizeCss: false,
