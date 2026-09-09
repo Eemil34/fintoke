@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 
+export const RELEASE = '2026-09-09-seed-first';
+
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
   let savedTemplates: string[] = [];
@@ -18,12 +20,20 @@ export async function GET() {
     savedTemplates = [];
   }
 
-  return NextResponse.json({
-    ok: true,
-    service: 'fintoke',
-    templatePack: 'saved-sites',
-    savedTemplates,
-  });
+  return NextResponse.json(
+    {
+      ok: true,
+      service: 'fintoke',
+      release: RELEASE,
+      templatePack: 'saved-sites',
+      savedTemplates,
+    },
+    {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+      },
+    },
+  );
 }
 
 export const runtime = 'nodejs';

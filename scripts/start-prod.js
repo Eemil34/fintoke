@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { spawn, spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -52,13 +52,3 @@ const child = spawn(
   }
 );
 child.on('exit', (code) => process.exit(code || 0));
-
-setTimeout(() => {
-  if (String(process.env.DATABASE_URL || '').startsWith('file:')) {
-    spawnSync(localBin('prisma'), ['db', 'push', '--skip-generate'], {
-      cwd: root,
-      stdio: 'inherit',
-      env: process.env,
-    });
-  }
-}, 4000);

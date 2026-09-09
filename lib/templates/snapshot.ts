@@ -34,8 +34,10 @@ export function seedSnapshotDir(templateId: string): string {
 }
 
 export async function resolveSnapshotDir(templateId: string): Promise<string | null> {
-  if (await directoryHasApp(snapshotDir(templateId))) return snapshotDir(templateId);
+  // Git seed files always win over the Railway volume. An earlier deploy may have
+  // copied a generated lookalike into /app/data/templates/snapshots.
   if (await directoryHasApp(seedSnapshotDir(templateId))) return seedSnapshotDir(templateId);
+  if (await directoryHasApp(snapshotDir(templateId))) return snapshotDir(templateId);
   return null;
 }
 

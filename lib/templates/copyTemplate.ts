@@ -3,7 +3,7 @@ import path from 'path';
 import { getManagedTemplate } from './store';
 import { materializeWebsiteTemplate } from './materialize';
 import { getWebsiteTemplateId } from './settings';
-import { copySnapshotToProject, snapshotHasApp } from './snapshot';
+import { copySnapshotToProject, resolveSnapshotDir, snapshotHasApp } from './snapshot';
 import { scaffoldBasicNextApp } from '@/lib/utils/scaffold';
 import { normalizeGeneratedProject } from './isolateNext';
 
@@ -18,6 +18,14 @@ async function readTemplateMark(projectPath: string): Promise<string | null> {
   }
 }
 
+async function readPageSource(dir: string): Promise<string | null> {
+  try {
+    return await fs.readFile(path.join(dir, 'app', 'page.tsx'), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
 export async function restoreSnapshotIfMaterialized(
   projectPath: string,
   projectId: string,
@@ -26,7 +34,19 @@ export async function restoreSnapshotIfMaterialized(
   const templateId = getWebsiteTemplateId(settingsJson);
   if (!templateId) return false;
   if (!(await snapshotHasApp(templateId))) return false;
-  if ((await readTemplateMark(projectPath)) === templateId) return false;
+
+  const materialized = await fs
+    .access(path.join(projectPath, 'lib', 'site.ts'))
+    .then(() => true)
+    .catch(() => false);
+  const snapshotDir = await resolveSnapshotDir(templateId);
+  const snapshotPage = snapshotDir ? await readPageSource(snapshotDir) : null;
+  const projectPage = await readPageSource(projectPath);
+  const seedComponent = snapshotPage?.match(/from ['"]\.\.\/components\/(\w+)['"]/)?.[1];
+  const hasSeedComponent = !seedComponent || Boolean(projectPage?.includes(seedComponent));
+  const alreadyRestored =
+    (await readTemplateMark(projectPath)) === templateId && !materialized && hasSeedComponent;
+  if (alreadyRestored) return false;
 
   const entries = await fs.readdir(projectPath).catch(() => [] as string[]);
   for (const name of entries) {
