@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --sift-lime: #d4ff45;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #000;
+  color: #fff;
+}
+
+::selection {
+  background: rgba(212, 255, 0, 0.35);
+  color: #000;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+.glow-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(80px);
+  pointer-events: none;
+}
+
+.nav-pill {
+  background: rgba(18, 18, 18, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 8px 24px -12px rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(16px);
+}
+
+.dashboard-chrome {
+  background: linear-gradient(180deg, #1c1c1c 0%, #121212 100%);
+  border: 1px solid #2e2e2e;
+}
+
+.how-panel {
+  background:
+    radial-gradient(ellipse 55% 55% at 18% 38%, rgba(45, 110, 60, 0.35), transparent 58%),
+    radial-gradient(ellipse 50% 50% at 82% 58%, rgba(25, 70, 45, 0.4), transparent 55%),
+    radial-gradient(ellipse 40% 35% at 50% 0%, rgba(212, 255, 69, 0.05), transparent 50%),
+    linear-gradient(165deg, #0c120f 0%, #080b09 50%, #0a0e0c 100%);
+}
