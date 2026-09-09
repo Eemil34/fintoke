@@ -41,20 +41,66 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-async function readStore(): Promise<TemplateFileStore> {
+function parseStore(raw: string): TemplateFileStore {
+  const parsed = JSON.parse(raw) as Partial<TemplateFileStore>;
+  const overrides =
+    parsed.overrides && typeof parsed.overrides === 'object' ? parsed.overrides : {};
+  const custom = Array.isArray(parsed.custom) ? parsed.custom : [];
+  const hidden = Array.isArray(parsed.hidden) ? parsed.hidden.map((id) => String(id)) : [];
+  return { overrides, custom, hidden };
+}
+
+async function readStoreFile(): Promise<TemplateFileStore> {
   try {
-    const raw = await fs.readFile(STORE_PATH, 'utf8');
-    const parsed = JSON.parse(raw) as Partial<TemplateFileStore>;
-    const overrides =
-      parsed.overrides && typeof parsed.overrides === 'object' ? parsed.overrides : {};
-    const custom = Array.isArray(parsed.custom) ? parsed.custom : [];
-    const hidden = Array.isArray(parsed.hidden) ? parsed.hidden.map((id) => String(id)) : [];
-    return { overrides, custom, hidden };
+    return parseStore(await fs.readFile(STORE_PATH, 'utf8'));
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT') return { overrides: {}, custom: [], hidden: [] };
     throw error;
   }
+}
+
+async function loadSeedStore(): Promise<TemplateFileStore | null> {
+  try {
+    return parseStore(await fs.readFile(path.join(process.cwd(), 'seed', 'templates.json'), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+async function copySeedSnapshots(): Promise<void> {
+  const from = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
+  const to = dataFile('templates', 'snapshots');
+  try {
+    await fs.access(from);
+    await fs.cp(from, to, { recursive: true });
+  } catch {
+    // Seed snapshots are optional until the deploy includes them.
+  }
+}
+
+async function readStore(): Promise<TemplateFileStore> {
+  const store = await readStoreFile();
+  const seed = await loadSeedStore();
+  if (!seed?.custom.length) return store;
+
+  const force = process.env.SYNC_TEMPLATES_FROM_SEED === '1';
+  const hasSeeded = seed.custom.some((template) =>
+    store.custom.some((row) => row.id === template.id),
+  );
+  if (!force && hasSeeded) return store;
+
+  const seedIds = new Set(seed.custom.map((template) => template.id));
+  const next: TemplateFileStore = force
+    ? { overrides: seed.overrides, custom: seed.custom, hidden: seed.hidden }
+    : {
+        overrides: { ...seed.overrides, ...store.overrides },
+        custom: [...seed.custom, ...store.custom.filter((template) => !seedIds.has(template.id))],
+        hidden: [...new Set([...seed.hidden, ...store.hidden])],
+      };
+  await copySeedSnapshots();
+  await writeStore(next);
+  return next;
 }
 
 async function writeStore(store: TemplateFileStore): Promise<void> {

@@ -32,7 +32,10 @@ function seedWebsiteTemplates() {
   if (!needsSeed) {
     try {
       const parsed = JSON.parse(fs.readFileSync(destJson, 'utf8'));
-      if (!Array.isArray(parsed.custom) || parsed.custom.length === 0) needsSeed = true;
+      const custom = Array.isArray(parsed.custom) ? parsed.custom : [];
+      const seed = JSON.parse(fs.readFileSync(seedJson, 'utf8'));
+      const seedIds = new Set((Array.isArray(seed.custom) ? seed.custom : []).map((row) => row.id));
+      needsSeed = !custom.some((row) => seedIds.has(row.id));
     } catch {
       needsSeed = true;
     }
