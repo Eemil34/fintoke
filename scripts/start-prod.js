@@ -71,6 +71,18 @@ if (!process.env.DATABASE_URL) {
 
 ensureCursorCli();
 
+if (process.env.DATABASE_URL.startsWith('file:')) {
+  console.log('Ensuring database schema…');
+  const result = spawnSync(localBin('prisma'), ['db', 'push', '--skip-generate'], {
+    cwd: root,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  if (result.status !== 0) {
+    console.error('prisma db push failed; chat/projects will not work until the database exists.');
+  }
+}
+
 const port = process.env.PORT || '3000';
 const child = spawn(
   localBin('next'),
@@ -82,15 +94,3 @@ const child = spawn(
   }
 );
 child.on('exit', (code) => process.exit(code || 0));
-
-setImmediate(() => {
-  if (!process.env.DATABASE_URL.startsWith('file:')) return;
-  const file = process.env.DATABASE_URL.replace(/^file:/, '');
-  if (fs.existsSync(file)) return;
-  console.log('Initializing database…');
-  spawnSync(localBin('prisma'), ['db', 'push', '--skip-generate'], {
-    cwd: root,
-    stdio: 'inherit',
-    env: process.env,
-  });
-});

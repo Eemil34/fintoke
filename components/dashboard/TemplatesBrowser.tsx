@@ -153,7 +153,7 @@ export default function TemplatesBrowser() {
                   Open
                 </Link>
                 <Link
-                  href={`/?template=${encodeURIComponent(template.id)}`}
+                  href={`/studio?template=${encodeURIComponent(template.id)}`}
                   className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Use

@@ -151,7 +151,7 @@ export default function TemplateWorkspace({ templateId }: { templateId: string }
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
-              href={`/?template=${encodeURIComponent(template.id)}`}
+                  href={`/studio?template=${encodeURIComponent(template.id)}`}
               className="rounded-xl bg-gray-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-gray-800"
             >
               Use template
@@ -252,7 +252,7 @@ export default function TemplateWorkspace({ templateId }: { templateId: string }
                 </dd>
               </div>
             ) : null}
-            {template.sourceProjectId ? (
+            {template.sourceProjectId && projects.some((project) => project.id === template.sourceProjectId) ? (
               <div className="flex gap-2">
                 <dt className="w-28 shrink-0 text-gray-400">Saved from</dt>
                 <dd>

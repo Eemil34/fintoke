@@ -266,6 +266,7 @@ export default function ChatPage() {
   const [hasInitialPrompt, setHasInitialPrompt] = useState<boolean>(false);
   const [agentWorkComplete, setAgentWorkComplete] = useState<boolean>(false);
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>('initializing');
+  const [projectMissing, setProjectMissing] = useState(false);
   const [initializationMessage, setInitializationMessage] = useState('Starting project initialization...');
   const [initialPromptSent, setInitialPromptSent] = useState(false);
   const initialPromptSentRef = useRef(false);
@@ -1479,15 +1480,15 @@ const persistProjectPreferences = useCallback(
     try {
       const r = await fetch(`${API_BASE}/api/projects/${projectId}`);
       if (!r.ok) {
-        setProjectName(`Project ${projectId.slice(0, 8)}`);
+        setProjectMissing(true);
+        setProjectName('Site not found');
         setProjectDescription('');
         setHasInitialPrompt(false);
-        localStorage.setItem(`project_${projectId}_hasInitialPrompt`, 'false');
-        setProjectStatus('active');
+        setProjectStatus('failed');
         setIsInitializing(false);
-        setUsingGlobalDefaults(true);
         return {};
       }
+      setProjectMissing(false);
 
       const payload = await r.json();
       const project = payload?.data ?? payload;
@@ -1753,6 +1754,10 @@ const persistProjectPreferences = useCallback(
   }
 
   async function runAct(messageOverride?: string, externalImages?: any[]) {
+    if (projectMissing) {
+      alert('This is not a saved site on this server. Open Studio and use the template to create a new site.');
+      return;
+    }
     let finalMessage = messageOverride || prompt;
     const imagesToUse = externalImages || uploadedImages;
 
@@ -2380,12 +2385,25 @@ const persistProjectPreferences = useCallback(
             
             {/* Simple input area */}
             <div className="p-4 rounded-bl-2xl">
+              {projectMissing ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  This URL is not a site on this server (the original laptop project was never copied).{' '}
+                  <button
+                    type="button"
+                    onClick={() => router.push('/studio')}
+                    className="font-medium underline"
+                  >
+                    Go to Studio
+                  </button>{' '}
+                  and start a new site from a template.
+                </div>
+              ) : null}
               <ChatInput
                 onSendMessage={(message, images) => {
                   // Pass images to runAct
                   runAct(message, images);
                 }}
-                disabled={isRunning}
+                disabled={isRunning || projectMissing}
                 placeholder={mode === 'act' ? "Ask Claudable..." : "Chat with Claudable..."}
                 mode={mode}
                 onModeChange={setMode}
