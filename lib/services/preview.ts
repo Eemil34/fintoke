@@ -11,7 +11,7 @@ import { ensureProjectApp } from '@/lib/templates/copyTemplate';
 import { normalizeGeneratedProject } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir } from '@/lib/server/paths';
-import { previewBasePath, previewIframeUrl, previewPublicUrl } from '@/lib/server/publicUrl';
+import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
