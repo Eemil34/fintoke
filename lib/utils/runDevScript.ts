@@ -100,6 +100,7 @@ function resolvePort(preferredPort) {
       shell: isWindows,
       env: {
         ...process.env,
+        NODE_ENV: 'development',
         PORT: String(port),
         WEB_PORT: String(port),
         NEXT_PUBLIC_APP_URL: url,

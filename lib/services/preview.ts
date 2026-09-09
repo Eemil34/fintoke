@@ -763,6 +763,7 @@ class PreviewManager {
     const iframeUrl = previewIframeUrl(projectId, preferredPort);
     const env: NodeJS.ProcessEnv = {
       ...process.env,
+      NODE_ENV: 'development',
       PORT: String(preferredPort),
       WEB_PORT: String(preferredPort),
       NEXT_PUBLIC_APP_URL: previewPublicUrl(projectId, preferredPort),
