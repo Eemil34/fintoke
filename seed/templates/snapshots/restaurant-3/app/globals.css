@@ -83,7 +83,7 @@ body {
 }
 
 .reveal {
-  opacity: 0;
+  opacity: 1;
   transform: translateY(36px);
   transition:
     opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),

@@ -77,7 +77,7 @@ body::before {
 
 /* Scroll reveal system */
 .reveal {
-  opacity: 0;
+  opacity: 1;
   transition:
     opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
     transform 0.85s cubic-bezier(0.22, 1, 0.36, 1),

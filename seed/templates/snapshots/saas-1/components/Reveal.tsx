@@ -32,7 +32,7 @@ export function Reveal({ children, className = '', delay }: RevealProps) {
   const delayClass = delay ? `reveal-delay-${delay}` : '';
 
   return (
-    <div ref={ref} className={`reveal ${delayClass} ${className}`.trim()}>
+    <div ref={ref} className={`reveal is-visible ${delayClass} ${className}`.trim()}>
       {children}
     </div>
   );

@@ -8,7 +8,7 @@ import fs from 'fs/promises';
 import { findAvailablePort } from '@/lib/utils/ports';
 import { getProjectById, updateProject, updateProjectStatus } from './project';
 import { ensureProjectApp, restoreSnapshotIfMaterialized } from '@/lib/templates/copyTemplate';
-import { ensureGeneratedDevScript, ensureIsolatedNextConfig, writePreviewNextConfig } from '@/lib/templates/isolateNext';
+import { clearNextCache, ensureGeneratedDevScript, ensureIsolatedNextConfig, ensureRevealVisible, writePreviewNextConfig } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir } from '@/lib/server/paths';
 import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
@@ -851,6 +851,10 @@ class PreviewManager {
     }
     await ensureIsolatedNextConfig(projectPath);
     await ensureGeneratedDevScript(projectPath);
+    const revealChanged = await ensureRevealVisible(projectPath);
+    if (revealChanged) {
+      await clearNextCache(projectPath);
+    }
     queueLog('Installing dependencies if needed...');
     flushPendingLogs();
 

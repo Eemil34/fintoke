@@ -126,6 +126,47 @@ export async function ensureGeneratedDevScript(projectPath: string): Promise<voi
   await fs.writeFile(scriptPath, RUN_DEV_SCRIPT);
 }
 
+export async function ensureRevealVisible(projectPath: string): Promise<boolean> {
+  let changed = false;
+  const walk = async (dir: string) => {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name === 'node_modules' || entry.name === '.next') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (entry.name.endsWith('.css')) {
+        const raw = await fs.readFile(full, 'utf8');
+        const next = raw.replace(/(\.reveal\s*\{[^}]*?)opacity\s*:\s*0/g, '$1opacity: 1');
+        if (next !== raw) {
+          await fs.writeFile(full, next);
+          changed = true;
+        }
+      }
+      if (entry.name === 'Reveal.tsx' || entry.name === 'Reveal.jsx') {
+        const raw = await fs.readFile(full, 'utf8');
+        const next = raw
+          .replace('useState(false)', 'useState(true)')
+          .replace('className={`reveal ${delayClass}', 'className={`reveal is-visible ${delayClass}');
+        if (next !== raw) {
+          await fs.writeFile(full, next);
+          changed = true;
+        }
+      }
+    }
+  };
+  await walk(projectPath);
+  return changed;
+}
+
 export async function clearNextCache(projectPath: string): Promise<void> {
   await fs.rm(path.join(projectPath, '.next'), { recursive: true, force: true });
 }
@@ -133,6 +174,7 @@ export async function clearNextCache(projectPath: string): Promise<void> {
 export async function normalizeGeneratedProject(projectPath: string): Promise<boolean> {
   const configChanged = await ensureIsolatedNextConfig(projectPath);
   await ensureGeneratedDevScript(projectPath);
+  const revealChanged = await ensureRevealVisible(projectPath);
   const images = await ensureSiteImages(projectPath);
   try {
     await retargetMismatchedRemoteImages(projectPath);
@@ -142,5 +184,5 @@ export async function normalizeGeneratedProject(projectPath: string): Promise<bo
   void repairBrokenRemoteImages(projectPath).catch((error) => {
     console.warn('[Preview] Failed to repair remote photos:', error);
   });
-  return configChanged || images.needsPreviewRestart;
+  return configChanged || revealChanged || images.needsPreviewRestart;
 }

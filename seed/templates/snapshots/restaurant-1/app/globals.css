@@ -390,7 +390,7 @@ select {
 }
 
 .reveal {
-  opacity: 0;
+  opacity: 1;
   transform: translateY(22px);
   transition: opacity 0.75s ease, transform 0.75s ease;
 }

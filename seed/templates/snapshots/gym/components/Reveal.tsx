@@ -19,7 +19,7 @@ export function Reveal({
   once = true,
 }: RevealProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [shown, setShown] = useState(false);
+  const [shown, setShown] = useState(true);
 
   useEffect(() => {
     const el = ref.current;
