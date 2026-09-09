@@ -10,8 +10,8 @@
     "dev:desktop": "node scripts/run-desktop.js",
     "dev:electron": "npm run dev:desktop",
     "ensure:env": "node scripts/setup-env.js",
-    "build": "prisma generate && next build",
-    "start": "next start",
+    "build": "node -e \"console.log('fintoke-template-pack')\" && prisma generate && next build",
+    "start": "node scripts/start-prod.js",
     "start:prod": "node scripts/start-prod.js",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
@@ -64,6 +64,7 @@
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
   },
+  "packageManager": "npm@10.9.2",
   "keywords": [
     "ai",
     "claude",
