@@ -17,6 +17,11 @@ export function previewBasePath(projectId: string): string {
   return usesPreviewProxy() ? `/__preview/${encodeURIComponent(projectId)}` : '';
 }
 
+export function previewIframeUrl(projectId: string, port: number): string {
+  if (!usesPreviewProxy()) return `http://localhost:${port}`;
+  return `/__preview/${encodeURIComponent(projectId)}`;
+}
+
 export function previewPublicUrl(projectId: string, port: number): string {
   if (!usesPreviewProxy()) return `http://localhost:${port}`;
   return `${publicAppOrigin()}${previewBasePath(projectId)}`;

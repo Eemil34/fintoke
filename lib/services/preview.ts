@@ -11,7 +11,7 @@ import { ensureProjectApp } from '@/lib/templates/copyTemplate';
 import { normalizeGeneratedProject } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir } from '@/lib/server/paths';
-import { previewBasePath, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
+import { previewBasePath, previewIframeUrl, previewPublicUrl } from '@/lib/server/publicUrl';
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
@@ -853,14 +853,10 @@ class PreviewManager {
     }
 
     const effectivePort = previewProcess.port;
-    let resolvedUrl = previewPublicUrl(projectId, effectivePort);
-    if (typeof overrides.url === 'string' && overrides.url.trim().length > 0) {
-      resolvedUrl = overrides.url.trim();
-    }
-
+    const resolvedUrl = previewPublicUrl(projectId, effectivePort);
     env.NEXT_PUBLIC_APP_URL = resolvedUrl;
     env.NEXT_BASE_PATH = previewBasePath(projectId);
-    previewProcess.url = resolvedUrl;
+    previewProcess.url = previewIframeUrl(projectId, effectivePort);
 
     const child = spawn(
       npmCommand,
