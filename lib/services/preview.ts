@@ -508,7 +508,7 @@ async function waitForPreviewReady(
         return true;
       }
       if (response.status === 405 || response.status === 501) {
-        const getResponse = await fetch(url, { method: 'GET' });
+        const getResponse = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(4000) });
         if (getResponse.ok) {
           log(
             Buffer.from(
