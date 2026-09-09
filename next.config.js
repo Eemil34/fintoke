@@ -14,6 +14,12 @@ const nextConfig = {
     optimizeCss: false,
     scrollRestoration: true,
   },
+  outputFileTracingIncludes: {
+    '/api/templates': ['./seed/**/*'],
+    '/api/templates/[id]': ['./seed/**/*'],
+    '/api/v1/templates': ['./seed/**/*'],
+    '/api/health': ['./seed/templates.json'],
+  },
   env: onVercel
     ? {}
     : {

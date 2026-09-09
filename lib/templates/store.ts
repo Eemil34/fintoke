@@ -13,6 +13,7 @@ import {
 import type { ManagedTemplate, TemplateKind, WebsiteTemplate } from './types';
 import { sanitizeWebsiteTemplate, slugifyTemplateId } from './validate';
 import { dataFile } from '@/lib/server/paths';
+import bundledSeedJson from '@/seed/templates.json';
 
 const STORE_PATH = dataFile('templates.json');
 const BUILTIN_IDS = new Set(WEBSITE_TEMPLATES.map((template) => template.id));
@@ -64,7 +65,11 @@ async function loadSeedStore(): Promise<TemplateFileStore | null> {
   try {
     return parseStore(await fs.readFile(path.join(process.cwd(), 'seed', 'templates.json'), 'utf8'));
   } catch {
-    return null;
+    try {
+      return parseStore(JSON.stringify(bundledSeedJson));
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -98,8 +103,12 @@ async function readStore(): Promise<TemplateFileStore> {
         custom: [...seed.custom, ...store.custom.filter((template) => !seedIds.has(template.id))],
         hidden: [...new Set([...seed.hidden, ...store.hidden])],
       };
-  await copySeedSnapshots();
-  await writeStore(next);
+  try {
+    await copySeedSnapshots();
+    await writeStore(next);
+  } catch (error) {
+    console.error('Could not persist seeded templates to disk:', error);
+  }
   return next;
 }
 

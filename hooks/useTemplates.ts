@@ -2,20 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchDashboardJson } from '@/lib/dashboard/client';
-import { WEBSITE_TEMPLATES } from '@/lib/templates';
 import type { ManagedTemplate } from '@/lib/templates';
 
 function asManaged(templates: ManagedTemplate[]): ManagedTemplate[] {
   return templates;
 }
 
-const FALLBACK: ManagedTemplate[] = WEBSITE_TEMPLATES.map((template) => ({
-  ...template,
-  source: 'builtin' as const,
-  overridden: false,
-  kind: 'catalog' as const,
-  hasSnapshot: false,
-}));
+const FALLBACK: ManagedTemplate[] = [];
 
 export function useTemplates() {
   const [templates, setTemplates] = useState<ManagedTemplate[]>([]);
