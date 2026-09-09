@@ -1,0 +1,5 @@
+{
+  "framework": "nextjs",
+  "installCommand": "npm install next@15.5.25 --save-exact && npm install",
+  "buildCommand": "next build"
+}
