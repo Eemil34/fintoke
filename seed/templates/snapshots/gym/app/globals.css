@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-sans: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+  --bg: #07090e;
+  --accent: #4f8cff;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(79, 140, 255, 0.08), transparent 55%),
+    radial-gradient(900px 500px at -10% 40%, rgba(79, 140, 255, 0.04), transparent 50%),
+    var(--bg);
+  color: #f4f6f8;
+  font-family: var(--font-sans);
+}
+
+body::before {
+  content: '';
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection {
+  background: #4f8cff;
+  color: #fff;
+}
+
+@layer components {
+  .btn-skew {
+    @apply relative inline-flex items-center justify-center px-8 py-3.5 text-[13px] font-semibold uppercase tracking-[0.14em] text-white transition duration-300;
+    background: #4f8cff;
+    clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  }
+
+  .btn-skew:hover {
+    background: #7eb0ff;
+    color: #07090e;
+  }
+
+  .section-pad {
+    @apply relative mx-auto w-full max-w-[1400px] px-5 py-24 md:px-10 lg:px-14 xl:px-20;
+  }
+
+  .label-accent {
+    @apply text-[11px] font-semibold uppercase tracking-[0.28em] text-electric;
+  }
+
+  .headline {
+    @apply font-display font-semibold uppercase leading-[0.92] tracking-[0.02em];
+  }
+
+  .hairline {
+    @apply h-px w-full bg-gradient-to-r from-transparent via-ink-line to-transparent;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Scroll reveal system */
+.reveal {
+  opacity: 0;
+  transition:
+    opacity 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.85s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.85s ease;
+  will-change: opacity, transform;
+}
+
+.reveal-up {
+  transform: translate3d(0, 36px, 0);
+}
+
+.reveal-left {
+  transform: translate3d(-40px, 0, 0);
+}
+
+.reveal-right {
+  transform: translate3d(40px, 0, 0);
+}
+
+.reveal-scale {
+  transform: scale(0.96);
+  filter: blur(2px);
+}
+
+.reveal-fade {
+  transform: none;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal-up,
+  .reveal-left,
+  .reveal-right,
+  .reveal-scale,
+  .reveal-fade {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
+    transition: none !important;
+  }
+}
+
+@keyframes arc-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.arc-dash {
+  stroke-dasharray: 4 6;
+  animation: arc-flow 3.2s linear infinite;
+}
