@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --font-display: 'Cormorant Garamond', Georgia, serif;
+  --font-sans: 'Manrope', ui-sans-serif, system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: #eae3d9;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 10% 0%, rgba(255, 255, 255, 0.4), transparent 55%),
+    radial-gradient(ellipse 55% 45% at 92% 12%, rgba(42, 27, 20, 0.05), transparent 50%),
+    radial-gradient(ellipse 40% 30% at 50% 100%, rgba(196, 165, 116, 0.08), transparent 60%);
+  color: #2a1b14;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: #2a1b14;
+  color: #f2ede4;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .paper-grain {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .hero-stage {
+    background:
+      radial-gradient(ellipse 55% 48% at 50% 42%, rgba(255, 252, 246, 0.92) 0%, transparent 68%),
+      radial-gradient(ellipse 38% 55% at 12% 58%, rgba(196, 165, 116, 0.18) 0%, transparent 70%),
+      radial-gradient(ellipse 36% 52% at 88% 58%, rgba(196, 165, 116, 0.16) 0%, transparent 70%),
+      radial-gradient(ellipse 80% 70% at 50% 100%, rgba(42, 27, 20, 0.14) 0%, transparent 58%),
+      radial-gradient(ellipse 90% 55% at 50% 0%, rgba(42, 27, 20, 0.08) 0%, transparent 55%),
+      linear-gradient(180deg, #f0ebe3 0%, #eae3d9 42%, #e2d8cb 100%);
+  }
+
+  .hero-vignette {
+    background:
+      radial-gradient(ellipse 70% 65% at 50% 45%, transparent 35%, rgba(42, 27, 20, 0.08) 100%),
+      linear-gradient(90deg, rgba(42, 27, 20, 0.12) 0%, transparent 18%, transparent 82%, rgba(42, 27, 20, 0.12) 100%),
+      linear-gradient(180deg, rgba(42, 27, 20, 0.06) 0%, transparent 22%, transparent 72%, rgba(42, 27, 20, 0.16) 100%);
+  }
+
+  .hero-cup-shadow {
+    background: radial-gradient(
+      ellipse 100% 100% at 50% 50%,
+      rgba(42, 27, 20, 0.28) 0%,
+      rgba(42, 27, 20, 0.12) 42%,
+      transparent 72%
+    );
+    filter: blur(18px);
+  }
+
+  .hero-text-glow {
+    background: radial-gradient(
+      ellipse 70% 55% at 50% 50%,
+      rgba(242, 239, 233, 0.72) 0%,
+      rgba(234, 227, 217, 0.35) 48%,
+      transparent 75%
+    );
+    filter: blur(2px);
+  }
+}
