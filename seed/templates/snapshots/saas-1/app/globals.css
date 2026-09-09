@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --cue-navy: #070b1f;
+  --cue-purple: #6366f1;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #fff;
+  color: #0b1020;
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.25);
+  color: #070b1f;
+}
+
+.hero-shell {
+  position: relative;
+  background: #060816;
+  overflow: hidden;
+}
+
+.hero-shell::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 18%;
+  width: 120%;
+  height: 70%;
+  transform: translateX(-50%);
+  background:
+    radial-gradient(ellipse 50% 45% at 50% 40%, rgba(165, 180, 255, 0.55), transparent 68%),
+    radial-gradient(ellipse 40% 40% at 35% 55%, rgba(99, 102, 241, 0.45), transparent 65%),
+    radial-gradient(ellipse 38% 38% at 68% 48%, rgba(56, 189, 248, 0.32), transparent 62%),
+    radial-gradient(ellipse 30% 30% at 50% 70%, rgba(167, 139, 250, 0.28), transparent 70%);
+  filter: blur(20px);
+  pointer-events: none;
+}
+
+.hero-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(99, 102, 241, 0.18), transparent 55%),
+    radial-gradient(circle at 15% 30%, rgba(129, 140, 248, 0.12), transparent 35%),
+    radial-gradient(circle at 85% 25%, rgba(56, 189, 248, 0.1), transparent 30%);
+  pointer-events: none;
+}
+
+.hero-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 180px;
+  background: linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.55) 55%, #ffffff 100%);
+  pointer-events: none;
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.reveal-delay-1 {
+  transition-delay: 0.1s;
+}
+.reveal-delay-2 {
+  transition-delay: 0.2s;
+}
+.reveal-delay-3 {
+  transition-delay: 0.3s;
+}
+.reveal-delay-4 {
+  transition-delay: 0.4s;
+}
