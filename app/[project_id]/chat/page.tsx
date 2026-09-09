@@ -2929,7 +2929,7 @@ const persistProjectPreferences = useCallback(
                         ) : (
                           <>
                             <div
-                              onClick={!isRunning && !isStartingPreview ? start : undefined}
+                              onClick={!isRunning && !isStartingPreview ? () => { void start(); } : undefined}
                               className={`w-40 h-40 mx-auto mb-6 relative ${!isRunning && !isStartingPreview ? 'cursor-pointer group' : ''}`}
                             >
                               {/* Claudable Symbol with rotating animation when starting */}
