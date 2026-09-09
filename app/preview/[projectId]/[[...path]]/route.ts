@@ -10,20 +10,54 @@ interface RouteContext {
   params: Promise<{ projectId: string; path?: string[] }>;
 }
 
+function loadingPage(projectId: string, message: string) {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="2" />
+  <title>Starting preview</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8fafc; color: #0f172a; }
+    main { text-align: center; padding: 24px; }
+    p { color: #475569; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Starting preview</h1>
+    <p>${message.replace(/</g, '&lt;')}</p>
+    <p>Site ${projectId.replace(/</g, '&lt;')}</p>
+  </main>
+</body>
+</html>`;
+  return new Response(html, {
+    status: 200,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+    },
+  });
+}
+
+function isAssetRequest(segments?: string[]) {
+  if (!segments?.length) return false;
+  if (segments[0] === '_next') return true;
+  return /\.[a-z0-9]+$/i.test(segments[segments.length - 1] || '');
+}
+
 async function proxy(request: NextRequest, { params }: RouteContext) {
   const { projectId: rawProjectId, path: segments } = await params;
   const projectId = decodeURIComponent(rawProjectId);
   let preview = previewManager.getStatus(projectId);
   if (!preview.port) {
-    try {
-      preview = await previewManager.start(projectId);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return new Response(`Preview failed to start: ${message}`, { status: 503 });
+    void previewManager.start(projectId).catch((error) => {
+      console.error('[Preview proxy] Failed to start:', error);
+    });
+    if (isAssetRequest(segments)) {
+      return new Response('', { status: 503, headers: { 'retry-after': '2' } });
     }
-  }
-  if (!preview.port) {
-    return new Response('Preview is not running. Open the site in Studio and start preview.', { status: 404 });
+    return loadingPage(projectId, 'Installing dependencies and starting the site…');
   }
 
   const rest = segments?.length ? `/${segments.map((part) => encodeURIComponent(part)).join('/')}` : '';
@@ -54,9 +88,11 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       out.set(key, value);
     });
     return new Response(upstream.body, { status: upstream.status, headers: out });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return new Response(`Preview proxy failed: ${message}`, { status: 502 });
+  } catch {
+    if (isAssetRequest(segments)) {
+      return new Response('', { status: 503, headers: { 'retry-after': '2' } });
+    }
+    return loadingPage(projectId, 'The site process is still starting. This page will refresh automatically.');
   }
 }
 

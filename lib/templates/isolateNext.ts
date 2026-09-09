@@ -94,9 +94,7 @@ export async function writePreviewNextConfig(projectPath: string, basePath: stri
     ? `  basePath: ${JSON.stringify(basePath)},
   assetPrefix: ${JSON.stringify(basePath)},`
     : '';
-  await fs.writeFile(
-    configPath,
-    `const path = require('path');
+  const contents = `const path = require('path');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -106,8 +104,14 @@ ${base}
 };
 
 module.exports = nextConfig;
-`,
-  );
+`;
+  try {
+    const current = await fs.readFile(configPath, 'utf8');
+    if (current === contents) return;
+  } catch {
+    // write a new config below
+  }
+  await fs.writeFile(configPath, contents);
   await clearNextCache(projectPath);
 }
 

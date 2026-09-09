@@ -797,28 +797,26 @@ const persistProjectPreferences = useCallback(
   const start = useCallback(async () => {
     try {
       setIsStartingPreview(true);
-      setPreviewInitializationMessage('Starting development server...');
-      
-      // Simulate progress updates
-      setTimeout(() => setPreviewInitializationMessage('Installing dependencies...'), 1000);
-      setTimeout(() => setPreviewInitializationMessage('Building your application...'), 2500);
-      
+      setPreviewInitializationMessage('Starting preview server...');
+
       const r = await fetch(`${API_BASE}/api/projects/${projectId}/preview/start`, { method: 'POST' });
+      const payload = await r.json().catch(() => ({}));
       if (!r.ok) {
-        console.error('Failed to start preview:', r.statusText);
-        setPreviewInitializationMessage('Failed to start preview');
-        setTimeout(() => setIsStartingPreview(false), 2000);
+        const detail =
+          (typeof payload?.error === 'string' && payload.error) ||
+          (typeof payload?.message === 'string' && payload.message) ||
+          r.statusText;
+        console.error('Failed to start preview:', detail);
+        setPreviewInitializationMessage(detail || 'Failed to start preview');
+        setTimeout(() => setIsStartingPreview(false), 4000);
         return;
       }
-      const payload = await r.json();
       const data = payload?.data ?? payload ?? {};
-
-      setPreviewInitializationMessage('Preview ready!');
-      setTimeout(() => {
-        setPreviewUrl(typeof data.url === 'string' ? data.url : null);
-        setIsStartingPreview(false);
-        setCurrentRoute('/'); // Reset to root route when starting
-      }, 1000);
+      const url = typeof data.url === 'string' ? data.url : `/preview/${encodeURIComponent(projectId)}`;
+      setPreviewUrl(url);
+      setPreviewInitializationMessage('Waiting for the site to compile…');
+      setIsStartingPreview(false);
+      setCurrentRoute('/');
     } catch (error) {
       console.warn('Error starting preview:', error instanceof Error ? error.message : error);
       setPreviewInitializationMessage('An error occurred');

@@ -498,7 +498,7 @@ async function waitForPreviewReady(
   while (Date.now() - start < timeoutMs) {
     attempts += 1;
     try {
-      const response = await fetch(url, { method: 'HEAD' });
+      const response = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(4000) });
       if (response.ok) {
         log(
           Buffer.from(
@@ -742,13 +742,9 @@ class PreviewManager {
     }
 
     await normalizeGeneratedProject(projectPath);
-    const proxyBasePath = previewBasePath(projectId);
     const existing = this.processes.get(projectId);
     if (existing && existing.status !== 'error' && existing.port) {
       return this.toInfo(existing);
-    }
-    if (proxyBasePath) {
-      await writePreviewNextConfig(projectPath, proxyBasePath);
     }
 
     const previewBounds = resolvePreviewBounds();
@@ -787,7 +783,61 @@ class PreviewManager {
     };
     flushPendingLogs();
 
-    // Ensure dependencies with the same per-project lock used by installDependencies
+    this.processes.set(projectId, previewProcess);
+    previewProcess.url = previewIframeUrl(projectId, preferredPort);
+    env.NEXT_PUBLIC_APP_URL = previewPublicUrl(projectId, preferredPort);
+    env.NEXT_BASE_PATH = previewBasePath(projectId);
+
+    await updateProject(projectId, {
+      previewUrl: previewProcess.url,
+      previewPort: previewProcess.port,
+      status: 'running',
+    }).catch((error) => {
+      console.error('[PreviewManager] Failed to persist preview URL:', error);
+    });
+
+    void this.bootPreviewProcess({
+      projectId,
+      projectPath,
+      previewProcess,
+      env,
+      previewBounds,
+      pendingLogs,
+    }).catch((error) => {
+      previewProcess.status = 'error';
+      log(
+        Buffer.from(
+          `[PreviewManager] Preview boot failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    });
+
+    return this.toInfo(previewProcess);
+  }
+
+  private async bootPreviewProcess(params: {
+    projectId: string;
+    projectPath: string;
+    previewProcess: PreviewProcess;
+    env: NodeJS.ProcessEnv;
+    previewBounds: { start: number; end: number };
+    pendingLogs: string[];
+  }): Promise<void> {
+    const { projectId, projectPath, previewProcess, env, previewBounds, pendingLogs } = params;
+    const log = this.getLogger(previewProcess);
+    const queueLog = (message: string) => {
+      const formatted = `[PreviewManager] ${message}`;
+      console.log(formatted);
+      pendingLogs.push(formatted);
+    };
+    const flushPendingLogs = () => {
+      if (pendingLogs.length === 0) {
+        return;
+      }
+      const entries = pendingLogs.splice(0);
+      entries.forEach((entry) => log(Buffer.from(entry)));
+    };
+
     const ensureWithLock = async () => {
       // If node_modules exists, skip
       if (await directoryExists(path.join(projectPath, 'node_modules'))) {
@@ -886,10 +936,13 @@ class PreviewManager {
 
     const child = spawn(
       npmCommand,
-      ['run', 'dev', '--', '--hostname', '127.0.0.1', '--port', String(effectivePort)],
+      ['run', 'dev', '--', '--hostname', '127.0.0.1', '--port', String(effectivePort), '--webpack'],
       {
         cwd: projectPath,
-        env,
+        env: {
+          ...env,
+          TURBOPACK: '0',
+        },
         shell: process.platform === 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
       }
@@ -939,13 +992,15 @@ class PreviewManager {
       // wait function already logged; ignore errors
     });
 
+    if (previewProcess.status !== 'error') {
+      previewProcess.status = 'running';
+    }
+
     await updateProject(projectId, {
       previewUrl: previewProcess.url,
       previewPort: previewProcess.port,
       status: 'running',
     });
-
-    return this.toInfo(previewProcess);
   }
 
   public async stop(projectId: string): Promise<PreviewInfo> {
