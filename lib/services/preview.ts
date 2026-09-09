@@ -720,7 +720,10 @@ class PreviewManager {
     return { logs };
   }
 
-  public async start(projectId: string): Promise<PreviewInfo> {
+  public async start(projectId: string, options?: { restart?: boolean }): Promise<PreviewInfo> {
+    if (options?.restart) {
+      await this.stop(projectId);
+    }
     const inflight = this.starting.get(projectId);
     if (inflight) {
       return inflight;
@@ -770,6 +773,9 @@ class PreviewManager {
       WEB_PORT: String(preferredPort),
       NEXT_PUBLIC_APP_URL: previewPublicUrl(projectId, preferredPort),
       NEXT_BASE_PATH: '',
+      WATCHPACK_POLLING: 'true',
+      CHOKIDAR_USEPOLLING: 'true',
+      CHOKIDAR_INTERVAL: '1000',
     };
 
     const pendingLogs: string[] = [

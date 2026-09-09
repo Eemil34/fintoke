@@ -100,6 +100,12 @@ const nextConfig = {
   outputFileTracingRoot: path.join(__dirname),
 ${prefix}
   ${GENERATED_IMAGES_CONFIG},
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.watchOptions = { poll: 1000, aggregateTimeout: 300 };
+    }
+    return config;
+  },
 };
 
 module.exports = nextConfig;

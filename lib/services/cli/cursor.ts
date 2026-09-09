@@ -643,7 +643,18 @@ ${instruction.trim()}`;
       ? project.activeCursorSessionId
       : undefined);
 
-  const baseArgs = ['--force', '-p', finalPrompt, '--output-format', 'stream-json'] as string[];
+  const baseArgs = [
+    '--force',
+    '--trust',
+    '--sandbox',
+    'disabled',
+    '--workspace',
+    repoPath,
+    '-p',
+    finalPrompt,
+    '--output-format',
+    'stream-json',
+  ] as string[];
   if (cursorCliModel) {
     baseArgs.push('--model', cursorCliModel);
   }

@@ -11,12 +11,19 @@ interface RouteContext {
 }
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: RouteContext
 ) {
   try {
     const { project_id } = await params;
-    const preview = await previewManager.start(project_id);
+    let restart = false;
+    try {
+      const body = await request.json();
+      restart = Boolean(body?.restart);
+    } catch {
+      restart = false;
+    }
+    const preview = await previewManager.start(project_id, { restart });
 
     return NextResponse.json({
       success: true,

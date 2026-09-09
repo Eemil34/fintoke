@@ -225,6 +225,7 @@ export default function ChatPage() {
   const [projectDescription, setProjectDescription] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+  const agentWasRunningRef = useRef(false);
   const [tree, setTree] = useState<Entry[]>([]);
   const [content, setContent] = useState<string>('');
   const [editedContent, setEditedContent] = useState<string>('');
@@ -799,12 +800,16 @@ const persistProjectPreferences = useCallback(
     }
   }, [projectId, startDeploymentPolling, loadDeployStatus]);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (options?: { restart?: boolean }) => {
     try {
       setIsStartingPreview(true);
-      setPreviewInitializationMessage('Starting preview server...');
+      setPreviewInitializationMessage(options?.restart ? 'Updating preview…' : 'Starting preview server...');
 
-      const r = await fetch(`${API_BASE}/api/projects/${projectId}/preview/start`, { method: 'POST' });
+      const r = await fetch(`${API_BASE}/api/projects/${projectId}/preview/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restart: Boolean(options?.restart) }),
+      });
       const payload = await r.json().catch(() => ({}));
       if (!r.ok) {
         const detail =
@@ -2366,13 +2371,22 @@ const persistProjectPreferences = useCallback(
                   onSessionStatusChange={(isRunningValue) => {
                   console.log('🔍 [DEBUG] Session status change:', isRunningValue);
                   setIsRunning(isRunningValue);
-                  // Track agent task completion and auto-start preview
-                  if (!isRunningValue && hasInitialPrompt && !agentWorkComplete && !previewUrl) {
+                  if (isRunningValue) {
+                    agentWasRunningRef.current = true;
+                    return;
+                  }
+                  if (!agentWasRunningRef.current) return;
+                  agentWasRunningRef.current = false;
+                  if (hasInitialPrompt && !agentWorkComplete && !previewUrlRef.current) {
                     setAgentWorkComplete(true);
-                    // Save to localStorage
                     localStorage.setItem(`project_${projectId}_taskComplete`, 'true');
-                    // Auto-start preview server after initial prompt task completion
-                    start();
+                    void start();
+                    return;
+                  }
+                  if (previewUrlRef.current) {
+                    void start({ restart: true }).then(() => {
+                      window.setTimeout(() => refreshPreview(), 2500);
+                    });
                   }
                 }}
                 onSseFallbackActive={(active) => {

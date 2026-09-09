@@ -39,14 +39,15 @@ export async function restoreSnapshotIfMaterialized(
     .access(path.join(projectPath, 'lib', 'site.ts'))
     .then(() => true)
     .catch(() => false);
+  const alreadyCopied = await readTemplateMark(projectPath);
+  if (alreadyCopied === templateId && !materialized) return false;
+
   const snapshotDir = await resolveSnapshotDir(templateId);
   const snapshotPage = snapshotDir ? await readPageSource(snapshotDir) : null;
   const projectPage = await readPageSource(projectPath);
   const seedComponent = snapshotPage?.match(/from ['"]\.\.\/components\/(\w+)['"]/)?.[1];
   const hasSeedComponent = !seedComponent || Boolean(projectPage?.includes(seedComponent));
-  const alreadyRestored =
-    (await readTemplateMark(projectPath)) === templateId && !materialized && hasSeedComponent;
-  if (alreadyRestored) return false;
+  if (alreadyCopied === templateId && hasSeedComponent && !materialized) return false;
 
   const entries = await fs.readdir(projectPath).catch(() => [] as string[]);
   for (const name of entries) {
