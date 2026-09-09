@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 
-const RELEASE = '2026-09-10-cursor-select';
+const RELEASE = '2026-09-10-cursor-cli';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');

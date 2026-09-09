@@ -35,6 +35,7 @@ import { serializeMessage, createRealtimeMessage } from '@/lib/serializers/chat'
 import { buildInitialAgentPrompt } from '@/lib/templates/agentPrompt';
 import { SITE_IMAGE_AGENT_RULES, buildSiteImageAgentRules } from '@/lib/templates/siteImages';
 import {
+  ensureCursorExecutable,
   resolveCursorApiKey,
   resolveCursorExecutable,
   withCursorPath,
@@ -674,13 +675,15 @@ ${instruction.trim()}`;
   });
   streamManager.publish(projectId, { type: 'message', data: placeholderMessage });
 
-  if (!resolveCursorExecutable()) {
+  publishStatus(projectId, 'starting', requestId, 'Installing Cursor CLI on this server if needed...');
+  const cursorBin = await ensureCursorExecutable();
+  if (!cursorBin) {
     await handleCursorFailure(
       projectId,
       requestId,
       [],
       undefined,
-      'cursor-agent is not installed on this server. Restart the service so it can install Cursor CLI, then try again.',
+      'Cursor CLI could not be installed on this server. Check Railway deploy logs for [cursor] errors, then retry the message.',
       placeholderMessageId,
     );
     return;
@@ -764,6 +767,7 @@ ${instruction.trim()}`;
       requestId,
       initialSessionId: resumeSessionId,
       placeholderMessageId,
+      executable: cursorBin,
     });
 
     if (result.success) {
@@ -834,10 +838,11 @@ async function runCursorOnce(params: {
   requestId?: string;
   initialSessionId?: string;
   placeholderMessageId?: string;
+  executable?: string;
 }): Promise<CursorRunResult> {
   const { projectId, repoPath, args, env, requestId, initialSessionId, placeholderMessageId } = params;
 
-  const executable = resolveCursorExecutable() || CURSOR_EXECUTABLE;
+  const executable = params.executable || resolveCursorExecutable() || CURSOR_EXECUTABLE;
   const child = spawn(executable, args, {
     cwd: repoPath,
     env,

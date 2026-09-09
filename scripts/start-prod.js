@@ -39,7 +39,9 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = `file:${path.join(dataDir, 'cc.db')}`;
 }
 
+process.env.SETTINGS_DIR = process.env.SETTINGS_DIR || dataDir;
 process.env.PATH = withCursorPath(process.env).PATH;
+process.env.PATH = `${path.join(dataDir, '.local', 'bin')}${path.delimiter}${process.env.PATH}`;
 
 const port = process.env.PORT || '3000';
 const child = spawn(
@@ -53,15 +55,6 @@ const child = spawn(
 );
 child.on('exit', (code) => process.exit(code || 0));
 
-function cursorInstalled() {
-  for (const dir of cursorBinDirs()) {
-    for (const name of ['cursor-agent', 'agent']) {
-      if (fs.existsSync(path.join(dir, name))) return true;
-    }
-  }
-  return false;
-}
-
 setTimeout(() => {
   if (!String(process.env.DATABASE_URL || '').startsWith('file:')) return;
   const prisma = spawn(localBin('prisma'), ['db', 'push', '--skip-generate'], {
@@ -74,18 +67,11 @@ setTimeout(() => {
   });
 }, 2000);
 
-setTimeout(() => {
-  if (cursorInstalled()) {
-    console.log('[start-prod] cursor-agent already installed');
-    return;
-  }
-  console.log('[start-prod] Installing Cursor CLI in the background');
-  const install = spawn('bash', ['-lc', 'curl -fsS https://cursor.com/install | bash'], {
-    cwd: root,
-    stdio: 'inherit',
-    env: process.env,
-  });
-  install.on('error', (error) => {
+try {
+  const { install } = require('./install-cursor-cli');
+  install().catch((error) => {
     console.error('[start-prod] Cursor CLI install failed:', error);
   });
-}, 8000);
+} catch (error) {
+  console.error('[start-prod] Cursor CLI installer missing:', error);
+}
