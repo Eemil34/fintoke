@@ -45,8 +45,8 @@ export async function fetchCliStatusSnapshot(): Promise<CLIStatus> {
         ...optimistic[option.id],
         ...entry,
         checking: false,
-        available: entry.available ?? entry.installed ?? optimistic[option.id]?.available ?? false,
-        configured: entry.configured ?? entry.installed ?? optimistic[option.id]?.configured ?? false,
+        available: Boolean(entry.available ?? entry.configured ?? entry.installed ?? optimistic[option.id]?.available),
+        configured: Boolean(entry.configured ?? entry.installed ?? optimistic[option.id]?.configured),
         models: entry.models ?? option.models?.map((model) => model.id),
       };
     }

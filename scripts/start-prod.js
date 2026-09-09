@@ -52,3 +52,40 @@ const child = spawn(
   }
 );
 child.on('exit', (code) => process.exit(code || 0));
+
+function cursorInstalled() {
+  for (const dir of cursorBinDirs()) {
+    for (const name of ['cursor-agent', 'agent']) {
+      if (fs.existsSync(path.join(dir, name))) return true;
+    }
+  }
+  return false;
+}
+
+setTimeout(() => {
+  if (!String(process.env.DATABASE_URL || '').startsWith('file:')) return;
+  const prisma = spawn(localBin('prisma'), ['db', 'push', '--skip-generate'], {
+    cwd: root,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  prisma.on('error', (error) => {
+    console.error('[start-prod] prisma db push failed:', error);
+  });
+}, 2000);
+
+setTimeout(() => {
+  if (cursorInstalled()) {
+    console.log('[start-prod] cursor-agent already installed');
+    return;
+  }
+  console.log('[start-prod] Installing Cursor CLI in the background');
+  const install = spawn('bash', ['-lc', 'curl -fsS https://cursor.com/install | bash'], {
+    cwd: root,
+    stdio: 'inherit',
+    env: process.env,
+  });
+  install.on('error', (error) => {
+    console.error('[start-prod] Cursor CLI install failed:', error);
+  });
+}, 8000);

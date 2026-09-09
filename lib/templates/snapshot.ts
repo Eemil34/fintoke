@@ -146,6 +146,7 @@ export async function copySnapshotToProject(
   templateId: string,
   projectPath: string,
   projectId: string,
+  options?: { normalize?: boolean },
 ): Promise<boolean> {
   const source = await resolveSnapshotDir(templateId);
   if (!source) return false;
@@ -153,7 +154,9 @@ export async function copySnapshotToProject(
   await copyDirectory(source, projectPath);
   await rewritePackageName(projectPath, projectId);
   await fs.writeFile(path.join(projectPath, '.fintoke-from'), `${templateId}\n`);
-  await normalizeGeneratedProject(projectPath);
+  if (options?.normalize !== false) {
+    await normalizeGeneratedProject(projectPath);
+  }
   return true;
 }
 

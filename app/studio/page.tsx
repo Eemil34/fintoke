@@ -535,7 +535,11 @@ export default function HomePage() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         console.error('Failed to create project:', errorData);
-        showToast('Failed to create project', 'error');
+        const detail =
+          (typeof errorData?.message === 'string' && errorData.message)
+          || (typeof errorData?.error === 'string' && errorData.error)
+          || `HTTP ${response.status}`;
+        showToast(`Failed to create project: ${detail}`, 'error');
         setIsCreatingProject(false);
         return;
       }

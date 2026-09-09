@@ -73,7 +73,7 @@ async function checkCursorCLI(): Promise<{
   if (!executable) {
     return {
       installed: false,
-      error: 'cursor-agent is not on PATH. Restart the service so start-prod can install Cursor CLI.',
+      error: 'cursor-agent is installing in the background. You can still select Cursor if CURSOR_API_KEY is set.',
     };
   }
   try {
@@ -176,7 +176,7 @@ export async function GET() {
       checking: false,
       error: cursorStatus.error,
       models: CURSOR_MODEL_DEFINITIONS.map((model) => model.id),
-      available: cursorStatus.installed && cursorHasKey,
+      available: cursorHasKey,
       configured: cursorHasKey,
     };
 

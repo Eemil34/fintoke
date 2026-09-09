@@ -46,28 +46,9 @@ export async function getProjectById(id: string): Promise<Project | null> {
  * Create new project
  */
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  // Create project directory
   const projectPath = path.join(PROJECTS_DIR_ABSOLUTE, input.project_id);
   await fs.mkdir(projectPath, { recursive: true });
 
-  if (input.websiteTemplateId && input.websiteTemplateId !== 'blank') {
-    const copied = await copyWebsiteTemplate(
-      projectPath,
-      input.websiteTemplateId,
-      input.project_id,
-    );
-    if (!copied) {
-      console.warn(
-        `[ProjectService] Unknown website template "${input.websiteTemplateId}" for ${input.project_id}`,
-      );
-    } else {
-      console.log(
-        `[ProjectService] Copied website template "${input.websiteTemplateId}" into ${projectPath}`,
-      );
-    }
-  }
-
-  // Create project in database
   const project = await prisma.project.create({
     data: {
       id: input.project_id,
@@ -88,6 +69,30 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       previewPort: null,
     },
   });
+
+  if (input.websiteTemplateId && input.websiteTemplateId !== 'blank') {
+    try {
+      const copied = await copyWebsiteTemplate(
+        projectPath,
+        input.websiteTemplateId,
+        input.project_id,
+      );
+      if (!copied) {
+        console.warn(
+          `[ProjectService] Unknown website template "${input.websiteTemplateId}" for ${input.project_id}`,
+        );
+      } else {
+        console.log(
+          `[ProjectService] Copied website template "${input.websiteTemplateId}" into ${projectPath}`,
+        );
+      }
+    } catch (error) {
+      console.error(
+        `[ProjectService] Template copy failed for ${input.project_id}; project was still created:`,
+        error,
+      );
+    }
+  }
 
   console.log(`[ProjectService] Created project: ${project.id}`);
   return {

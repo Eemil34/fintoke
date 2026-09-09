@@ -309,7 +309,11 @@ export default function ChatPage() {
     () => CLI_ORDER.map(cli => ({
       id: cli,
       name: CLI_LABELS[cli] || cli,
-      available: Boolean(cliStatuses[cli]?.available && cliStatuses[cli]?.configured)
+      available: Boolean(
+        cliStatuses[cli]?.available
+          || cliStatuses[cli]?.configured
+          || cliStatuses[cli]?.installed,
+      ),
     })),
     [cliStatuses]
   );

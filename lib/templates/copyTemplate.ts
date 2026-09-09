@@ -67,7 +67,9 @@ export async function copyWebsiteTemplate(
 ): Promise<boolean> {
   await fs.mkdir(projectPath, { recursive: true });
 
-  const fromSnapshot = await copySnapshotToProject(templateId, projectPath, projectId);
+  const fromSnapshot = await copySnapshotToProject(templateId, projectPath, projectId, {
+    normalize: false,
+  });
   if (fromSnapshot) return true;
 
   const template = await getManagedTemplate(templateId);
