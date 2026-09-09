@@ -697,9 +697,14 @@ export default function HomePage() {
   }, [selectedAssistant, handleFiles, load]);
 
   // Update models when assistant changes
+  const isAssistantSelectable = (assistant: string) => {
+    const status = cliStatus[assistant];
+    if (!status || status.checking) return true;
+    return Boolean(status.installed || status.configured || status.available);
+  };
+
   const handleAssistantChange = (assistant: string) => {
-    // Don't allow selecting uninstalled CLIs
-    if (!cliStatus[assistant]?.installed) return;
+    if (!isAssistantSelectable(assistant)) return;
 
     const sanitized = sanitizeAssistant(assistant);
     setUsingGlobalDefaults(false);
@@ -1139,9 +1144,9 @@ export default function HomePage() {
                         <button
                           key={option.id}
                           onClick={() => handleAssistantChange(option.id)}
-                          disabled={!(cliStatus[option.id]?.installed || cliStatus[option.id]?.configured)}
+                          disabled={!isAssistantSelectable(option.id)}
                           className={`w-full flex items-center gap-2 px-3 py-2 text-left first:rounded-t-2xl last:rounded-b-2xl transition-colors ${
-                            !(cliStatus[option.id]?.installed || cliStatus[option.id]?.configured)
+                            !isAssistantSelectable(option.id)
                               ? 'opacity-50 cursor-not-allowed text-gray-400 '
                               : selectedAssistant === option.id 
                               ? 'bg-gray-100 text-black font-semibold' 
