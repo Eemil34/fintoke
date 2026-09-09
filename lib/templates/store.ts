@@ -8,6 +8,7 @@ import {
   directoryHasApp,
   duplicateProjectSnapshot,
   snapshotHasApp,
+  syncSeedSnapshotsToVolume,
   writeProjectSnapshot,
 } from './snapshot';
 import type { ManagedTemplate, TemplateKind, WebsiteTemplate } from './types';
@@ -74,17 +75,18 @@ async function loadSeedStore(): Promise<TemplateFileStore | null> {
 }
 
 async function copySeedSnapshots(): Promise<void> {
-  const from = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
-  const to = dataFile('templates', 'snapshots');
   try {
-    await fs.access(from);
-    await fs.cp(from, to, { recursive: true });
-  } catch {
-    // Seed snapshots are optional until the deploy includes them.
+    const copied = await syncSeedSnapshotsToVolume();
+    if (copied > 0) {
+      console.log(`[templates] Copied ${copied} saved-site snapshot(s) from seed.`);
+    }
+  } catch (error) {
+    console.warn('[templates] Could not copy seed snapshots:', error);
   }
 }
 
 async function readStore(): Promise<TemplateFileStore> {
+  await copySeedSnapshots();
   const store = await readStoreFile();
   const seed = await loadSeedStore();
   if (!seed?.custom.length) return store;
@@ -104,7 +106,6 @@ async function readStore(): Promise<TemplateFileStore> {
         hidden: [...new Set([...seed.hidden, ...store.hidden])],
       };
   try {
-    await copySeedSnapshots();
     await writeStore(next);
   } catch (error) {
     console.error('Could not persist seeded templates to disk:', error);

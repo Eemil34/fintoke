@@ -3,9 +3,40 @@ import path from 'path';
 import { getManagedTemplate } from './store';
 import { materializeWebsiteTemplate } from './materialize';
 import { getWebsiteTemplateId } from './settings';
-import { copySnapshotToProject } from './snapshot';
+import { copySnapshotToProject, snapshotHasApp } from './snapshot';
 import { scaffoldBasicNextApp } from '@/lib/utils/scaffold';
 import { normalizeGeneratedProject } from './isolateNext';
+
+async function isMaterializedFallback(projectPath: string): Promise<boolean> {
+  try {
+    await fs.access(path.join(projectPath, 'lib/site.ts'));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function restoreSnapshotIfMaterialized(
+  projectPath: string,
+  projectId: string,
+  settingsJson?: string | null,
+): Promise<boolean> {
+  const templateId = getWebsiteTemplateId(settingsJson);
+  if (!templateId) return false;
+  if (!(await isMaterializedFallback(projectPath))) return false;
+  if (!(await snapshotHasApp(templateId))) return false;
+
+  const entries = await fs.readdir(projectPath);
+  for (const name of entries) {
+    if (name === 'node_modules') continue;
+    await fs.rm(path.join(projectPath, name), { recursive: true, force: true });
+  }
+  const copied = await copySnapshotToProject(templateId, projectPath, projectId);
+  if (copied) {
+    console.log(`[templates] Restored saved snapshot "${templateId}" over generated fallback for ${projectId}`);
+  }
+  return copied;
+}
 
 export async function copyWebsiteTemplate(
   projectPath: string,
@@ -17,9 +48,13 @@ export async function copyWebsiteTemplate(
 
   await fs.mkdir(projectPath, { recursive: true });
 
-  if (template.hasSnapshot) {
+  if (template.hasSnapshot || template.kind === 'snapshot') {
     const copied = await copySnapshotToProject(templateId, projectPath, projectId);
     if (copied) return true;
+    console.warn(
+      `[templates] Snapshot files missing for "${templateId}"; refusing to substitute a generated catalog site.`,
+    );
+    return false;
   }
 
   await materializeWebsiteTemplate(projectPath, template, projectId);
@@ -40,6 +75,11 @@ export async function ensureProjectApp(
   projectId: string,
   settingsJson?: string | null,
 ): Promise<void> {
+  if (await restoreSnapshotIfMaterialized(projectPath, projectId, settingsJson)) {
+    await normalizeGeneratedProject(projectPath);
+    return;
+  }
+
   if (await projectHasApp(projectPath)) {
     await normalizeGeneratedProject(projectPath);
     return;

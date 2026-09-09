@@ -4,6 +4,7 @@ import { normalizeGeneratedProject } from './isolateNext';
 import { dataFile } from '@/lib/server/paths';
 
 const SNAPSHOTS_DIR = dataFile('templates', 'snapshots');
+const SEED_SNAPSHOTS_DIR = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
 
 const IGNORE_NAMES = new Set([
   'node_modules',
@@ -28,6 +29,37 @@ export function snapshotDir(templateId: string): string {
   return path.join(SNAPSHOTS_DIR, templateId);
 }
 
+export function seedSnapshotDir(templateId: string): string {
+  return path.join(SEED_SNAPSHOTS_DIR, templateId);
+}
+
+export async function resolveSnapshotDir(templateId: string): Promise<string | null> {
+  if (await directoryHasApp(snapshotDir(templateId))) return snapshotDir(templateId);
+  if (await directoryHasApp(seedSnapshotDir(templateId))) return seedSnapshotDir(templateId);
+  return null;
+}
+
+export async function syncSeedSnapshotsToVolume(): Promise<number> {
+  let copied = 0;
+  let entries;
+  try {
+    entries = await fs.readdir(SEED_SNAPSHOTS_DIR, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  await fs.mkdir(SNAPSHOTS_DIR, { recursive: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const from = path.join(SEED_SNAPSHOTS_DIR, entry.name);
+    const to = path.join(SNAPSHOTS_DIR, entry.name);
+    if (await directoryHasApp(to)) continue;
+    if (!(await directoryHasApp(from))) continue;
+    await fs.cp(from, to, { recursive: true });
+    copied += 1;
+  }
+  return copied;
+}
+
 function shouldIgnore(name: string): boolean {
   if (IGNORE_NAMES.has(name)) return true;
   if (name.startsWith('.env')) return true;
@@ -45,7 +77,7 @@ export async function directoryHasApp(dir: string): Promise<boolean> {
 }
 
 export async function snapshotHasApp(templateId: string): Promise<boolean> {
-  return directoryHasApp(snapshotDir(templateId));
+  return Boolean(await resolveSnapshotDir(templateId));
 }
 
 export async function copyDirectory(source: string, destination: string): Promise<number> {
@@ -108,9 +140,10 @@ export async function copySnapshotToProject(
   projectPath: string,
   projectId: string,
 ): Promise<boolean> {
-  if (!(await snapshotHasApp(templateId))) return false;
+  const source = await resolveSnapshotDir(templateId);
+  if (!source) return false;
   await fs.mkdir(projectPath, { recursive: true });
-  await copyDirectory(snapshotDir(templateId), projectPath);
+  await copyDirectory(source, projectPath);
   await rewritePackageName(projectPath, projectId);
   await normalizeGeneratedProject(projectPath);
   return true;
@@ -121,10 +154,11 @@ export async function deleteProjectSnapshot(templateId: string): Promise<void> {
 }
 
 export async function duplicateProjectSnapshot(fromId: string, toId: string): Promise<boolean> {
-  if (!(await snapshotHasApp(fromId))) return false;
+  const source = await resolveSnapshotDir(fromId);
+  if (!source) return false;
   const destination = snapshotDir(toId);
   await fs.rm(destination, { recursive: true, force: true });
-  await copyDirectory(snapshotDir(fromId), destination);
+  await copyDirectory(source, destination);
   await rewritePackageName(destination, toId);
   await normalizeGeneratedProject(destination);
   return true;

@@ -78,6 +78,20 @@ const dataDir = process.env.SETTINGS_DIR || path.join(root, 'data');
 const projects = process.env.PROJECTS_DIR || path.join(dataDir, 'projects');
 fs.mkdirSync(projects, { recursive: true });
 
+const seedSnapshots = path.join(root, 'seed', 'templates', 'snapshots');
+const volumeSnapshots = path.join(dataDir, 'templates', 'snapshots');
+if (fs.existsSync(seedSnapshots)) {
+  fs.mkdirSync(volumeSnapshots, { recursive: true });
+  for (const name of fs.readdirSync(seedSnapshots)) {
+    const from = path.join(seedSnapshots, name);
+    const to = path.join(volumeSnapshots, name);
+    if (!fs.statSync(from).isDirectory()) continue;
+    if (fs.existsSync(path.join(to, 'package.json'))) continue;
+    fs.cpSync(from, to, { recursive: true });
+    console.log(`Copied saved template snapshot ${name}`);
+  }
+}
+
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = `file:${path.join(dataDir, 'cc.db')}`;
 }

@@ -7,7 +7,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { findAvailablePort } from '@/lib/utils/ports';
 import { getProjectById, updateProject, updateProjectStatus } from './project';
-import { ensureProjectApp } from '@/lib/templates/copyTemplate';
+import { ensureProjectApp, restoreSnapshotIfMaterialized } from '@/lib/templates/copyTemplate';
 import { ensureGeneratedDevScript, ensureIsolatedNextConfig, writePreviewNextConfig } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir } from '@/lib/server/paths';
@@ -726,11 +726,6 @@ class PreviewManager {
       return inflight;
     }
 
-    const live = this.processes.get(projectId);
-    if (live && live.status !== 'error' && live.port) {
-      return this.toInfo(live);
-    }
-
     const run = this.startPreview(projectId).finally(() => {
       if (this.starting.get(projectId) === run) {
         this.starting.delete(projectId);
@@ -746,13 +741,20 @@ class PreviewManager {
       throw new Error('Project not found');
     }
 
-    const live = this.processes.get(projectId);
-    if (live && live.status !== 'error' && live.port) {
-      return this.toInfo(live);
-    }
-
     const projectPath = await resolveProjectWorkspace(project, projectId);
     await fs.mkdir(projectPath, { recursive: true });
+    const restored = await restoreSnapshotIfMaterialized(
+      projectPath,
+      projectId,
+      project.settings,
+    );
+
+    const live = this.processes.get(projectId);
+    if (restored && live) {
+      await this.stop(projectId);
+    } else if (live && live.status !== 'error' && live.port) {
+      return this.toInfo(live);
+    }
 
     const previewBounds = resolvePreviewBounds();
     const preferredPort = await findAvailablePort(
