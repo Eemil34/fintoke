@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 
-const RELEASE = '2026-09-10-cursor-cli';
+const RELEASE = '2026-09-10-cursor-tarball';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');

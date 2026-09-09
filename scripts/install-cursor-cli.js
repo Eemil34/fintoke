@@ -1,18 +1,16 @@
 #!/usr/bin/env node
 
-const { spawn } = require('child_process');
+const { spawnSync } = require('child_process');
 const fs = require('fs');
 const https = require('https');
 const os = require('os');
 const path = require('path');
 
+const INSTALL_SCRIPT_URL = 'https://cursor.com/install';
+const CURL_UA = 'curl/8.7.1';
+
 function cursorHome() {
-  return (
-    process.env.SETTINGS_DIR ||
-    process.env.HOME ||
-    os.homedir() ||
-    '/tmp'
-  );
+  return process.env.SETTINGS_DIR || process.env.HOME || os.homedir() || '/tmp';
 }
 
 function binDirs() {
@@ -28,98 +26,188 @@ function binDirs() {
   ];
 }
 
+function isFile(full) {
+  try {
+    return fs.statSync(full).isFile();
+  } catch {
+    return false;
+  }
+}
+
 function findBin() {
   for (const dir of binDirs()) {
     for (const name of ['agent', 'cursor-agent']) {
       const full = path.join(dir, name);
-      if (fs.existsSync(full)) return full;
+      if (isFile(full)) return full;
     }
   }
   return null;
 }
 
-function fetchText(url) {
+function request(url, destPath) {
   return new Promise((resolve, reject) => {
     const go = (target, hops = 0) => {
-      https
-        .get(target, (res) => {
+      const req = https.get(
+        target,
+        {
+          headers: {
+            'User-Agent': CURL_UA,
+            Accept: '*/*',
+          },
+        },
+        (res) => {
           const location = res.headers.location;
-          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && location && hops < 5) {
-            go(location, hops + 1);
+          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && location && hops < 8) {
+            const next = location.startsWith('http') ? location : new URL(location, target).href;
+            go(next, hops + 1);
             return;
           }
           if (res.statusCode !== 200) {
-            reject(new Error(`Cursor install script HTTP ${res.statusCode}`));
+            reject(new Error(`${target} HTTP ${res.statusCode}`));
             return;
           }
-          let body = '';
-          res.setEncoding('utf8');
-          res.on('data', (chunk) => {
-            body += chunk;
-          });
-          res.on('end', () => resolve(body));
-        })
-        .on('error', reject);
+          if (!destPath) {
+            let body = '';
+            res.setEncoding('utf8');
+            res.on('data', (chunk) => {
+              body += chunk;
+            });
+            res.on('end', () => resolve(body));
+            return;
+          }
+          const out = fs.createWriteStream(destPath);
+          res.pipe(out);
+          out.on('finish', () => resolve(destPath));
+          out.on('error', reject);
+        },
+      );
+      req.on('error', reject);
     };
     go(url);
   });
 }
 
-function runBash(scriptPath, home) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('bash', [scriptPath], {
-      env: {
-        ...process.env,
-        HOME: home,
-        PATH: `${path.join(home, '.local', 'bin')}${path.delimiter}${process.env.PATH || ''}`,
-      },
-      stdio: 'inherit',
-    });
-    const timer = setTimeout(() => {
-      child.kill();
-      reject(new Error('Cursor CLI install timed out'));
-    }, 120000);
-    child.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.on('exit', (code) => {
-      clearTimeout(timer);
-      if (code === 0) resolve();
-      else reject(new Error(`Cursor CLI install exited ${code}`));
-    });
-  });
+function platformTriple() {
+  const osName = process.platform === 'darwin' ? 'darwin' : 'linux';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  return { osName, arch };
+}
+
+function parseDownloadUrl(script) {
+  const match = script.match(/DOWNLOAD_URL="([^"]+)"/);
+  if (match) return match[1];
+  const { osName, arch } = platformTriple();
+  const version = script.match(/lab\/(\d{4}\.\d{2}\.\d{2}-[a-f0-9]+)\//);
+  if (version) {
+    return `https://downloads.cursor.com/lab/${version[1]}/${osName}/${arch}/agent-cli-package.tar.gz`;
+  }
+  return null;
+}
+
+function findExtractedAgent(dir) {
+  const stack = [dir];
+  while (stack.length) {
+    const current = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) stack.push(full);
+      if (entry.isFile() && (entry.name === 'cursor-agent' || entry.name === 'agent')) {
+        return full;
+      }
+    }
+  }
+  return null;
 }
 
 async function install() {
   const existing = findBin();
-  if (existing) return existing;
+  if (existing) {
+    console.log(`[cursor] Already installed at ${existing}`);
+    return existing;
+  }
 
   const home = cursorHome();
-  fs.mkdirSync(path.join(home, '.local', 'bin'), { recursive: true });
+  const binDir = path.join(home, '.local', 'bin');
+  const shareDir = path.join(home, '.local', 'share', 'cursor-agent');
+  fs.mkdirSync(binDir, { recursive: true });
+  fs.mkdirSync(shareDir, { recursive: true });
 
-  const script = await fetchText('https://cursor.com/install');
-  const scriptPath = path.join(os.tmpdir(), 'cursor-install.sh');
-  fs.writeFileSync(scriptPath, script);
+  console.log(`[cursor] Fetching installer script as curl`);
+  const script = await request(INSTALL_SCRIPT_URL);
+  if (typeof script !== 'string' || !script.startsWith('#!')) {
+    throw new Error('cursor.com/install did not return a bash installer (got HTML).');
+  }
 
-  console.log(`[cursor] Installing CLI into ${home}`);
-  await runBash(scriptPath, home);
-  return findBin();
+  let downloadUrl = parseDownloadUrl(script);
+  if (downloadUrl) {
+    const { osName, arch } = platformTriple();
+    downloadUrl = downloadUrl.replace('${OS}', osName).replace('${ARCH}', arch);
+  }
+  if (!downloadUrl) {
+    throw new Error('Could not parse Cursor CLI download URL from installer.');
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cursor-cli-'));
+  const tarPath = path.join(tmpDir, 'agent-cli-package.tar.gz');
+  const extractDir = path.join(tmpDir, 'extract');
+  fs.mkdirSync(extractDir, { recursive: true });
+
+  console.log(`[cursor] Downloading ${downloadUrl}`);
+  await request(downloadUrl, tarPath);
+
+  const extracted = spawnSync('tar', ['-xzf', tarPath, '-C', extractDir], { encoding: 'utf8' });
+  if (extracted.status !== 0) {
+    throw new Error(`tar extract failed: ${extracted.stderr || extracted.error || extracted.status}`);
+  }
+
+  const agentPath = findExtractedAgent(extractDir);
+  if (!agentPath) {
+    throw new Error('Downloaded Cursor package did not contain an agent binary.');
+  }
+
+  const versionMatch = downloadUrl.match(/lab\/([^/]+)\//);
+  const version = versionMatch ? versionMatch[1] : 'current';
+  const finalDir = path.join(shareDir, 'versions', version);
+  fs.rmSync(finalDir, { recursive: true, force: true });
+  fs.mkdirSync(path.dirname(finalDir), { recursive: true });
+  fs.cpSync(extractDir, finalDir, { recursive: true });
+
+  const finalAgent = findExtractedAgent(finalDir);
+  if (!finalAgent) {
+    throw new Error('Failed to copy Cursor agent binary into place.');
+  }
+  try {
+    fs.chmodSync(finalAgent, 0o755);
+  } catch {
+    // ignore
+  }
+
+  for (const name of ['agent', 'cursor-agent']) {
+    const link = path.join(binDir, name);
+    fs.rmSync(link, { force: true });
+    fs.symlinkSync(finalAgent, link);
+  }
+
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+  const ready = findBin();
+  if (!ready) {
+    throw new Error(`Installed Cursor agent at ${finalAgent} but it is not on the search path.`);
+  }
+  console.log(`[cursor] Ready at ${ready}`);
+  return ready;
 }
 
 module.exports = { install, findBin, cursorHome, binDirs };
 
 if (require.main === module) {
-  install()
-    .then((bin) => {
-      if (!bin) {
-        console.error('[cursor] Install finished but agent binary was not found');
-        process.exit(1);
-      }
-      console.log(`[cursor] Ready at ${bin}`);
-    })
-    .catch((error) => {
-      console.error('[cursor] Install failed:', error);
-      process.exit(1);
-    });
+  install().catch((error) => {
+    console.error('[cursor] Install failed:', error);
+    process.exit(1);
+  });
 }
