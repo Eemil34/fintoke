@@ -45,16 +45,17 @@ export async function copyWebsiteTemplate(
   templateId: string,
   projectId: string,
 ): Promise<boolean> {
+  await fs.mkdir(projectPath, { recursive: true });
+
+  const fromSnapshot = await copySnapshotToProject(templateId, projectPath, projectId);
+  if (fromSnapshot) return true;
+
   const template = await getManagedTemplate(templateId);
   if (!template) return false;
 
-  await fs.mkdir(projectPath, { recursive: true });
-
-  if (template.hasSnapshot || template.kind === 'snapshot') {
-    const copied = await copySnapshotToProject(templateId, projectPath, projectId);
-    if (copied) return true;
+  if (template.kind === 'snapshot') {
     console.warn(
-      `[templates] Snapshot files missing for "${templateId}"; refusing to substitute a generated catalog site.`,
+      `[templates] Snapshot files missing for "${templateId}"; will not generate a lookalike catalog page.`,
     );
     return false;
   }

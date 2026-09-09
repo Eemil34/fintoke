@@ -8,7 +8,6 @@ import {
   directoryHasApp,
   duplicateProjectSnapshot,
   snapshotHasApp,
-  syncSeedSnapshotsToVolume,
   writeProjectSnapshot,
 } from './snapshot';
 import type { ManagedTemplate, TemplateKind, WebsiteTemplate } from './types';
@@ -74,41 +73,28 @@ async function loadSeedStore(): Promise<TemplateFileStore | null> {
   }
 }
 
-async function copySeedSnapshots(): Promise<void> {
-  try {
-    const copied = await syncSeedSnapshotsToVolume();
-    if (copied > 0) {
-      console.log(`[templates] Copied ${copied} saved-site snapshot(s) from seed.`);
-    }
-  } catch (error) {
-    console.warn('[templates] Could not copy seed snapshots:', error);
-  }
-}
-
 async function readStore(): Promise<TemplateFileStore> {
-  await copySeedSnapshots();
   const store = await readStoreFile();
   const seed = await loadSeedStore();
   if (!seed?.custom.length) return store;
 
-  const force = process.env.SYNC_TEMPLATES_FROM_SEED === '1';
-  const hasSeeded = seed.custom.some((template) =>
-    store.custom.some((row) => row.id === template.id),
-  );
-  if (!force && hasSeeded) return store;
-
   const seedIds = new Set(seed.custom.map((template) => template.id));
-  const next: TemplateFileStore = force
-    ? { overrides: seed.overrides, custom: seed.custom, hidden: seed.hidden }
-    : {
-        overrides: { ...seed.overrides, ...store.overrides },
-        custom: [...seed.custom, ...store.custom.filter((template) => !seedIds.has(template.id))],
-        hidden: [...new Set([...seed.hidden, ...store.hidden])],
-      };
-  try {
-    await writeStore(next);
-  } catch (error) {
-    console.error('Could not persist seeded templates to disk:', error);
+  const next: TemplateFileStore = {
+    overrides: { ...store.overrides, ...seed.overrides },
+    custom: [
+      ...seed.custom,
+      ...store.custom.filter((template) => !seedIds.has(template.id)),
+    ],
+    hidden: [...new Set([...(seed.hidden ?? []), ...(store.hidden ?? [])])],
+  };
+
+  const changed = JSON.stringify(store) !== JSON.stringify(next);
+  if (changed) {
+    try {
+      await writeStore(next);
+    } catch (error) {
+      console.error('Could not persist seeded templates to disk:', error);
+    }
   }
   return next;
 }
@@ -161,12 +147,12 @@ async function toManaged(
   overridden: boolean,
   extras: ReturnType<typeof snapshotMeta> = { kind: 'catalog' },
 ): Promise<ManagedTemplate> {
-  const hasSnapshot = extras.kind === 'snapshot' ? await snapshotHasApp(template.id) : false;
+  const hasSnapshot = await snapshotHasApp(template.id);
   return {
     ...template,
     source,
     overridden,
-    kind: extras.kind,
+    kind: hasSnapshot ? 'snapshot' : extras.kind,
     sourceProjectId: extras.sourceProjectId ?? null,
     sourceUrl: extras.sourceUrl ?? null,
     hasSnapshot,
@@ -236,13 +222,16 @@ export async function listManagedTemplates(): Promise<ManagedTemplate[]> {
       ),
     ),
   );
-  const builtins = await Promise.all(
-    WEBSITE_TEMPLATES.filter((template) => !store.hidden.includes(template.id)).map((template) => {
-      const override = store.overrides[template.id];
-      if (!override) return toManaged(template, 'builtin', false);
-      return toManaged(sanitizeWebsiteTemplate(override, { id: template.id }), 'builtin', true);
-    }),
-  );
+  const hasSavedSites = custom.some((template) => template.hasSnapshot);
+  const builtins = hasSavedSites
+    ? []
+    : await Promise.all(
+        WEBSITE_TEMPLATES.filter((template) => !store.hidden.includes(template.id)).map((template) => {
+          const override = store.overrides[template.id];
+          if (!override) return toManaged(template, 'builtin', false);
+          return toManaged(sanitizeWebsiteTemplate(override, { id: template.id }), 'builtin', true);
+        }),
+      );
   return [...custom, ...builtins];
 }
 

@@ -1,7 +1,29 @@
+import fs from 'fs';
+import path from 'path';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
-  return NextResponse.json({ ok: true, service: 'fintoke', templatePack: 'saved-sites' });
+  const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
+  let savedTemplates: string[] = [];
+  try {
+    savedTemplates = fs
+      .readdirSync(seed, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isDirectory() &&
+          fs.existsSync(path.join(seed, entry.name, 'app', 'page.tsx')),
+      )
+      .map((entry) => entry.name);
+  } catch {
+    savedTemplates = [];
+  }
+
+  return NextResponse.json({
+    ok: true,
+    service: 'fintoke',
+    templatePack: 'saved-sites',
+    savedTemplates,
+  });
 }
 
 export const runtime = 'nodejs';
