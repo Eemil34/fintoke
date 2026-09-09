@@ -58,11 +58,15 @@ function isAssetRequest(segments?: string[]) {
   return /\.[a-z0-9]+$/i.test(segments[segments.length - 1] || '');
 }
 
-function rewriteHtml(html: string, prefix: string) {
+function rewritePublicPaths(source: string, prefix: string) {
   const base = prefix.replace(/\/$/, '');
-  return html
-    .replace(/(["'])\/_next\//g, `$1${base}/_next/`)
-    .replace(/((?:href|src)=["'])\/(?!\/)/g, `$1${base}/`);
+  return source.replace(/(["'`(=])\/(?!\/|preview\/)/g, `$1${base}/`);
+}
+
+function childPath(segments?: string[]) {
+  if (!segments?.length) return '/';
+  if (segments.some((part) => part === '..' || part === '')) return '/';
+  return `/${segments.join('/')}`;
 }
 
 async function proxy(request: NextRequest, { params }: RouteContext) {
@@ -91,9 +95,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     return previewPage('Starting preview', 'Preparing the site process…', logs(), true);
   }
 
-  const rest = segments?.length
-    ? `/${segments.map((part) => encodeURIComponent(part)).join('/')}`
-    : '/';
+  const rest = childPath(segments);
   const target = `http://127.0.0.1:${preview.port}${rest}${request.nextUrl.search}`;
 
   const headers = new Headers();
@@ -141,7 +143,10 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     if (key === 'location') {
       try {
         const location = new URL(value, `http://127.0.0.1:${preview.port}`);
-        out.set('location', `${prefix}${location.pathname}${location.search}`);
+        const path = location.pathname.startsWith(prefix)
+          ? location.pathname
+          : `${prefix}${location.pathname}`;
+        out.set('location', `${path}${location.search}`);
         return;
       } catch {
         out.set(key, value);
@@ -151,10 +156,15 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     out.set(key, value);
   });
 
-  if (contentType.includes('text/html')) {
-    const html = rewriteHtml(await upstream.text(), prefix);
+  const shouldRewrite =
+    contentType.includes('text/html') ||
+    contentType.includes('javascript') ||
+    contentType.includes('text/css') ||
+    contentType.includes('json');
+  if (shouldRewrite) {
+    const body = rewritePublicPaths(await upstream.text(), prefix);
     out.delete('content-length');
-    return new Response(html, { status: upstream.status, headers: out });
+    return new Response(body, { status: upstream.status, headers: out });
   }
 
   return new Response(upstream.body, { status: upstream.status, headers: out });

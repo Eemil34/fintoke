@@ -88,18 +88,17 @@ export async function ensureIsolatedNextConfig(projectPath: string): Promise<boo
   return true;
 }
 
-export async function writePreviewNextConfig(projectPath: string, basePath: string): Promise<void> {
+export async function writePreviewNextConfig(projectPath: string, assetPrefix: string): Promise<void> {
   const configPath = path.join(projectPath, 'next.config.js');
-  const base = basePath
-    ? `  basePath: ${JSON.stringify(basePath)},
-  assetPrefix: ${JSON.stringify(basePath)},`
+  const prefix = assetPrefix
+    ? `  assetPrefix: ${JSON.stringify(assetPrefix)},`
     : '';
   const contents = `const path = require('path');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   outputFileTracingRoot: path.join(__dirname),
-${base}
+${prefix}
   ${GENERATED_IMAGES_CONFIG},
 };
 

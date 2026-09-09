@@ -938,7 +938,7 @@ class PreviewManager {
     env.NEXT_BASE_PATH = '';
     previewProcess.url = iframeUrl;
 
-    await writePreviewNextConfig(projectPath, '');
+    await writePreviewNextConfig(projectPath, previewBasePath(projectId));
 
     const child = spawn(
       npmCommand,
