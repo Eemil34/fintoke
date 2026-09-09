@@ -648,6 +648,8 @@ ${instruction.trim()}`;
 
   if (cursorSettings?.apiKey && typeof cursorSettings.apiKey === 'string' && cursorSettings.apiKey.trim()) {
     env.CURSOR_API_KEY = cursorSettings.apiKey.trim();
+  } else if (process.env.CURSOR_API_KEY?.trim()) {
+    env.CURSOR_API_KEY = process.env.CURSOR_API_KEY.trim();
   }
 
   const maxAttempts = 2;
