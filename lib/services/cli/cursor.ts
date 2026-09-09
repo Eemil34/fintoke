@@ -34,6 +34,11 @@ import {
 import { serializeMessage, createRealtimeMessage } from '@/lib/serializers/chat';
 import { buildInitialAgentPrompt } from '@/lib/templates/agentPrompt';
 import { SITE_IMAGE_AGENT_RULES, buildSiteImageAgentRules } from '@/lib/templates/siteImages';
+import {
+  resolveCursorApiKey,
+  resolveCursorExecutable,
+  withCursorPath,
+} from '@/lib/server/cursorCli';
 
 type CursorEvent = {
   type?: string;
@@ -470,7 +475,7 @@ async function handleCursorFailure(
   } else if (detectedError === 'auth') {
     headerMessage = [
       '⚠️ Cursor Agent failed to authenticate.',
-      'Re-enter CURSOR_API_KEY under Settings → AI Agents and confirm the cursor-agent login status.',
+      'Set CURSOR_API_KEY in the server environment (Railway Variables) or Settings → AI Agents, then restart the service so cursor-agent can see it.',
     ].join('\n');
   } else if (detectedError === 'invalid_model') {
     headerMessage = [
@@ -642,14 +647,14 @@ ${instruction.trim()}`;
     baseArgs.push('--model', cursorCliModel);
   }
 
-  const env: NodeJS.ProcessEnv = {
+  const cursorApiKey = resolveCursorApiKey(cursorSettings?.apiKey);
+  const env: NodeJS.ProcessEnv = withCursorPath({
     ...process.env,
-  };
+    ...(cursorApiKey ? { CURSOR_API_KEY: cursorApiKey } : {}),
+  });
 
-  if (cursorSettings?.apiKey && typeof cursorSettings.apiKey === 'string' && cursorSettings.apiKey.trim()) {
-    env.CURSOR_API_KEY = cursorSettings.apiKey.trim();
-  } else if (process.env.CURSOR_API_KEY?.trim()) {
-    env.CURSOR_API_KEY = process.env.CURSOR_API_KEY.trim();
+  if (cursorApiKey) {
+    baseArgs.unshift('--api-key', cursorApiKey);
   }
 
   const maxAttempts = 2;
@@ -668,6 +673,30 @@ ${instruction.trim()}`;
     isOptimistic: true,
   });
   streamManager.publish(projectId, { type: 'message', data: placeholderMessage });
+
+  if (!resolveCursorExecutable()) {
+    await handleCursorFailure(
+      projectId,
+      requestId,
+      [],
+      undefined,
+      'cursor-agent is not installed on this server. Restart the service so it can install Cursor CLI, then try again.',
+      placeholderMessageId,
+    );
+    return;
+  }
+
+  if (!cursorApiKey) {
+    await handleCursorFailure(
+      projectId,
+      requestId,
+      [],
+      'auth',
+      undefined,
+      placeholderMessageId,
+    );
+    return;
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const attemptSuffix = attempt > 1 ? ` (retry ${attempt}/${maxAttempts})` : '';
@@ -808,7 +837,8 @@ async function runCursorOnce(params: {
 }): Promise<CursorRunResult> {
   const { projectId, repoPath, args, env, requestId, initialSessionId, placeholderMessageId } = params;
 
-  const child = spawn(CURSOR_EXECUTABLE, args, {
+  const executable = resolveCursorExecutable() || CURSOR_EXECUTABLE;
+  const child = spawn(executable, args, {
     cwd: repoPath,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],

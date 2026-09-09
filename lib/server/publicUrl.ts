@@ -14,12 +14,12 @@ export function usesPreviewProxy(): boolean {
 }
 
 export function previewBasePath(projectId: string): string {
-  return usesPreviewProxy() ? `/__preview/${encodeURIComponent(projectId)}` : '';
+  return usesPreviewProxy() ? `/preview/${encodeURIComponent(projectId)}` : '';
 }
 
 export function previewIframeUrl(projectId: string, port: number): string {
   if (!usesPreviewProxy()) return `http://localhost:${port}`;
-  return `/__preview/${encodeURIComponent(projectId)}`;
+  return `/preview/${encodeURIComponent(projectId)}`;
 }
 
 export function previewPublicUrl(projectId: string, port: number): string {

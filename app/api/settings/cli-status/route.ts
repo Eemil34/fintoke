@@ -10,7 +10,13 @@ import type { CLIStatus } from '@/types/backend';
 import { CODEX_MODEL_DEFINITIONS } from '@/lib/constants/codexModels';
 import { QWEN_MODEL_DEFINITIONS } from '@/lib/constants/qwenModels';
 import { GLM_MODEL_DEFINITIONS } from '@/lib/constants/glmModels';
+import { loadGlobalSettings } from '@/lib/services/settings';
 import { CURSOR_MODEL_DEFINITIONS } from '@/lib/constants/cursorModels';
+import {
+  hasCursorApiKey,
+  resolveCursorExecutable,
+  withCursorPath,
+} from '@/lib/server/cursorCli';
 
 const execAsync = promisify(exec);
 
@@ -63,19 +69,27 @@ async function checkCursorCLI(): Promise<{
   version?: string;
   error?: string;
 }> {
-  const executable = process.platform === 'win32' ? 'cursor-agent.cmd' : 'cursor-agent';
-  try {
-    const { stdout, stderr } = await execAsync(`${executable} --version`);
-    const output = `${stdout.trim()} ${stderr.trim()}`.trim();
-    const version = output.length > 0 ? output : 'installed';
-    return {
-      installed: true,
-      version,
-    };
-  } catch (error) {
+  const executable = resolveCursorExecutable();
+  if (!executable) {
     return {
       installed: false,
-      error: error instanceof Error ? error.message : 'Failed to check Cursor CLI',
+      error: 'cursor-agent is not on PATH. Restart the service so start-prod can install Cursor CLI.',
+    };
+  }
+  try {
+    const { stdout, stderr } = await execAsync(`"${executable}" --version`, {
+      timeout: 8000,
+      env: withCursorPath(process.env),
+    });
+    const output = `${stdout.trim()} ${stderr.trim()}`.trim();
+    return {
+      installed: true,
+      version: output.length > 0 ? output : 'installed',
+    };
+  } catch {
+    return {
+      installed: true,
+      version: 'installed',
     };
   }
 }
@@ -152,6 +166,9 @@ export async function GET() {
       models: CODEX_MODEL_DEFINITIONS.map(model => model.id),
     };
 
+    const globalSettings = await loadGlobalSettings();
+    const cursorHasKey = hasCursorApiKey(globalSettings.cli_settings?.cursor?.apiKey);
+
     const cursorStatus = await checkCursorCLI();
     status.cursor = {
       installed: cursorStatus.installed,
@@ -159,6 +176,8 @@ export async function GET() {
       checking: false,
       error: cursorStatus.error,
       models: CURSOR_MODEL_DEFINITIONS.map((model) => model.id),
+      available: cursorStatus.installed && cursorHasKey,
+      configured: cursorHasKey,
     };
 
     const qwenStatus = await checkQwenCLI();

@@ -1135,9 +1135,9 @@ export default function HomePage() {
                         <button
                           key={option.id}
                           onClick={() => handleAssistantChange(option.id)}
-                          disabled={!cliStatus[option.id]?.installed}
+                          disabled={!(cliStatus[option.id]?.installed || cliStatus[option.id]?.configured)}
                           className={`w-full flex items-center gap-2 px-3 py-2 text-left first:rounded-t-2xl last:rounded-b-2xl transition-colors ${
-                            !cliStatus[option.id]?.installed
+                            !(cliStatus[option.id]?.installed || cliStatus[option.id]?.configured)
                               ? 'opacity-50 cursor-not-allowed text-gray-400 '
                               : selectedAssistant === option.id 
                               ? 'bg-gray-100 text-black font-semibold' 

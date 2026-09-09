@@ -2,6 +2,7 @@ import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { prisma } from '@/lib/db/client';
+import { resolveCursorExecutable, withCursorPath } from '@/lib/server/cursorCli';
 import { getProjectById, updateProject, updateProjectActivity } from '@/lib/services/project';
 import { createMessage } from '@/lib/services/message';
 import { initializeNextJsProject as initializeClaudeProject, applyChanges as applyClaudeChanges } from '@/lib/services/cli/claude';
@@ -24,7 +25,7 @@ let cliAvailabilityCache: { at: number; claude: boolean; cursor: boolean } | nul
 
 async function commandInstalled(command: string): Promise<boolean> {
   try {
-    await execAsync(`${command} --version`, { timeout: 2500 });
+    await execAsync(`"${command}" --version`, { timeout: 2500, env: withCursorPath(process.env) });
     return true;
   } catch {
     return false;
@@ -35,9 +36,12 @@ async function resolveBuilderCli(preferred?: string): Promise<string> {
   const requested = (preferred || 'claude').toLowerCase();
   const now = Date.now();
   if (!cliAvailabilityCache || now - cliAvailabilityCache.at > 30_000) {
-    const cursorBin = process.platform === 'win32' ? 'cursor-agent.cmd' : 'cursor-agent';
-    const [claude, cursor] = await Promise.all([commandInstalled('claude'), commandInstalled(cursorBin)]);
-    cliAvailabilityCache = { at: now, claude, cursor };
+    const cursorBin = resolveCursorExecutable() || (process.platform === 'win32' ? 'cursor-agent.cmd' : 'cursor-agent');
+    const [claude, cursor] = await Promise.all([
+      commandInstalled('claude'),
+      commandInstalled(cursorBin),
+    ]);
+    cliAvailabilityCache = { at: now, claude, cursor: cursor || Boolean(resolveCursorExecutable()) };
   }
 
   if (requested === 'claude' && !cliAvailabilityCache.claude && cliAvailabilityCache.cursor) {

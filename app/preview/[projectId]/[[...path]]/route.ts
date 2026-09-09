@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { previewManager } from '@/lib/services/preview';
+import { previewBasePath } from '@/lib/server/publicUrl';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   const rest = segments?.length ? `/${segments.map((part) => encodeURIComponent(part)).join('/')}` : '';
-  const prefix = `/__preview/${encodeURIComponent(projectId)}`;
+  const prefix = previewBasePath(projectId) || `/preview/${encodeURIComponent(projectId)}`;
   const target = `http://127.0.0.1:${preview.port}${prefix}${rest}${request.nextUrl.search}`;
 
   const headers = new Headers();
@@ -36,13 +37,18 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     (init as RequestInit & { duplex: string }).duplex = 'half';
   }
 
-  const upstream = await fetch(target, init);
-  const out = new Headers();
-  upstream.headers.forEach((value, key) => {
-    if (key === 'content-encoding' || key === 'transfer-encoding') return;
-    out.set(key, value);
-  });
-  return new Response(upstream.body, { status: upstream.status, headers: out });
+  try {
+    const upstream = await fetch(target, init);
+    const out = new Headers();
+    upstream.headers.forEach((value, key) => {
+      if (key === 'content-encoding' || key === 'transfer-encoding') return;
+      out.set(key, value);
+    });
+    return new Response(upstream.body, { status: upstream.status, headers: out });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(`Preview proxy failed: ${message}`, { status: 502 });
+  }
 }
 
 export const GET = proxy;

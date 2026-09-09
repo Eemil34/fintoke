@@ -32,11 +32,24 @@ function withCursorPath(env) {
 }
 
 function cursorInstalled() {
-  const result = spawnSync('cursor-agent', ['--version'], {
-    env: withCursorPath(process.env),
-    encoding: 'utf8',
-  });
-  return result.status === 0;
+  const env = withCursorPath(process.env);
+  const names = ['cursor-agent', 'agent'];
+  for (const name of names) {
+    const result = spawnSync(name, ['--version'], {
+      env,
+      encoding: 'utf8',
+    });
+    if (result.status === 0) return true;
+  }
+  const home = os.homedir();
+  const dirs = [
+    path.join(home, '.local', 'bin'),
+    path.join(home, '.cursor', 'bin'),
+    path.join(home, '.cursor-agent', 'bin'),
+  ];
+  return dirs.some((dir) =>
+    names.some((name) => fs.existsSync(path.join(dir, name)))
+  );
 }
 
 function ensureCursorCli() {

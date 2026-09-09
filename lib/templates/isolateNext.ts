@@ -88,6 +88,29 @@ export async function ensureIsolatedNextConfig(projectPath: string): Promise<boo
   return true;
 }
 
+export async function writePreviewNextConfig(projectPath: string, basePath: string): Promise<void> {
+  const configPath = path.join(projectPath, 'next.config.js');
+  const base = basePath
+    ? `  basePath: ${JSON.stringify(basePath)},
+  assetPrefix: ${JSON.stringify(basePath)},`
+    : '';
+  await fs.writeFile(
+    configPath,
+    `const path = require('path');
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  outputFileTracingRoot: path.join(__dirname),
+${base}
+  ${GENERATED_IMAGES_CONFIG},
+};
+
+module.exports = nextConfig;
+`,
+  );
+  await clearNextCache(projectPath);
+}
+
 export async function ensureGeneratedDevScript(projectPath: string): Promise<void> {
   const scriptPath = path.join(projectPath, 'scripts', 'run-dev.js');
   await fs.mkdir(path.dirname(scriptPath), { recursive: true });

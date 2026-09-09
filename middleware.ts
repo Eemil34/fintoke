@@ -4,7 +4,7 @@ import { ADMIN_COOKIE, verifyAdminToken } from '@/lib/admin-auth';
 function isProtectedPath(pathname: string) {
   if (pathname === '/studio' || pathname.startsWith('/studio/')) return true;
   if (pathname.startsWith('/dashboard')) return true;
-  if (pathname.startsWith('/__preview/')) return true;
+  if (pathname.startsWith('/preview/')) return true;
   if (/^\/[^/]+\/chat(?:\/|$)/.test(pathname)) return true;
   return false;
 }
@@ -26,6 +26,6 @@ export const config = {
     '/dashboard/:path*',
     '/:project_id/chat',
     '/:project_id/chat/:path*',
-    '/__preview/:path*',
+    '/preview/:path*',
   ],
 };

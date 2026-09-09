@@ -8,7 +8,7 @@ import fs from 'fs/promises';
 import { findAvailablePort } from '@/lib/utils/ports';
 import { getProjectById, updateProject, updateProjectStatus } from './project';
 import { ensureProjectApp } from '@/lib/templates/copyTemplate';
-import { normalizeGeneratedProject } from '@/lib/templates/isolateNext';
+import { normalizeGeneratedProject, writePreviewNextConfig } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir } from '@/lib/server/paths';
 import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
@@ -721,12 +721,16 @@ class PreviewManager {
     }
 
     const isolated = await normalizeGeneratedProject(projectPath);
+    const proxyBasePath = previewBasePath(projectId);
+    if (proxyBasePath) {
+      await writePreviewNextConfig(projectPath, proxyBasePath);
+    }
     const existing = this.processes.get(projectId);
     if (existing && existing.status !== 'error') {
-      if (!isolated) {
+      if (!proxyBasePath && !isolated) {
         return this.toInfo(existing);
       }
-      queueLog('Isolated Next.js config changed; restarting preview.');
+      queueLog('Restarting preview with the production proxy base path.');
       await this.stop(projectId);
     }
 
@@ -854,13 +858,18 @@ class PreviewManager {
 
     const effectivePort = previewProcess.port;
     const resolvedUrl = previewPublicUrl(projectId, effectivePort);
+    const iframeUrl = previewIframeUrl(projectId, effectivePort);
     env.NEXT_PUBLIC_APP_URL = resolvedUrl;
     env.NEXT_BASE_PATH = previewBasePath(projectId);
-    previewProcess.url = previewIframeUrl(projectId, effectivePort);
+    previewProcess.url = iframeUrl;
+
+    if (env.NEXT_BASE_PATH) {
+      await writePreviewNextConfig(projectPath, env.NEXT_BASE_PATH);
+    }
 
     const child = spawn(
       npmCommand,
-      ['run', 'dev', '--', '--port', String(effectivePort)],
+      ['run', 'dev', '--', '--hostname', '127.0.0.1', '--port', String(effectivePort)],
       {
         cwd: projectPath,
         env,

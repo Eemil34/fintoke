@@ -511,7 +511,7 @@ export default function GlobalSettings({
                     const status = cliStatus[cli.id];
                     const settings = globalSettings.cli_settings[cli.id] || {};
                     const isChecking = status?.checking || false;
-                    const isInstalled = status?.installed || false;
+                    const isInstalled = Boolean(status?.installed || status?.configured);
                     const isDefault = globalSettings.default_cli === cli.id;
 
                     return (
@@ -640,7 +640,7 @@ export default function GlobalSettings({
                                 </div>
                                 <p className="text-[11px] text-gray-500 leading-snug">
                                   Injected as <code className="font-mono">CURSOR_API_KEY</code> and passed to <code className="font-mono">cursor-agent</code>.
-                                  Leave blank to rely on the logged-in Cursor CLI session.
+                                  Leave blank to use the same variable from Railway / the server environment.
                                 </p>
                               </div>
                             )}
