@@ -52,8 +52,13 @@ export async function syncSeedSnapshotsToVolume(): Promise<number> {
     if (!entry.isDirectory()) continue;
     const from = path.join(SEED_SNAPSHOTS_DIR, entry.name);
     const to = path.join(SNAPSHOTS_DIR, entry.name);
-    if (await directoryHasApp(to)) continue;
     if (!(await directoryHasApp(from))) continue;
+    try {
+      await fs.access(path.join(to, 'app', 'page.tsx'));
+      continue;
+    } catch {
+      // incomplete volume copy
+    }
     await fs.cp(from, to, { recursive: true });
     copied += 1;
   }
@@ -145,6 +150,7 @@ export async function copySnapshotToProject(
   await fs.mkdir(projectPath, { recursive: true });
   await copyDirectory(source, projectPath);
   await rewritePackageName(projectPath, projectId);
+  await fs.writeFile(path.join(projectPath, '.fintoke-from'), `${templateId}\n`);
   await normalizeGeneratedProject(projectPath);
   return true;
 }

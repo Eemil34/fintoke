@@ -7,12 +7,14 @@ import { copySnapshotToProject, snapshotHasApp } from './snapshot';
 import { scaffoldBasicNextApp } from '@/lib/utils/scaffold';
 import { normalizeGeneratedProject } from './isolateNext';
 
-async function isMaterializedFallback(projectPath: string): Promise<boolean> {
+const TEMPLATE_MARK = '.fintoke-from';
+
+async function readTemplateMark(projectPath: string): Promise<string | null> {
   try {
-    await fs.access(path.join(projectPath, 'lib/site.ts'));
-    return true;
+    const value = (await fs.readFile(path.join(projectPath, TEMPLATE_MARK), 'utf8')).trim();
+    return value || null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -23,17 +25,17 @@ export async function restoreSnapshotIfMaterialized(
 ): Promise<boolean> {
   const templateId = getWebsiteTemplateId(settingsJson);
   if (!templateId) return false;
-  if (!(await isMaterializedFallback(projectPath))) return false;
   if (!(await snapshotHasApp(templateId))) return false;
+  if ((await readTemplateMark(projectPath)) === templateId) return false;
 
-  const entries = await fs.readdir(projectPath);
+  const entries = await fs.readdir(projectPath).catch(() => [] as string[]);
   for (const name of entries) {
     if (name === 'node_modules') continue;
     await fs.rm(path.join(projectPath, name), { recursive: true, force: true });
   }
   const copied = await copySnapshotToProject(templateId, projectPath, projectId);
   if (copied) {
-    console.log(`[templates] Restored saved snapshot "${templateId}" over generated fallback for ${projectId}`);
+    console.log(`[templates] Restored saved snapshot "${templateId}" for ${projectId}`);
   }
   return copied;
 }

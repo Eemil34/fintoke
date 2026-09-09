@@ -78,37 +78,11 @@ const dataDir = process.env.SETTINGS_DIR || path.join(root, 'data');
 const projects = process.env.PROJECTS_DIR || path.join(dataDir, 'projects');
 fs.mkdirSync(projects, { recursive: true });
 
-const seedSnapshots = path.join(root, 'seed', 'templates', 'snapshots');
-const volumeSnapshots = path.join(dataDir, 'templates', 'snapshots');
-if (fs.existsSync(seedSnapshots)) {
-  fs.mkdirSync(volumeSnapshots, { recursive: true });
-  for (const name of fs.readdirSync(seedSnapshots)) {
-    const from = path.join(seedSnapshots, name);
-    const to = path.join(volumeSnapshots, name);
-    if (!fs.statSync(from).isDirectory()) continue;
-    if (fs.existsSync(path.join(to, 'package.json'))) continue;
-    fs.cpSync(from, to, { recursive: true });
-    console.log(`Copied saved template snapshot ${name}`);
-  }
-}
-
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = `file:${path.join(dataDir, 'cc.db')}`;
 }
 
-ensureCursorCli();
-
-if (process.env.DATABASE_URL.startsWith('file:')) {
-  console.log('Ensuring database schema…');
-  const result = spawnSync(localBin('prisma'), ['db', 'push', '--skip-generate'], {
-    cwd: root,
-    stdio: 'inherit',
-    env: process.env,
-  });
-  if (result.status !== 0) {
-    console.error('prisma db push failed; chat/projects will not work until the database exists.');
-  }
-}
+process.env.PATH = withCursorPath(process.env).PATH;
 
 const port = process.env.PORT || '3000';
 const child = spawn(
@@ -121,3 +95,50 @@ const child = spawn(
   }
 );
 child.on('exit', (code) => process.exit(code || 0));
+
+function snapshotComplete(dir) {
+  return (
+    fs.existsSync(path.join(dir, 'package.json')) &&
+    (fs.existsSync(path.join(dir, 'app', 'page.tsx')) ||
+      fs.existsSync(path.join(dir, 'app', 'page.jsx')))
+  );
+}
+
+function syncSeedSnapshots() {
+  const seedSnapshots = path.join(root, 'seed', 'templates', 'snapshots');
+  const volumeSnapshots = path.join(dataDir, 'templates', 'snapshots');
+  if (!fs.existsSync(seedSnapshots)) {
+    console.warn('No seed/templates/snapshots in this image.');
+    return;
+  }
+  fs.mkdirSync(volumeSnapshots, { recursive: true });
+  for (const name of fs.readdirSync(seedSnapshots)) {
+    const from = path.join(seedSnapshots, name);
+    const to = path.join(volumeSnapshots, name);
+    if (!fs.statSync(from).isDirectory()) continue;
+    if (!snapshotComplete(from)) continue;
+    if (snapshotComplete(to)) continue;
+    fs.cpSync(from, to, { recursive: true });
+    console.log(`Copied saved template snapshot ${name}`);
+  }
+}
+
+setTimeout(() => {
+  if (process.env.DATABASE_URL.startsWith('file:')) {
+    console.log('Ensuring database schema…');
+    const result = spawnSync(localBin('prisma'), ['db', 'push', '--skip-generate'], {
+      cwd: root,
+      stdio: 'inherit',
+      env: process.env,
+    });
+    if (result.status !== 0) {
+      console.error('prisma db push failed; chat/projects will not work until the database exists.');
+    }
+  }
+  try {
+    syncSeedSnapshots();
+  } catch (error) {
+    console.error('Failed to copy saved template snapshots:', error);
+  }
+  ensureCursorCli();
+}, 250);
