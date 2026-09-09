@@ -27,7 +27,6 @@ export function previewPublicUrl(projectId: string, port: number): string {
   return `${publicAppOrigin()}${previewBasePath(projectId)}`;
 }
 
-export function previewInternalUrl(projectId: string, port: number): string {
-  const base = previewBasePath(projectId);
-  return `http://127.0.0.1:${port}${base || '/'}`;
+export function previewInternalUrl(_projectId: string, port: number): string {
+  return `http://127.0.0.1:${port}/`;
 }

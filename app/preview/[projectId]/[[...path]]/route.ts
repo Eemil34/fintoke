@@ -1,7 +1,5 @@
 import { NextRequest } from 'next/server';
 import { previewManager } from '@/lib/services/preview';
-import { previewBasePath } from '@/lib/server/publicUrl';
-import { getProjectById } from '@/lib/services/project';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -21,7 +19,7 @@ function escapeHtml(value: string) {
 
 function previewPage(title: string, message: string, logs: string[], refresh: boolean) {
   const logBlock = logs
-    .slice(-20)
+    .slice(-30)
     .map((line) => escapeHtml(line))
     .join('\n');
   const html = `<!DOCTYPE html>
@@ -60,28 +58,25 @@ function isAssetRequest(segments?: string[]) {
   return /\.[a-z0-9]+$/i.test(segments[segments.length - 1] || '');
 }
 
+function rewriteHtml(html: string, prefix: string) {
+  const base = prefix.replace(/\/$/, '');
+  return html
+    .replace(/(["'])\/_next\//g, `$1${base}/_next/`)
+    .replace(/((?:href|src)=["'])\/(?!\/)/g, `$1${base}/`);
+}
+
 async function proxy(request: NextRequest, { params }: RouteContext) {
   const { projectId: rawProjectId, path: segments } = await params;
   const projectId = decodeURIComponent(rawProjectId);
-  let preview = previewManager.getStatus(projectId);
-
-  if (!preview.port) {
-    const project = await getProjectById(projectId);
-    if (project?.previewPort) {
-      preview = {
-        ...preview,
-        port: project.previewPort,
-        url: project.previewUrl || preview.url,
-        status: preview.status === 'stopped' ? 'starting' : preview.status,
-      };
-    }
-  }
+  const prefix = `/preview/${encodeURIComponent(projectId)}`;
+  const logs = () => previewManager.getLogs(projectId);
+  const preview = previewManager.getStatus(projectId);
 
   if (preview.status === 'error') {
     return previewPage(
       'Preview failed',
-      'The site process exited. Open this page again from chat to retry.',
-      preview.logs || [],
+      'The site process exited. Reload chat to retry.',
+      preview.logs || logs(),
       false,
     );
   }
@@ -93,17 +88,13 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     if (isAssetRequest(segments)) {
       return new Response('', { status: 503, headers: { 'retry-after': '2' } });
     }
-    return previewPage(
-      'Starting preview',
-      'Preparing the site process…',
-      preview.logs || [],
-      true,
-    );
+    return previewPage('Starting preview', 'Preparing the site process…', logs(), true);
   }
 
-  const rest = segments?.length ? `/${segments.map((part) => encodeURIComponent(part)).join('/')}` : '';
-  const prefix = previewBasePath(projectId) || `/preview/${encodeURIComponent(projectId)}`;
-  const target = `http://127.0.0.1:${preview.port}${prefix}${rest}${request.nextUrl.search}`;
+  const rest = segments?.length
+    ? `/${segments.map((part) => encodeURIComponent(part)).join('/')}`
+    : '/';
+  const target = `http://127.0.0.1:${preview.port}${rest}${request.nextUrl.search}`;
 
   const headers = new Headers();
   request.headers.forEach((value, key) => {
@@ -111,8 +102,6 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     headers.set(key, value);
   });
   headers.set('host', `127.0.0.1:${preview.port}`);
-  headers.set('x-forwarded-host', request.headers.get('host') || '');
-  headers.set('x-forwarded-proto', request.nextUrl.protocol.replace(':', ''));
 
   const method = request.method.toUpperCase();
   const init: RequestInit = { method, headers, redirect: 'manual' };
@@ -121,31 +110,69 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     (init as RequestInit & { duplex: string }).duplex = 'half';
   }
 
+  let upstream: Response;
   try {
-    const upstream = await fetch(target, init);
-    const out = new Headers();
-    upstream.headers.forEach((value, key) => {
-      if (key === 'content-encoding' || key === 'transfer-encoding') return;
-      out.set(key, value);
-    });
-    return new Response(upstream.body, { status: upstream.status, headers: out });
+    upstream = await fetch(target, init);
   } catch {
     if (isAssetRequest(segments)) {
       return new Response('', { status: 503, headers: { 'retry-after': '2' } });
     }
     return previewPage(
       'Starting preview',
-      'Dependencies are installing or Next.js is compiling. This frame refreshes automatically.',
-      previewManager.getLogs(projectId),
+      'Dependencies are installing or Next.js is compiling.',
+      logs(),
       true,
     );
   }
+
+  if (upstream.status >= 500 && !isAssetRequest(segments)) {
+    return previewPage(
+      'Starting preview',
+      'The site is still compiling. This frame will refresh.',
+      logs(),
+      true,
+    );
+  }
+
+  const contentType = upstream.headers.get('content-type') || '';
+  const out = new Headers();
+  upstream.headers.forEach((value, key) => {
+    if (key === 'content-encoding' || key === 'transfer-encoding') return;
+    if (key === 'location') {
+      try {
+        const location = new URL(value, `http://127.0.0.1:${preview.port}`);
+        out.set('location', `${prefix}${location.pathname}${location.search}`);
+        return;
+      } catch {
+        out.set(key, value);
+        return;
+      }
+    }
+    out.set(key, value);
+  });
+
+  if (contentType.includes('text/html')) {
+    const html = rewriteHtml(await upstream.text(), prefix);
+    out.delete('content-length');
+    return new Response(html, { status: upstream.status, headers: out });
+  }
+
+  return new Response(upstream.body, { status: upstream.status, headers: out });
 }
 
-export const GET = proxy;
-export const POST = proxy;
-export const PUT = proxy;
-export const PATCH = proxy;
-export const DELETE = proxy;
-export const HEAD = proxy;
-export const OPTIONS = proxy;
+async function safeProxy(request: NextRequest, context: RouteContext) {
+  try {
+    return await proxy(request, context);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return previewPage('Preview error', message, [], true);
+  }
+}
+
+export const GET = safeProxy;
+export const POST = safeProxy;
+export const PUT = safeProxy;
+export const PATCH = safeProxy;
+export const DELETE = safeProxy;
+export const HEAD = safeProxy;
+export const OPTIONS = safeProxy;

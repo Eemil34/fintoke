@@ -766,7 +766,7 @@ class PreviewManager {
       PORT: String(preferredPort),
       WEB_PORT: String(preferredPort),
       NEXT_PUBLIC_APP_URL: previewPublicUrl(projectId, preferredPort),
-      NEXT_BASE_PATH: previewBasePath(projectId),
+      NEXT_BASE_PATH: '',
     };
 
     const pendingLogs: string[] = [
@@ -934,12 +934,10 @@ class PreviewManager {
     const resolvedUrl = previewPublicUrl(projectId, effectivePort);
     const iframeUrl = previewIframeUrl(projectId, effectivePort);
     env.NEXT_PUBLIC_APP_URL = resolvedUrl;
-    env.NEXT_BASE_PATH = previewBasePath(projectId);
+    env.NEXT_BASE_PATH = '';
     previewProcess.url = iframeUrl;
 
-    if (env.NEXT_BASE_PATH) {
-      await writePreviewNextConfig(projectPath, env.NEXT_BASE_PATH);
-    }
+    await writePreviewNextConfig(projectPath, '');
 
     const child = spawn(
       npmCommand,
