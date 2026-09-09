@@ -1,0 +1,2442 @@
+{
+  "overrides": {},
+  "custom": [
+    {
+      "id": "gym",
+      "name": "Gym",
+      "niche": "Saved site",
+      "category": "health-wellness",
+      "description": "make a gym landing page exactly like this with image 7 hero image and use like a bit bluish design but make it look like this structurally and designilly",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "Gym",
+        "tagline": "Saved site",
+        "description": "make a gym landing page exactly like this with image 7 hero image and use like a bit bluish design but make it look like this structurally and designilly"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "Gym",
+        "subtitle": "make a gym landing page exactly like this with image 7 hero image and use like a bit bluish design but make it look like this structurally and designilly",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788735076918-ua01nu84m",
+      "sourceUrl": null
+    },
+    {
+      "id": "coffee-shop-2",
+      "name": "Coffee shop 2",
+      "niche": "Saved site",
+      "category": "food-hospitality",
+      "description": "make an landing page exactly like this and use the image 4 in the hero",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "Coffee shop 2",
+        "tagline": "Saved site",
+        "description": "make an landing page exactly like this and use the image 4 in the hero"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "Coffee shop 2",
+        "subtitle": "make an landing page exactly like this and use the image 4 in the hero",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788732740314-9ryci7gkg",
+      "sourceUrl": null
+    },
+    {
+      "id": "coffee-shop",
+      "name": "coffee shop",
+      "niche": "Saved site",
+      "category": "food-hospitality",
+      "description": "could you make the hero of my coffee shop exactly like this and the rest matching the style",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "coffee shop",
+        "tagline": "Saved site",
+        "description": "could you make the hero of my coffee shop exactly like this and the rest matching the style"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "coffee shop",
+        "subtitle": "could you make the hero of my coffee shop exactly like this and the rest matching the style",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788730771179-4y3z4eqx0",
+      "sourceUrl": null
+    },
+    {
+      "id": "medicine-3",
+      "name": "medicine 3",
+      "niche": "Saved site",
+      "category": "health-wellness",
+      "description": "make landing page for a hospital/medical company exactly like this",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "medicine 3",
+        "tagline": "Saved site",
+        "description": "make landing page for a hospital/medical company exactly like this"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "medicine 3",
+        "subtitle": "make landing page for a hospital/medical company exactly like this",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788616558968-747la5elz",
+      "sourceUrl": null
+    },
+    {
+      "id": "restaurant-3",
+      "name": "restaurant 3",
+      "niche": "Saved site",
+      "category": "food-hospitality",
+      "description": "make me a restaurant website EXACTLY like this one you can add own sections if needed but match the style",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "restaurant 3",
+        "tagline": "Saved site",
+        "description": "make me a restaurant website EXACTLY like this one you can add own sections if needed but match the style"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "restaurant 3",
+        "subtitle": "make me a restaurant website EXACTLY like this one you can add own sections if needed but match the style",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788615217983-3wqnb3c05",
+      "sourceUrl": null
+    },
+    {
+      "id": "saas-3-world",
+      "name": "saas 3 world",
+      "niche": "Saved site",
+      "category": "saas-tech",
+      "description": "okay now make me a landing page exactly like this hero with that world and on scroll it would go down and add your own sections to match it but the hero needs to be exactly like it",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "saas 3 world",
+        "tagline": "Saved site",
+        "description": "okay now make me a landing page exactly like this hero with that world and on scroll it would go down and add your own sections to match it but the hero needs to be exactly like it"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "saas 3 world",
+        "subtitle": "okay now make me a landing page exactly like this hero with that world and on scroll it would go down and add your own sections to match it but the hero needs to be exactly like it",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788614490344-ddbs9fud4",
+      "sourceUrl": null
+    },
+    {
+      "id": "saas-2",
+      "name": "Saas 2",
+      "niche": "Saved site",
+      "category": "saas-tech",
+      "description": "make me a landing page exactly like this one it needs to be exactly like it",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "Saas 2",
+        "tagline": "Saved site",
+        "description": "make me a landing page exactly like this one it needs to be exactly like it"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "Saas 2",
+        "subtitle": "make me a landing page exactly like this one it needs to be exactly like it",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788613314524-9ds81f1u3",
+      "sourceUrl": null
+    },
+    {
+      "id": "saas-1",
+      "name": "saas 1",
+      "niche": "Saved site",
+      "category": "saas-tech",
+      "description": "make me a landing page for a company that looks exactly like this, add some animations on scroll and make scrolling effect on it also you can add your own sections in there but makes sure that it looks exactly like this",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "saas 1",
+        "tagline": "Saved site",
+        "description": "make me a landing page for a company that looks exactly like this, add some animations on scroll and make scrolling effect on it also you can add your own sections in there but makes sure that it looks exactly like this"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "saas 1",
+        "subtitle": "make me a landing page for a company that looks exactly like this, add some animations on scroll and make scrolling effect on it also you can add your own sections in there but makes sure that it looks exactly like this",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788558556575-1uoqfrw6b",
+      "sourceUrl": null
+    },
+    {
+      "id": "ai",
+      "name": "AI",
+      "niche": "Saved site",
+      "category": "emerging-tech",
+      "description": "make me landing page exactly like this , need to be exactly like it",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "AI",
+        "tagline": "Saved site",
+        "description": "make me landing page exactly like this , need to be exactly like it"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "AI",
+        "subtitle": "make me landing page exactly like this , need to be exactly like it",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788557071874-z1znr6ndb",
+      "sourceUrl": null
+    },
+    {
+      "id": "medicine-2",
+      "name": "medicine 2",
+      "niche": "Saved site",
+      "category": "health-wellness",
+      "description": "now make a website exactly like here on the image and add you own nice sections, like this medical landing page",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "medicine 2",
+        "tagline": "Saved site",
+        "description": "now make a website exactly like here on the image and add you own nice sections, like this medical landing page"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "medicine 2",
+        "subtitle": "now make a website exactly like here on the image and add you own nice sections, like this medical landing page",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788556109719-vnnsamy34",
+      "sourceUrl": null
+    },
+    {
+      "id": "medical-1",
+      "name": "medical 1",
+      "niche": "Saved site",
+      "category": "health-wellness",
+      "description": "now make a website like this exactly for medical hospital. needs to be exactly like this",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "medical 1",
+        "tagline": "Saved site",
+        "description": "now make a website like this exactly for medical hospital. needs to be exactly like this"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "medical 1",
+        "subtitle": "now make a website like this exactly for medical hospital. needs to be exactly like this",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788554041745-h0nzmq8vd",
+      "sourceUrl": null
+    },
+    {
+      "id": "business-2",
+      "name": "Business 2",
+      "niche": "Saved site",
+      "category": "business-professional",
+      "description": "make this exactly like this landing page and make rest of the page for it with the same style",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "Business 2",
+        "tagline": "Saved site",
+        "description": "make this exactly like this landing page and make rest of the page for it with the same style"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "Business 2",
+        "subtitle": "make this exactly like this landing page and make rest of the page for it with the same style",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788553002247-usyb1mf3i",
+      "sourceUrl": null
+    },
+    {
+      "id": "bussiness-1",
+      "name": "Bussiness 1",
+      "niche": "Saved site",
+      "category": "business-professional",
+      "description": "make a business website with hero like this and make the rest of the site to match it",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "Bussiness 1",
+        "tagline": "Saved site",
+        "description": "make a business website with hero like this and make the rest of the site to match it"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "Bussiness 1",
+        "subtitle": "make a business website with hero like this and make the rest of the site to match it",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788551838360-nihsbj7ha",
+      "sourceUrl": null
+    },
+    {
+      "id": "restaurant-2",
+      "name": "Restaurant 2",
+      "niche": "Saved site",
+      "category": "food-hospitality",
+      "description": "clone this website for me make it exactly like it",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "Restaurant 2",
+        "tagline": "Saved site",
+        "description": "clone this website for me make it exactly like it"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "Restaurant 2",
+        "subtitle": "clone this website for me make it exactly like it",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788550039744-a55a6ffba",
+      "sourceUrl": null
+    },
+    {
+      "id": "restaurant-1",
+      "name": "restaurant 1",
+      "niche": "squarespace.com",
+      "category": "food-hospitality",
+      "description": "make the page exactly like it",
+      "keywords": [
+        "custom",
+        "saved",
+        "squarespace.com"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "restaurant 1",
+        "tagline": "squarespace.com",
+        "description": "make the page exactly like it"
+      },
+      "hero": {
+        "eyebrow": "squarespace.com",
+        "title": "restaurant 1",
+        "subtitle": "make the page exactly like it",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788548471543-bdc71d6z8",
+      "sourceUrl": "https://www.squarespace.com/tour/restaurant-websites?clickid=VZhwwcWumxyZU%3Aey4o3z31A1Ukr2wuz5lwcmWo0&irgwc=1&afsrc=1&utm_medium=pp&utm_source=Site%20Builder%20Report&utm_campaign=Site%20Builder%20Report&channel=pp&subchannel=41544&source=Site%20Builder%20Report&sharedid="
+    },
+    {
+      "id": "restaurant-landing-page-with-images",
+      "name": "restaurant landing page with images",
+      "niche": "Saved site",
+      "category": "food-hospitality",
+      "description": "mak restaurna´ánt landing page but make it bit better using this template",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "restaurant landing page with images",
+        "tagline": "Saved site",
+        "description": "mak restaurna´ánt landing page but make it bit better using this template"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "restaurant landing page with images",
+        "subtitle": "mak restaurna´ánt landing page but make it bit better using this template",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788343288376-54zlybaxo",
+      "sourceUrl": null
+    },
+    {
+      "id": "restaurant-starter",
+      "name": "Restaurant starter",
+      "niche": "Saved site",
+      "category": "food-hospitality",
+      "description": "mak restaurna´ánt landing page but make it bit better using this template",
+      "keywords": [
+        "custom",
+        "saved"
+      ],
+      "layout": "saas-light",
+      "theme": {
+        "mode": "light",
+        "primary": "#DE7356",
+        "accent": "#111827",
+        "background": "#f8fafc",
+        "surface": "#ffffff",
+        "text": "#111827",
+        "muted": "#6b7280",
+        "font": "sans",
+        "radius": "rounded"
+      },
+      "brand": {
+        "name": "Restaurant starter",
+        "tagline": "Saved site",
+        "description": "mak restaurna´ánt landing page but make it bit better using this template"
+      },
+      "hero": {
+        "eyebrow": "Saved template",
+        "title": "Restaurant starter",
+        "subtitle": "mak restaurna´ánt landing page but make it bit better using this template",
+        "cta": "Use template"
+      },
+      "stats": [
+        {
+          "value": "10+",
+          "label": "Years"
+        },
+        {
+          "value": "120",
+          "label": "Projects"
+        },
+        {
+          "value": "4.9",
+          "label": "Rating"
+        }
+      ],
+      "features": [
+        {
+          "title": "Clear offer",
+          "body": "What you actually sell, in plain language."
+        },
+        {
+          "title": "Proof",
+          "body": "A result, a number, or a reason to believe it."
+        },
+        {
+          "title": "Next step",
+          "body": "What happens after someone clicks the button."
+        }
+      ],
+      "testimonials": [
+        {
+          "quote": "Replace this with a real customer sentence.",
+          "name": "Alex Rivera",
+          "role": "Founder"
+        }
+      ],
+      "pricing": [
+        {
+          "name": "Starter",
+          "price": "$0",
+          "features": [
+            "One page",
+            "Contact form"
+          ],
+          "highlighted": false
+        },
+        {
+          "name": "Studio",
+          "price": "$49",
+          "period": "/mo",
+          "features": [
+            "Multi-page",
+            "Booking",
+            "Support"
+          ],
+          "highlighted": true
+        }
+      ],
+      "team": [
+        {
+          "name": "Jordan Lee",
+          "role": "Lead",
+          "bio": "A short bio for the person visitors will actually meet."
+        }
+      ],
+      "pages": [
+        {
+          "slug": "about",
+          "label": "About",
+          "kind": "about",
+          "title": "About the studio",
+          "subtitle": "Who you are and how you work.",
+          "items": []
+        },
+        {
+          "slug": "work",
+          "label": "Work",
+          "kind": "list",
+          "title": "Selected work",
+          "subtitle": "A few projects worth showing.",
+          "items": [
+            {
+              "title": "Project one",
+              "body": "What you shipped and who it was for."
+            },
+            {
+              "title": "Project two",
+              "body": "The outcome in one sentence."
+            }
+          ]
+        },
+        {
+          "slug": "contact",
+          "label": "Contact",
+          "kind": "contact",
+          "title": "Get in touch",
+          "subtitle": "A form, an email, or a booking link.",
+          "items": []
+        }
+      ],
+      "cta": {
+        "title": "Ready when you are.",
+        "subtitle": "Invite the next action without sounding like a banner ad.",
+        "button": "Start a project"
+      },
+      "footer": "Replace this footer with your legal name and city.",
+      "kind": "snapshot",
+      "sourceProjectId": "project-1788343288376-54zlybaxo",
+      "sourceUrl": null
+    }
+  ],
+  "hidden": [
+    "web3-crypto",
+    "event-conference",
+    "newsletter",
+    "ecommerce",
+    "online-course",
+    "fitness-gym",
+    "barber-salon",
+    "construction",
+    "real-estate",
+    "law-firm",
+    "dental-clinic",
+    "personal-cv",
+    "hotel-booking",
+    "fine-dining",
+    "ai-startup",
+    "modern-saas",
+    "mobile-app",
+    "photography",
+    "restaurant-cafe",
+    "digital-agency"
+  ]
+}
