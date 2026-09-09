@@ -2,6 +2,7 @@
 
 const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 
 const root = path.join(__dirname, '..');
@@ -16,6 +17,50 @@ function localBin(name) {
   return bin;
 }
 
+function cursorBinDirs() {
+  const home = os.homedir();
+  return [
+    path.join(home, '.local', 'bin'),
+    path.join(home, '.cursor', 'bin'),
+    path.join(home, '.cursor-agent', 'bin'),
+  ];
+}
+
+function withCursorPath(env) {
+  const extra = cursorBinDirs().join(path.delimiter);
+  return { ...env, PATH: `${extra}${path.delimiter}${env.PATH || ''}` };
+}
+
+function cursorInstalled() {
+  const result = spawnSync('cursor-agent', ['--version'], {
+    env: withCursorPath(process.env),
+    encoding: 'utf8',
+  });
+  return result.status === 0;
+}
+
+function ensureCursorCli() {
+  process.env.PATH = withCursorPath(process.env).PATH;
+  if (cursorInstalled()) {
+    console.log('Cursor CLI already installed.');
+    return;
+  }
+  if (process.env.SKIP_CURSOR_INSTALL === '1') {
+    console.log('Skipping Cursor CLI install.');
+    return;
+  }
+  console.log('Installing Cursor CLI…');
+  const result = spawnSync('bash', ['-lc', 'curl -fsSL https://cursor.com/install | bash'], {
+    env: process.env,
+    stdio: 'inherit',
+    timeout: 120000,
+  });
+  process.env.PATH = withCursorPath(process.env).PATH;
+  if (result.status !== 0 || !cursorInstalled()) {
+    console.error('Cursor CLI install did not complete. Preview/chat can still run; add CURSOR_API_KEY after installing cursor-agent.');
+  }
+}
+
 const dataDir = process.env.SETTINGS_DIR || path.join(root, 'data');
 const projects = process.env.PROJECTS_DIR || path.join(dataDir, 'projects');
 fs.mkdirSync(projects, { recursive: true });
@@ -23,6 +68,8 @@ fs.mkdirSync(projects, { recursive: true });
 if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = `file:${path.join(dataDir, 'cc.db')}`;
 }
+
+ensureCursorCli();
 
 const port = process.env.PORT || '3000';
 const child = spawn(

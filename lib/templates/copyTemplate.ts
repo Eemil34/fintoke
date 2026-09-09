@@ -22,10 +22,6 @@ export async function copyWebsiteTemplate(
     if (copied) return true;
   }
 
-  if (template.kind === 'snapshot') {
-    return false;
-  }
-
   await materializeWebsiteTemplate(projectPath, template, projectId);
   return true;
 }
