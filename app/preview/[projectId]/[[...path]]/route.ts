@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { previewManager } from '@/lib/services/preview';
 import { previewBasePath } from '@/lib/server/publicUrl';
+import { getProjectById } from '@/lib/services/project';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -10,24 +11,37 @@ interface RouteContext {
   params: Promise<{ projectId: string; path?: string[] }>;
 }
 
-function loadingPage(projectId: string, message: string) {
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function previewPage(title: string, message: string, logs: string[], refresh: boolean) {
+  const logBlock = logs
+    .slice(-20)
+    .map((line) => escapeHtml(line))
+    .join('\n');
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="2" />
-  <title>Starting preview</title>
+  ${refresh ? '<meta http-equiv="refresh" content="3" />' : ''}
+  <title>${escapeHtml(title)}</title>
   <style>
-    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f8fafc; color: #0f172a; }
-    main { text-align: center; padding: 24px; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; min-height: 100vh; background: #f8fafc; color: #0f172a; }
+    main { max-width: 720px; margin: 0 auto; padding: 32px 20px; }
+    pre { text-align: left; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 12px; overflow: auto; font-size: 12px; min-height: 80px; }
     p { color: #475569; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Starting preview</h1>
-    <p>${message.replace(/</g, '&lt;')}</p>
-    <p>Site ${projectId.replace(/</g, '&lt;')}</p>
+    <h1>${escapeHtml(title)}</h1>
+    <p>${escapeHtml(message)}</p>
+    <pre>${logBlock || 'Waiting for preview logs…'}</pre>
   </main>
 </body>
 </html>`;
@@ -50,6 +64,28 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   const { projectId: rawProjectId, path: segments } = await params;
   const projectId = decodeURIComponent(rawProjectId);
   let preview = previewManager.getStatus(projectId);
+
+  if (!preview.port) {
+    const project = await getProjectById(projectId);
+    if (project?.previewPort) {
+      preview = {
+        ...preview,
+        port: project.previewPort,
+        url: project.previewUrl || preview.url,
+        status: preview.status === 'stopped' ? 'starting' : preview.status,
+      };
+    }
+  }
+
+  if (preview.status === 'error') {
+    return previewPage(
+      'Preview failed',
+      'The site process exited. Open this page again from chat to retry.',
+      preview.logs || [],
+      false,
+    );
+  }
+
   if (!preview.port) {
     void previewManager.start(projectId).catch((error) => {
       console.error('[Preview proxy] Failed to start:', error);
@@ -57,7 +93,12 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     if (isAssetRequest(segments)) {
       return new Response('', { status: 503, headers: { 'retry-after': '2' } });
     }
-    return loadingPage(projectId, 'Installing dependencies and starting the site…');
+    return previewPage(
+      'Starting preview',
+      'Preparing the site process…',
+      preview.logs || [],
+      true,
+    );
   }
 
   const rest = segments?.length ? `/${segments.map((part) => encodeURIComponent(part)).join('/')}` : '';
@@ -92,7 +133,12 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     if (isAssetRequest(segments)) {
       return new Response('', { status: 503, headers: { 'retry-after': '2' } });
     }
-    return loadingPage(projectId, 'The site process is still starting. This page will refresh automatically.');
+    return previewPage(
+      'Starting preview',
+      'Dependencies are installing or Next.js is compiling. This frame refreshes automatically.',
+      previewManager.getLogs(projectId),
+      true,
+    );
   }
 }
 

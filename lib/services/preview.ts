@@ -8,10 +8,39 @@ import fs from 'fs/promises';
 import { findAvailablePort } from '@/lib/utils/ports';
 import { getProjectById, updateProject, updateProjectStatus } from './project';
 import { ensureProjectApp } from '@/lib/templates/copyTemplate';
-import { normalizeGeneratedProject, writePreviewNextConfig } from '@/lib/templates/isolateNext';
+import { ensureGeneratedDevScript, ensureIsolatedNextConfig, writePreviewNextConfig } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir } from '@/lib/server/paths';
 import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
+
+function previewWorkspaceFallback(projectId: string): string {
+  return path.join(projectsDir(), projectId);
+}
+
+async function resolveProjectWorkspace(
+  project: { repoPath?: string | null },
+  projectId: string,
+): Promise<string> {
+  const fallback = previewWorkspaceFallback(projectId);
+  const raw = project.repoPath?.trim();
+  if (!raw) return fallback;
+
+  const resolved = path.isAbsolute(raw) ? raw : path.resolve(projectsDir(), raw);
+  const root = path.resolve(projectsDir());
+  if (resolved === root || resolved.startsWith(`${root}${path.sep}`)) {
+    return resolved;
+  }
+
+  try {
+    await fs.access(path.join(resolved, 'package.json'));
+    return resolved;
+  } catch {
+    console.warn(
+      `[PreviewManager] repoPath is not on this server (${resolved}); using ${fallback}`,
+    );
+    return fallback;
+  }
+}
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
@@ -717,80 +746,45 @@ class PreviewManager {
       throw new Error('Project not found');
     }
 
-    const projectPath = project.repoPath
-      ? path.resolve(project.repoPath)
-      : path.join(projectsDir(), projectId);
+    const live = this.processes.get(projectId);
+    if (live && live.status !== 'error' && live.port) {
+      return this.toInfo(live);
+    }
 
+    const projectPath = await resolveProjectWorkspace(project, projectId);
     await fs.mkdir(projectPath, { recursive: true });
-
-    const pendingLogs: string[] = [];
-    const queueLog = (message: string) => {
-      const formatted = `[PreviewManager] ${message}`;
-      console.log(formatted);
-      pendingLogs.push(formatted);
-    };
-
-    await ensureProjectRootStructure(projectPath, queueLog);
-
-    try {
-      await fs.access(path.join(projectPath, 'package.json'));
-    } catch {
-      console.log(
-        `[PreviewManager] Bootstrapping app for project ${projectId}`
-      );
-      await ensureProjectApp(projectPath, projectId, project.settings);
-    }
-
-    await normalizeGeneratedProject(projectPath);
-    const existing = this.processes.get(projectId);
-    if (existing && existing.status !== 'error' && existing.port) {
-      return this.toInfo(existing);
-    }
 
     const previewBounds = resolvePreviewBounds();
     const preferredPort = await findAvailablePort(
       previewBounds.start,
-      previewBounds.end
+      previewBounds.end,
     );
 
-    const initialUrl = previewPublicUrl(projectId, preferredPort);
-    const basePath = previewBasePath(projectId);
-
+    const iframeUrl = previewIframeUrl(projectId, preferredPort);
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       PORT: String(preferredPort),
       WEB_PORT: String(preferredPort),
-      NEXT_PUBLIC_APP_URL: initialUrl,
-      NEXT_BASE_PATH: basePath,
+      NEXT_PUBLIC_APP_URL: previewPublicUrl(projectId, preferredPort),
+      NEXT_BASE_PATH: previewBasePath(projectId),
     };
 
+    const pendingLogs: string[] = [
+      `[PreviewManager] Queued preview on port ${preferredPort} at ${projectPath}`,
+    ];
     const previewProcess: PreviewProcess = {
       process: null,
       port: preferredPort,
-      url: initialUrl,
+      url: iframeUrl,
       status: 'starting',
-      logs: [],
+      logs: [...pendingLogs],
       startedAt: new Date(),
     };
-
-    const log = this.getLogger(previewProcess);
-    const flushPendingLogs = () => {
-      if (pendingLogs.length === 0) {
-        return;
-      }
-      const entries = pendingLogs.splice(0);
-      entries.forEach((entry) => log(Buffer.from(entry)));
-    };
-    flushPendingLogs();
-
     this.processes.set(projectId, previewProcess);
-    previewProcess.url = previewIframeUrl(projectId, preferredPort);
-    env.NEXT_PUBLIC_APP_URL = previewPublicUrl(projectId, preferredPort);
-    env.NEXT_BASE_PATH = previewBasePath(projectId);
 
     await updateProject(projectId, {
-      previewUrl: previewProcess.url,
-      previewPort: previewProcess.port,
+      previewUrl: iframeUrl,
+      previewPort: preferredPort,
       status: 'running',
     }).catch((error) => {
       console.error('[PreviewManager] Failed to persist preview URL:', error);
@@ -805,10 +799,8 @@ class PreviewManager {
       pendingLogs,
     }).catch((error) => {
       previewProcess.status = 'error';
-      log(
-        Buffer.from(
-          `[PreviewManager] Preview boot failed: ${error instanceof Error ? error.message : String(error)}`,
-        ),
+      previewProcess.logs.push(
+        `[PreviewManager] Preview boot failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     });
 
@@ -837,6 +829,21 @@ class PreviewManager {
       const entries = pendingLogs.splice(0);
       entries.forEach((entry) => log(Buffer.from(entry)));
     };
+
+    flushPendingLogs();
+    queueLog('Preparing project files...');
+    await ensureProjectRootStructure(projectPath, queueLog);
+    try {
+      await fs.access(path.join(projectPath, 'package.json'));
+    } catch {
+      queueLog('No package.json yet; scaffolding the site.');
+      const project = await getProjectById(projectId);
+      await ensureProjectApp(projectPath, projectId, project?.settings);
+    }
+    await ensureIsolatedNextConfig(projectPath);
+    await ensureGeneratedDevScript(projectPath);
+    queueLog('Installing dependencies if needed...');
+    flushPendingLogs();
 
     const ensureWithLock = async () => {
       // If node_modules exists, skip
@@ -936,13 +943,10 @@ class PreviewManager {
 
     const child = spawn(
       npmCommand,
-      ['run', 'dev', '--', '--hostname', '127.0.0.1', '--port', String(effectivePort), '--webpack'],
+      ['run', 'dev', '--', '--hostname', '127.0.0.1', '--port', String(effectivePort)],
       {
         cwd: projectPath,
-        env: {
-          ...env,
-          TURBOPACK: '0',
-        },
+        env,
         shell: process.platform === 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
       }
@@ -964,16 +968,7 @@ class PreviewManager {
 
     child.on('exit', (code, signal) => {
       previewProcess.status = code === 0 ? 'stopped' : 'error';
-      this.processes.delete(projectId);
-      updateProject(projectId, {
-        previewUrl: null,
-        previewPort: null,
-      }).catch((error) => {
-        console.error('[PreviewManager] Failed to reset project preview:', error);
-      });
-      updateProjectStatus(projectId, 'idle').catch((error) => {
-        console.error('[PreviewManager] Failed to reset project status:', error);
-      });
+      previewProcess.process = null;
       log(
         Buffer.from(
           `Preview process exited (code: ${code ?? 'null'}, signal: ${
