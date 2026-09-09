@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --hr-green: #68e39d;
+  --hr-green-bright: #3dff8b;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #000;
+  color: #fff;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+::selection {
+  background: #68e39d;
+  color: #000;
+}
+
+.hero-muted {
+  color: #4a4a4a;
+}
+
+.star-field {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.18) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.curved-label {
+  offset-path: path('M 0 40 Q 90 0 180 40');
+  offset-rotate: auto;
+}
+
+.nav-shell {
+  position: relative;
+}
+
+.nav-shell::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    120deg,
+    rgba(61, 255, 139, 0.35),
+    transparent 35%,
+    transparent 65%,
+    rgba(104, 227, 157, 0.2)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0.85rem;
+  right: 0.85rem;
+  bottom: 0.35rem;
+  height: 1.5px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #3dff8b, transparent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.28s ease;
+  box-shadow: 0 0 10px rgba(61, 255, 139, 0.6);
+}
+
+.nav-link:hover::after {
+  transform: scaleX(1);
+}
+
+.hero-grid {
+  background-image:
+    linear-gradient(rgba(61, 255, 139, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(61, 255, 139, 0.07) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%);
+}
+
+.hero-shine {
+  background: linear-gradient(110deg, #fff 35%, #3dff8b 50%, #fff 65%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shine-sweep 4.5s ease-in-out infinite;
+}
+
+@keyframes shine-sweep {
+  0%,
+  55% {
+    background-position: 120% center;
+  }
+  100% {
+    background-position: -20% center;
+  }
+}
+
+.hero-word {
+  display: inline-block;
+  animation: word-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes word-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.hero-floater {
+  animation: floater-drift 7s ease-in-out infinite;
+}
+
+@keyframes floater-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateY(-10px);
+    opacity: 0.95;
+  }
+}
+
+.hero-scroll-line span {
+  animation: scroll-drip 1.8s ease-in-out infinite;
+}
+
+@keyframes scroll-drip {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(200%);
+  }
+}
+
+.hero-icon {
+  vertical-align: -0.15em;
+}
+
+.adventure-orb {
+  animation: adventure-float 5s ease-in-out infinite;
+}
+
+@keyframes adventure-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(2deg);
+  }
+}
+
+.adventure-card {
+  will-change: transform, box-shadow, opacity;
+}

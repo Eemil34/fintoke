@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Sora', system-ui, sans-serif;
+  --lime: #b8f04a;
+  --ink: #0e1410;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #f5f7f1;
+  color: #0e1410;
+}
+
+::selection {
+  background: #b8f04a;
+  color: #0e1410;
+}
+
+@layer components {
+  .section-pad {
+    @apply px-5 sm:px-8 lg:px-12;
+  }
+
+  .btn-lime {
+    @apply inline-flex items-center gap-2.5 rounded-full bg-lime px-5 py-3.5 text-sm font-semibold text-ink shadow-[0_8px_24px_rgba(184,240,74,0.22)] transition duration-300 hover:bg-lime-soft hover:shadow-[0_10px_28px_rgba(184,240,74,0.32)];
+  }
+
+  .btn-outline-light {
+    @apply inline-flex items-center gap-2.5 rounded-full border border-white/40 bg-white/5 px-5 py-3.5 text-sm font-semibold text-white backdrop-blur-md transition duration-300 hover:border-white/70 hover:bg-white/10;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-3 text-[13px] font-medium text-white/90;
+  }
+
+  .eyebrow::before {
+    content: '';
+    @apply h-5 w-[3px] shrink-0 rounded-full bg-lime;
+  }
+
+  .hero-overlay {
+    background:
+      linear-gradient(90deg, rgba(10, 16, 12, 0.9) 0%, rgba(10, 16, 12, 0.64) 40%, rgba(10, 16, 12, 0.2) 66%, rgba(10, 16, 12, 0.05) 100%),
+      linear-gradient(180deg, rgba(10, 16, 12, 0.58) 0%, rgba(10, 16, 12, 0.1) 30%, rgba(10, 16, 12, 0.16) 60%, rgba(10, 16, 12, 0.76) 100%);
+  }
+
+  .hero-tint {
+    background:
+      radial-gradient(ellipse 50% 45% at 80% 40%, rgba(184, 240, 74, 0.1), transparent 68%),
+      radial-gradient(ellipse 42% 38% at 20% 75%, rgba(212, 137, 74, 0.08), transparent 70%);
+  }
+}
