@@ -4,15 +4,24 @@ import { previewBasePath } from '@/lib/server/publicUrl';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 interface RouteContext {
   params: Promise<{ projectId: string; path?: string[] }>;
 }
 
 async function proxy(request: NextRequest, { params }: RouteContext) {
-  const { projectId, path: segments } = await params;
-  const preview = previewManager.getStatus(projectId);
+  const { projectId: rawProjectId, path: segments } = await params;
+  const projectId = decodeURIComponent(rawProjectId);
+  let preview = previewManager.getStatus(projectId);
+  if (!preview.port) {
+    try {
+      preview = await previewManager.start(projectId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return new Response(`Preview failed to start: ${message}`, { status: 503 });
+    }
+  }
   if (!preview.port) {
     return new Response('Preview is not running. Open the site in Studio and start preview.', { status: 404 });
   }

@@ -489,7 +489,7 @@ async function ensureProjectRootStructure(
 async function waitForPreviewReady(
   url: string,
   log: (chunk: Buffer | string) => void,
-  timeoutMs = 30_000,
+  timeoutMs = 120_000,
   intervalMs = 1_000
 ) {
   const start = Date.now();
@@ -598,6 +598,7 @@ export interface PreviewInfo {
 class PreviewManager {
   private processes = new Map<string, PreviewProcess>();
   private installing = new Map<string, Promise<void>>();
+  private starting = new Map<string, Promise<PreviewInfo>>();
 
   private getLogger(processInfo: PreviewProcess) {
     return (chunk: Buffer | string) => {
@@ -691,6 +692,26 @@ class PreviewManager {
   }
 
   public async start(projectId: string): Promise<PreviewInfo> {
+    const inflight = this.starting.get(projectId);
+    if (inflight) {
+      return inflight;
+    }
+
+    const live = this.processes.get(projectId);
+    if (live && live.status !== 'error' && live.port) {
+      return this.toInfo(live);
+    }
+
+    const run = this.startPreview(projectId).finally(() => {
+      if (this.starting.get(projectId) === run) {
+        this.starting.delete(projectId);
+      }
+    });
+    this.starting.set(projectId, run);
+    return run;
+  }
+
+  private async startPreview(projectId: string): Promise<PreviewInfo> {
     const project = await getProjectById(projectId);
     if (!project) {
       throw new Error('Project not found');
@@ -720,18 +741,14 @@ class PreviewManager {
       await ensureProjectApp(projectPath, projectId, project.settings);
     }
 
-    const isolated = await normalizeGeneratedProject(projectPath);
+    await normalizeGeneratedProject(projectPath);
     const proxyBasePath = previewBasePath(projectId);
+    const existing = this.processes.get(projectId);
+    if (existing && existing.status !== 'error' && existing.port) {
+      return this.toInfo(existing);
+    }
     if (proxyBasePath) {
       await writePreviewNextConfig(projectPath, proxyBasePath);
-    }
-    const existing = this.processes.get(projectId);
-    if (existing && existing.status !== 'error') {
-      if (!proxyBasePath && !isolated) {
-        return this.toInfo(existing);
-      }
-      queueLog('Restarting preview with the production proxy base path.');
-      await this.stop(projectId);
     }
 
     const previewBounds = resolvePreviewBounds();
