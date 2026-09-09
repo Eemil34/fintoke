@@ -44,6 +44,7 @@
     "node_modules",
     "data/projects",
     "data/templates",
+    "seed/templates/snapshots",
     "external_Claudable"
   ]
 }
