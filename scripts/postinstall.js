@@ -8,6 +8,8 @@ if (
   process.env.VERCEL ||
   process.env.RAILWAY_ENVIRONMENT ||
   process.env.RAILWAY_PROJECT_ID ||
+  process.env.RAILWAY_SERVICE_ID ||
+  process.env.RAILPACK ||
   process.env.SKIP_ENV_SETUP === '1'
 ) {
   process.exit(0);

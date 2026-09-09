@@ -10,7 +10,7 @@
     "dev:desktop": "node scripts/run-desktop.js",
     "dev:electron": "npm run dev:desktop",
     "ensure:env": "node scripts/setup-env.js",
-    "build": "node -e \"console.log('fintoke-template-pack')\" && prisma generate && next build",
+    "build": "prisma generate && next build",
     "start": "node scripts/start-prod.js",
     "start:prod": "node scripts/start-prod.js",
     "lint": "next lint",
