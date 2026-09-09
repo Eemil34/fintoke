@@ -78,6 +78,7 @@ type ProjectStatus = 'initializing' | 'active' | 'failed';
 type CliStatusSnapshot = {
   available?: boolean;
   configured?: boolean;
+  installed?: boolean;
   models?: string[];
 };
 
