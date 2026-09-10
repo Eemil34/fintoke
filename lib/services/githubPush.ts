@@ -79,7 +79,7 @@ export async function pushDirectoryViaGitHubApi(params: {
     return body as Record<string, unknown>;
   };
 
-  const blobs = [];
+  const blobs: Array<{ path: string; mode: string; type: string; sha: string }> = [];
   for (let i = 0; i < files.length; i += 8) {
     const chunk = files.slice(i, i + 8);
     const created = await Promise.all(
@@ -91,11 +91,13 @@ export async function pushDirectoryViaGitHubApi(params: {
       ),
     );
     created.forEach((blob, index) => {
+      const sha = typeof blob.sha === 'string' ? blob.sha : '';
+      if (!sha) return;
       blobs.push({
         path: chunk[index].path,
         mode: '100644',
         type: 'blob',
-        sha: blob.sha,
+        sha,
       });
     });
   }
