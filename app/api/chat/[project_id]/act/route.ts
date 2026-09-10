@@ -29,6 +29,7 @@ import {
   markUserRequestAsProcessing,
 } from '@/lib/services/user-requests';
 import { projectsDir } from '@/lib/server/paths';
+import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 
 interface RouteContext {
   params: Promise<{ project_id: string }>;
@@ -373,7 +374,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
     await updateProjectActivity(project_id);
 
-    const projectPath = project.repoPath || path.join(process.cwd(), 'projects', project_id);
+    const projectPath = await resolveProjectWorkspace(project, project_id);
 
     const existingSelected = normalizeModelId(project.preferredCli ?? 'claude', project.selectedModel ?? undefined);
 

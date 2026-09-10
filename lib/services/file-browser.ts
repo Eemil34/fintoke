@@ -5,6 +5,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { getProjectById } from '@/lib/services/project';
+import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import type { ProjectFileEntry } from '@/types/backend';
 import type { Project } from '@/types/backend';
 
@@ -31,13 +32,8 @@ export class FileBrowserError extends Error {
   }
 }
 
-function resolveRepoRoot(project: Project): string {
-  const repoPath =
-    project.repoPath || path.join('data', 'projects', project.id);
-  const absolutePath = path.isAbsolute(repoPath)
-    ? repoPath
-    : path.resolve(process.cwd(), repoPath);
-  return absolutePath;
+async function resolveRepoRoot(project: Project): Promise<string> {
+  return resolveProjectWorkspace(project, project.id);
 }
 
 async function resolveSafePath(base: string, target: string): Promise<string> {
@@ -106,7 +102,7 @@ export async function listProjectDirectory(
     throw new FileBrowserError('Project not found', 404);
   }
 
-  const repoRoot = resolveRepoRoot(project);
+  const repoRoot = await resolveRepoRoot(project);
   const targetDir = normalizeRelativePath(dir);
   const absoluteDir = await resolveSafePath(repoRoot, targetDir === '.' ? '.' : targetDir);
 
@@ -185,7 +181,7 @@ export async function readProjectFileContent(
     throw new FileBrowserError('Project not found', 404);
   }
 
-  const repoRoot = resolveRepoRoot(project);
+  const repoRoot = await resolveRepoRoot(project);
   const normalizedPath = normalizeRelativePath(filePath);
   const absolutePath = await resolveSafePath(
     repoRoot,
@@ -234,7 +230,7 @@ export async function writeProjectFileContent(
     throw new FileBrowserError('Invalid file content', 400);
   }
 
-  const repoRoot = resolveRepoRoot(project);
+  const repoRoot = await resolveRepoRoot(project);
   const normalizedPath = normalizeRelativePath(filePath);
   const absolutePath = await resolveSafePath(
     repoRoot,
@@ -257,6 +253,7 @@ export async function writeProjectFileContent(
   }
 
   try {
+    await fs.chmod(absolutePath, 0o644);
     await fs.writeFile(absolutePath, content, 'utf-8');
   } catch (error) {
     throw new FileBrowserError('Failed to write file', 500);

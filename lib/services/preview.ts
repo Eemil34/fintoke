@@ -11,36 +11,8 @@ import { ensureProjectApp, restoreSnapshotIfMaterialized } from '@/lib/templates
 import { clearNextCache, ensureGeneratedDevScript, ensureIsolatedNextConfig, ensureRevealVisible, writePreviewNextConfig } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir } from '@/lib/server/paths';
+import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
-
-function previewWorkspaceFallback(projectId: string): string {
-  return path.join(projectsDir(), projectId);
-}
-
-async function resolveProjectWorkspace(
-  project: { repoPath?: string | null },
-  projectId: string,
-): Promise<string> {
-  const fallback = previewWorkspaceFallback(projectId);
-  const raw = project.repoPath?.trim();
-  if (!raw) return fallback;
-
-  const resolved = path.isAbsolute(raw) ? raw : path.resolve(projectsDir(), raw);
-  const root = path.resolve(projectsDir());
-  if (resolved === root || resolved.startsWith(`${root}${path.sep}`)) {
-    return resolved;
-  }
-
-  try {
-    await fs.access(path.join(resolved, 'package.json'));
-    return resolved;
-  } catch {
-    console.warn(
-      `[PreviewManager] repoPath is not on this server (${resolved}); using ${fallback}`,
-    );
-    return fallback;
-  }
-}
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';

@@ -34,6 +34,7 @@ import {
 import { serializeMessage, createRealtimeMessage } from '@/lib/serializers/chat';
 import { buildInitialAgentPrompt } from '@/lib/templates/agentPrompt';
 import { SITE_IMAGE_AGENT_RULES, buildSiteImageAgentRules } from '@/lib/templates/siteImages';
+import { resolveProjectWorkspace, makeTreeWritable } from '@/lib/server/projectWorkspace';
 import {
   ensureCursorExecutable,
   resolveCursorApiKey,
@@ -71,6 +72,8 @@ const STATUS_LABELS: Record<string, string> = {
 
 const AUTO_INSTRUCTIONS = `Act autonomously to complete the task without asking for confirmations.
 Work directly inside the provided project directory. Do not create additional top-level folders unless explicitly requested.
+You MUST edit the existing Next.js source files (app/page.tsx, components, CSS). Do not only describe changes. Apply the edits.
+Do not start a new app in a subdirectory.
 Keep responses concise and focus on the code or command outputs that unblock the user.
 The platform already installs dependencies and runs the live preview. Never run npm install, npm run dev, next dev, or start another server.
 ${SITE_IMAGE_AGENT_RULES}`;
@@ -92,25 +95,10 @@ async function ensureProjectPath(projectId: string, projectPath: string): Promis
     throw new Error(`Project not found: ${projectId}`);
   }
 
-  const absolute = path.isAbsolute(projectPath)
-    ? path.resolve(projectPath)
-    : path.resolve(process.cwd(), projectPath);
-
-  const allowedBasePath = path.resolve(process.cwd(), process.env.PROJECTS_DIR || './data/projects');
-  const relativeToBase = path.relative(allowedBasePath, absolute);
-  const isWithinBase = !relativeToBase.startsWith('..') && !path.isAbsolute(relativeToBase);
-
-  if (!isWithinBase) {
-    throw new Error(`Project path must be within ${allowedBasePath}. Got: ${absolute}`);
-  }
-
-  try {
-    await fs.access(absolute);
-  } catch {
-    await fs.mkdir(absolute, { recursive: true });
-  }
-
-  return absolute;
+  const workspace = await resolveProjectWorkspace(project, projectId);
+  await fs.mkdir(workspace, { recursive: true });
+  await makeTreeWritable(workspace);
+  return workspace;
 }
 
 async function appendProjectContext(baseInstruction: string, repoPath: string): Promise<string> {

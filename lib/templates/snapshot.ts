@@ -110,6 +110,7 @@ export async function copyDirectory(source: string, destination: string): Promis
     } else if (entry.isFile()) {
       await fs.mkdir(path.dirname(to), { recursive: true });
       await fs.copyFile(from, to);
+      await fs.chmod(to, 0o644).catch(() => undefined);
       count += 1;
     }
   }
