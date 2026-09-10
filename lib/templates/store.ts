@@ -7,6 +7,7 @@ import {
   deleteProjectSnapshot,
   directoryHasApp,
   duplicateProjectSnapshot,
+  listVolumeSnapshotIds,
   snapshotHasApp,
   writeProjectSnapshot,
 } from './snapshot';
@@ -74,17 +75,48 @@ async function loadSeedStore(): Promise<TemplateFileStore | null> {
   }
 }
 
+async function recoverVolumeTemplates(store: TemplateFileStore): Promise<TemplateFileStore> {
+  const known = new Set(store.custom.map((template) => template.id));
+  const volumeIds = await listVolumeSnapshotIds();
+  let changed = false;
+  for (const id of volumeIds) {
+    if (known.has(id) || BUILTIN_IDS.has(id) || RESERVED_IDS.has(id)) continue;
+    const name = id
+      .replace(/[-_]+/g, ' ')
+      .replace(/\b\w/g, (letter) => letter.toUpperCase())
+      .trim() || id;
+    store.custom.unshift(
+      persistCustom({
+        ...skeletonFromSave({
+          id,
+          name,
+          description: 'Saved site recovered from this server.',
+        }),
+        savedAt: new Date().toISOString(),
+      }),
+    );
+    known.add(id);
+    changed = true;
+  }
+  if (changed) {
+    try {
+      await writeStore(store);
+    } catch (error) {
+      console.error('Could not re-register volume templates:', error);
+    }
+  }
+  return store;
+}
+
 async function readStore(): Promise<TemplateFileStore> {
   const store = await readStoreFile();
   const seed = await loadSeedStore();
-  if (!seed?.custom.length) return store;
-
   const have = new Set(store.custom.map((template) => template.id));
-  const missingSeed = seed.custom.filter((template) => !have.has(template.id));
+  const missingSeed = (seed?.custom ?? []).filter((template) => !have.has(template.id));
   const next: TemplateFileStore = {
-    overrides: { ...seed.overrides, ...store.overrides },
+    overrides: { ...(seed?.overrides ?? {}), ...store.overrides },
     custom: [...store.custom, ...missingSeed],
-    hidden: [...new Set([...(seed.hidden ?? []), ...(store.hidden ?? [])])],
+    hidden: [...new Set([...(seed?.hidden ?? []), ...(store.hidden ?? [])])],
   };
 
   if (JSON.stringify(store) !== JSON.stringify(next)) {
@@ -94,7 +126,7 @@ async function readStore(): Promise<TemplateFileStore> {
       console.error('Could not persist seeded templates to disk:', error);
     }
   }
-  return next;
+  return recoverVolumeTemplates(next);
 }
 
 async function writeStore(store: TemplateFileStore): Promise<void> {

@@ -141,7 +141,8 @@ export function ProjectSettings({
           
           {activeTab === 'services' && (
             <ServiceSettings 
-              projectId={projectId} 
+              projectId={projectId}
+              projectName={projectName}
               onOpenGlobalSettings={() => {
                 // Open Global Settings with services tab
                 setShowGlobalSettings(true);

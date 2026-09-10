@@ -8,8 +8,8 @@ const SETTINGS_PATH = dataFile('mail.json');
 
 const DEFAULT_SMTP: MailSmtpSettings = {
   host: '',
-  port: 465,
-  secure: true,
+  port: 587,
+  secure: false,
   user: '',
   password: '',
 };
@@ -149,7 +149,9 @@ export async function updateMailSettings(input: MailSettingsPatch): Promise<Publ
     const smtpPatch = input.smtp
       ? {
           ...input.smtp,
-          password: input.smtp.password?.trim() ? input.smtp.password : current.smtp.password,
+            password: input.smtp.password?.trim()
+              ? input.smtp.password.replace(/\s+/g, '')
+              : current.smtp.password,
         }
       : undefined;
     const next = mergeSettings(current, {
@@ -192,6 +194,45 @@ export function emailToHtml(body: string): string {
 </html>`;
 }
 
+function smtpAuthPassword(password: string): string {
+  return password.replace(/\s+/g, '');
+}
+
+function isGmailHost(host: string): boolean {
+  return /(^|\.)gmail\.com$/i.test(host.trim());
+}
+
+function createSmtpTransport(settings: MailSettings) {
+  const host = settings.smtp.host || (isGmailHost(settings.smtp.host) ? 'smtp.gmail.com' : settings.smtp.host);
+  const port = settings.smtp.port || 587;
+  const secure = port === 465;
+  return nodemailer.createTransport({
+    host: host || 'smtp.gmail.com',
+    port,
+    secure,
+    requireTLS: !secure,
+    auth: {
+      user: settings.smtp.user,
+      pass: smtpAuthPassword(settings.smtp.password),
+    },
+    tls: { minVersion: 'TLSv1.2' },
+    connectionTimeout: 20_000,
+    greetingTimeout: 20_000,
+    socketTimeout: 20_000,
+  });
+}
+
+function withGmailPortFallback(settings: MailSettings): MailSettings[] {
+  const variants = [settings];
+  if (isGmailHost(settings.smtp.host) && settings.smtp.port === 465) {
+    variants.push({
+      ...settings,
+      smtp: { ...settings.smtp, port: 587, secure: false },
+    });
+  }
+  return variants;
+}
+
 export async function deliverEmail(input: {
   to: string;
   subject: string;
@@ -231,26 +272,27 @@ export async function deliverEmail(input: {
     return { from, provider: 'resend' };
   }
 
-  const transporter = nodemailer.createTransport({
-    host: settings.smtp.host,
-    port: settings.smtp.port,
-    secure: settings.smtp.secure || settings.smtp.port === 465,
-    auth: {
-      user: settings.smtp.user,
-      pass: settings.smtp.password,
-    },
-  });
-
-  await transporter.sendMail({
-    from,
-    to: input.to,
-    replyTo: input.replyTo || settings.replyTo || undefined,
-    subject: input.subject,
-    text: input.body,
-    html,
-  });
-
-  return { from, provider: 'smtp' };
+  let lastError: unknown;
+  for (const variant of withGmailPortFallback(settings)) {
+    try {
+      const transporter = createSmtpTransport(variant);
+      await transporter.sendMail({
+        from,
+        to: input.to,
+        replyTo: input.replyTo || settings.replyTo || undefined,
+        subject: input.subject,
+        text: input.body,
+        html,
+      });
+      return { from, provider: 'smtp' };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  const detail = lastError instanceof Error ? lastError.message : 'SMTP send failed';
+  throw new Error(
+    `Gmail/SMTP rejected the message: ${detail}. Use an App Password (not your normal Gmail password), smtp.gmail.com, port 587, and the full Gmail address as username.`,
+  );
 }
 
 export async function verifyMailConnection(): Promise<{ ok: boolean; provider: MailProvider; from: string }> {
@@ -269,15 +311,17 @@ export async function verifyMailConnection(): Promise<{ ok: boolean; provider: M
     return { ok: true, provider: 'resend', from: formatFromAddress(settings) };
   }
 
-  const transporter = nodemailer.createTransport({
-    host: settings.smtp.host,
-    port: settings.smtp.port,
-    secure: settings.smtp.secure || settings.smtp.port === 465,
-    auth: {
-      user: settings.smtp.user,
-      pass: settings.smtp.password,
-    },
-  });
-  await transporter.verify();
-  return { ok: true, provider: 'smtp', from: formatFromAddress(settings) };
+  let lastError: unknown;
+  for (const variant of withGmailPortFallback(settings)) {
+    try {
+      await createSmtpTransport(variant).verify();
+      return { ok: true, provider: 'smtp', from: formatFromAddress(settings) };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  const detail = lastError instanceof Error ? lastError.message : 'SMTP verify failed';
+  throw new Error(
+    `Could not connect to the mail server: ${detail}. For Gmail, create an App Password and use smtp.gmail.com on port 587.`,
+  );
 }

@@ -1,7 +1,6 @@
-import path from 'path';
-import fs from 'fs/promises';
 import { getPlainServiceToken } from '@/lib/services/tokens';
 import { getProjectById, updateProject } from '@/lib/services/project';
+import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { getProjectService, upsertProjectServiceConnection, updateProjectServiceData } from '@/lib/services/project-services';
 import { ensureGitRepository, ensureGitConfig, initializeMainBranch, addOrUpdateRemote, commitAll, pushToRemote, getCurrentBranch } from '@/lib/services/git';
 import type { GitHubUserInfo, CreateRepoOptions, GitHubRepositoryInfo } from '@/types/shared';
@@ -100,23 +99,27 @@ export async function createRepository(options: CreateRepoOptions) {
     throw new GitHubError('GitHub token not configured', 401);
   }
 
-  const payload = {
-    name: options.repoName,
-    description: options.description ?? '',
-    private: options.private ?? false,
-    auto_init: false,
-  };
-
+  const user = await getGithubUser();
   try {
-    const repo = await githubFetch(token, '/user/repos', {
+    return (await githubFetch(token, '/user/repos', {
       method: 'POST',
-      body: JSON.stringify(payload),
-    });
-
-    return repo as any;
+      body: JSON.stringify({
+        name: options.repoName,
+        description: options.description ?? '',
+        private: options.private ?? false,
+        auto_init: false,
+      }),
+    })) as any;
   } catch (error) {
-    if (error instanceof GitHubError && error.status === 422) {
-      throw new GitHubError(`Repository name "${options.repoName}" is unavailable or already exists.`, error.status);
+    if (error instanceof GitHubError && (error.status === 422 || error.status === 409)) {
+      try {
+        return (await githubFetch(token, `/repos/${user.login}/${options.repoName}`)) as any;
+      } catch {
+        throw new GitHubError(
+          `${error.message} Use a different repository name, or give the GitHub token the repo scope.`,
+          error.status,
+        );
+      }
     }
     throw error;
   }
@@ -130,17 +133,8 @@ function githubAuthenticatedCloneUrl(cloneUrl: string, token: string) {
   return cloneUrl;
 }
 
-function resolveProjectRepoPath(projectId: string, repoPath?: string | null) {
-  if (repoPath) {
-    return path.isAbsolute(repoPath) ? repoPath : path.resolve(process.cwd(), repoPath);
-  }
-  return path.resolve(process.cwd(), process.env.PROJECTS_DIR || './data/projects', projectId);
-}
-
 export async function ensureProjectRepository(projectId: string, repoPath?: string | null) {
-  const resolved = resolveProjectRepoPath(projectId, repoPath);
-  await fs.mkdir(resolved, { recursive: true });
-  return resolved;
+  return resolveAndPersistProjectWorkspace({ repoPath }, projectId);
 }
 
 export async function getGithubRepositoryDetails(owner: string, repo: string): Promise<GitHubRepositoryInfo> {

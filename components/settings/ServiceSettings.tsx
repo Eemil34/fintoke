@@ -31,10 +31,11 @@ interface Service {
 
 interface ServiceSettingsProps {
   projectId: string;
+  projectName?: string;
   onOpenGlobalSettings?: () => void;
 }
 
-export function ServiceSettings({ projectId, onOpenGlobalSettings }: ServiceSettingsProps) {
+export function ServiceSettings({ projectId, projectName, onOpenGlobalSettings }: ServiceSettingsProps) {
   const [tokenStatus, setTokenStatus] = useState<{
     github: boolean | null;
     supabase: boolean | null;
@@ -349,7 +350,7 @@ export function ServiceSettings({ projectId, onOpenGlobalSettings }: ServiceSett
           isOpen={gitHubModalOpen}
           onClose={() => setGitHubModalOpen(false)}
           projectId={projectId}
-          projectName={projectId} // Use projectId as fallback project name
+          projectName={projectName || projectId}
           onSuccess={handleGitHubModalSuccess}
         />
       )}
@@ -360,7 +361,7 @@ export function ServiceSettings({ projectId, onOpenGlobalSettings }: ServiceSett
           isOpen={vercelModalOpen}
           onClose={() => setVercelModalOpen(false)}
           projectId={projectId}
-          projectName={projectId} // Use projectId as fallback project name
+          projectName={projectName || projectId}
           onSuccess={handleVercelModalSuccess}
         />
       )}
@@ -371,7 +372,7 @@ export function ServiceSettings({ projectId, onOpenGlobalSettings }: ServiceSett
           isOpen={supabaseModalOpen}
           onClose={() => setSupabaseModalOpen(false)}
           projectId={projectId}
-          projectName={projectId} // Use projectId as fallback project name
+          projectName={projectName || projectId}
           onSuccess={handleSupabaseModalSuccess}
         />
       )}

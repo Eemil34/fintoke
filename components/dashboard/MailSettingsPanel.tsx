@@ -10,7 +10,7 @@ const EMPTY: PublicMailSettings = {
   fromName: '',
   fromEmail: '',
   replyTo: '',
-  smtp: { host: 'smtp.gmail.com', port: 465, secure: true, user: '', hasPassword: false },
+  smtp: { host: 'smtp.gmail.com', port: 587, secure: false, user: '', hasPassword: false },
   resend: { hasApiKey: false },
 };
 
@@ -38,8 +38,8 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
     setReplyTo(next.replyTo);
     setProvider(next.provider);
     setHost(next.smtp.host || 'smtp.gmail.com');
-    setPort(String(next.smtp.port || 465));
-    setSecure(next.smtp.secure);
+    setPort(String(next.smtp.port || 587));
+    setSecure(Boolean(next.smtp.port === 465));
     setUser(next.smtp.user);
     setPassword('');
     setResendKey('');
@@ -67,7 +67,7 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
           resendApiKey: resendKey,
           smtp: {
             host,
-            port: Number(port) || 465,
+            port: Number(port) || 587,
             secure,
             user,
             password,
@@ -106,7 +106,7 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
         <div>
           <p className="text-sm font-semibold text-gray-900">Sending</p>
           <p className="mt-1 text-sm text-gray-500">
-            Claude uses this connection to deliver template emails. Gmail needs an app password, not your normal login.
+            Claude uses this connection to deliver template emails. For Gmail use an App Password, smtp.gmail.com, port 587, and your full Gmail address as the username.
           </p>
         </div>
         <span
@@ -213,7 +213,7 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
           </label>
           <label className="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2">
             <input type="checkbox" checked={secure} onChange={(event) => setSecure(event.target.checked)} />
-            Use SSL (port 465). Turn off for STARTTLS on 587.
+            Use SSL (port 465). Leave off for Gmail on port 587.
           </label>
         </div>
       ) : (

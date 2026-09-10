@@ -83,6 +83,23 @@ export async function directoryHasApp(dir: string): Promise<boolean> {
   }
 }
 
+export async function listVolumeSnapshotIds(): Promise<string[]> {
+  let entries;
+  try {
+    entries = await fs.readdir(SNAPSHOTS_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const ids: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (await directoryHasApp(path.join(SNAPSHOTS_DIR, entry.name))) {
+      ids.push(entry.name);
+    }
+  }
+  return ids;
+}
+
 export async function snapshotHasApp(templateId: string): Promise<boolean> {
   return Boolean(await resolveSnapshotDir(templateId));
 }

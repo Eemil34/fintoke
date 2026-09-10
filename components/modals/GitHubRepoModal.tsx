@@ -28,21 +28,18 @@ export default function GitHubRepoModal({
 
   const sanitizeRepoName = useCallback((name: string): string => {
     if (!name) return '';
-    
-    return name
-      // Convert to lowercase
+    const cleaned = name
       .toLowerCase()
-      // Replace spaces and underscores with hyphens
       .replace(/[\s_]+/g, '-')
-      // Remove invalid characters
       .replace(/[^a-z0-9.-]/g, '')
-      // Remove consecutive periods and hyphens
       .replace(/[-]{2,}/g, '-')
       .replace(/[.]{2,}/g, '.')
-      // Remove leading/trailing periods and hyphens
       .replace(/^[.-]+|[.-]+$/g, '')
-      // Limit to 100 characters
-      .substring(0, 100);
+      .substring(0, 80);
+    if (!cleaned || /^project-\d+/.test(cleaned)) {
+      return `site-${Date.now().toString(36)}`;
+    }
+    return cleaned;
   }, []);
 
   const validateRepoName = (name: string): string => {
@@ -111,8 +108,8 @@ export default function GitHubRepoModal({
   // Initialize and set sanitized repo name when modal opens
   useEffect(() => {
     if (isOpen && !repoName) {
-      const sanitized = sanitizeRepoName(projectName || projectId || '');
-      setRepoName(sanitized);
+      const sanitized = sanitizeRepoName(projectName || '');
+      setRepoName(sanitized || sanitizeRepoName(`site-${projectId.slice(-6)}`));
     }
   }, [isOpen, projectName, projectId, repoName, sanitizeRepoName]);
 
