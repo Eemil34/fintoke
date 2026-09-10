@@ -210,16 +210,15 @@ export async function updateMailSettings(input: MailSettingsPatch): Promise<Publ
         ? input.resendApiKey.trim() || current.resendApiKey
         : undefined,
     });
+    const mailbox = parseMailbox(next.fromEmail);
+    if (mailbox.email) {
+      next.fromEmail = mailbox.email;
+      if (!next.fromName.trim() && mailbox.name) next.fromName = mailbox.name;
+    }
     await fs.mkdir(path.dirname(SETTINGS_PATH), { recursive: true });
     await fs.writeFile(SETTINGS_PATH, JSON.stringify(next, null, 2), 'utf8');
     return toPublicMailSettings(next);
   });
-}
-
-export function formatFromAddress(settings: MailSettings): string {
-  const email = settings.fromEmail || settings.smtp.user;
-  if (settings.fromName && email) return `${settings.fromName} <${email}>`;
-  return email;
 }
 
 function escapeHtml(value: string): string {
