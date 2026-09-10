@@ -606,6 +606,7 @@ export interface PreviewInfo {
 }
 
 class PreviewManager {
+  private stampCache = new Map<string, { at: number; stamp: string }>();
   private processes = new Map<string, PreviewProcess>();
   private installing = new Map<string, Promise<void>>();
   private starting = new Map<string, Promise<PreviewInfo>>();
@@ -736,18 +737,17 @@ class PreviewManager {
 
     const projectPath = await resolveProjectWorkspace(project, projectId);
     await fs.mkdir(projectPath, { recursive: true });
-    const restored = await restoreSnapshotIfMaterialized(
+
+    const live = this.processes.get(projectId);
+    if (live && live.status !== 'error' && live.port) {
+      return this.toInfo(live);
+    }
+
+    await restoreSnapshotIfMaterialized(
       projectPath,
       projectId,
       project.settings,
     );
-
-    const live = this.processes.get(projectId);
-    if (restored && live) {
-      await this.stop(projectId);
-    } else if (live && live.status !== 'error' && live.port) {
-      return this.toInfo(live);
-    }
 
     const previewBounds = resolvePreviewBounds();
     const preferredPort = await findAvailablePort(
@@ -1070,6 +1070,72 @@ class PreviewManager {
   public getLogs(projectId: string): string[] {
     const processInfo = this.processes.get(projectId);
     return processInfo ? [...processInfo.logs] : [];
+  }
+
+  public async sourceStamp(projectId: string): Promise<string> {
+    const cached = this.stampCache.get(projectId);
+    if (cached && Date.now() - cached.at < 400) {
+      return cached.stamp;
+    }
+
+    const project = await getProjectById(projectId);
+    if (!project) {
+      return '0';
+    }
+
+    const root = await resolveProjectWorkspace(project, projectId);
+    let max = 0;
+    let count = 0;
+    const walk = async (dir: string, depth: number) => {
+      if (depth > 6) return;
+      let entries;
+      try {
+        entries = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (entry.name === 'node_modules' || entry.name === '.next' || entry.name === '.git') {
+          continue;
+        }
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full, depth + 1);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        try {
+          const stat = await fs.stat(full);
+          max = Math.max(max, stat.mtimeMs);
+          count += 1;
+        } catch {
+          // skip unreadable files
+        }
+      }
+    };
+
+    for (const folder of ['app', 'components', 'lib', 'src', 'public', 'styles', 'content']) {
+      await walk(path.join(root, folder), 0);
+    }
+    for (const file of [
+      'package.json',
+      'tailwind.config.ts',
+      'tailwind.config.js',
+      'next.config.js',
+      'app/globals.css',
+    ]) {
+      try {
+        const stat = await fs.stat(path.join(root, file));
+        max = Math.max(max, stat.mtimeMs);
+        count += 1;
+      } catch {
+        // optional
+      }
+    }
+
+    const stamp = `${count}:${Math.round(max)}`;
+    this.stampCache.set(projectId, { at: Date.now(), stamp });
+    return stamp;
   }
 
   private toInfo(processInfo: PreviewProcess): PreviewInfo {

@@ -801,9 +801,12 @@ const persistProjectPreferences = useCallback(
   }, [projectId, startDeploymentPolling, loadDeployStatus]);
 
   const start = useCallback(async (options?: { restart?: boolean }) => {
+    const keepVisible = Boolean(previewUrlRef.current) && !options?.restart;
     try {
-      setIsStartingPreview(true);
-      setPreviewInitializationMessage(options?.restart ? 'Updating preview…' : 'Starting preview server...');
+      if (!keepVisible) {
+        setIsStartingPreview(true);
+        setPreviewInitializationMessage(options?.restart ? 'Updating preview…' : 'Starting preview server...');
+      }
 
       const r = await fetch(`${API_BASE}/api/projects/${projectId}/preview/start`, {
         method: 'POST',
@@ -824,9 +827,11 @@ const persistProjectPreferences = useCallback(
       const data = payload?.data ?? payload ?? {};
       const url = typeof data.url === 'string' ? data.url : `/preview/${encodeURIComponent(projectId)}`;
       setPreviewUrl(url);
-      setPreviewInitializationMessage('Waiting for the site to compile…');
+      if (!keepVisible) {
+        setPreviewInitializationMessage('Waiting for the site to compile…');
+        setCurrentRoute('/');
+      }
       setIsStartingPreview(false);
-      setCurrentRoute('/');
     } catch (error) {
       console.warn('Error starting preview:', error instanceof Error ? error.message : error);
       setPreviewInitializationMessage('An error occurred');
@@ -2224,11 +2229,6 @@ const persistProjectPreferences = useCallback(
       canceled = true;
       window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('services-updated', handleServicesUpdate);
-
-      const currentPreview = previewUrlRef.current;
-      if (currentPreview) {
-        fetch(`${API_BASE}/api/projects/${projectId}/preview/stop`, { method: 'POST' }).catch(() => {});
-      }
     };
   }, [projectId]);
 
@@ -2381,9 +2381,7 @@ const persistProjectPreferences = useCallback(
                     setAgentWorkComplete(true);
                     localStorage.setItem(`project_${projectId}_taskComplete`, 'true');
                     void start();
-                    return;
                   }
-                  window.setTimeout(() => refreshPreview(), 1500);
                 }}
                 onSseFallbackActive={(active) => {
                   console.log('🔄 [SSE] Fallback status:', active);

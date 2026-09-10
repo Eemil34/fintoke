@@ -40,14 +40,10 @@ export async function restoreSnapshotIfMaterialized(
     .then(() => true)
     .catch(() => false);
   const alreadyCopied = await readTemplateMark(projectPath);
-  if (alreadyCopied === templateId && !materialized) return false;
-
-  const snapshotDir = await resolveSnapshotDir(templateId);
-  const snapshotPage = snapshotDir ? await readPageSource(snapshotDir) : null;
-  const projectPage = await readPageSource(projectPath);
-  const seedComponent = snapshotPage?.match(/from ['"]\.\.\/components\/(\w+)['"]/)?.[1];
-  const hasSeedComponent = !seedComponent || Boolean(projectPage?.includes(seedComponent));
-  if (alreadyCopied === templateId && hasSeedComponent && !materialized) return false;
+  // Catalog lookalikes still have lib/site.ts. Real sites and Cursor edits must stay.
+  if (!materialized && (alreadyCopied || (await projectHasApp(projectPath)))) {
+    return false;
+  }
 
   const entries = await fs.readdir(projectPath).catch(() => [] as string[]);
   for (const name of entries) {

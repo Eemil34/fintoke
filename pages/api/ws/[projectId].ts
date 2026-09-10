@@ -1,8 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import http from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type { IncomingMessage, Server as HTTPServer } from 'http';
 import type { Socket } from 'net';
 import { ensureHeartbeat, websocketManager } from '@/lib/server/websocket-manager';
+import { previewManager } from '@/lib/services/preview';
 
 type UpgradeListener = (request: IncomingMessage, socket: Socket, head: Buffer) => void;
 
@@ -23,6 +25,55 @@ export const config = {
 
 function isProjectWebSocketPath(pathname: string): boolean {
   return pathname === '/api/ws' || pathname.startsWith('/api/ws/');
+}
+
+function previewHmrTarget(pathname: string, search: string): { projectId: string; path: string } | null {
+  const match = pathname.match(/^\/preview\/([^/]+)(\/.*)$/);
+  if (!match) return null;
+  return {
+    projectId: decodeURIComponent(match[1]),
+    path: `${match[2]}${search}`,
+  };
+}
+
+function proxyPreviewWebSocket(request: IncomingMessage, socket: Socket, head: Buffer) {
+  const upgradeUrl = new URL(request.url ?? '', 'http://localhost');
+  const target = previewHmrTarget(upgradeUrl.pathname, upgradeUrl.search);
+  if (!target) return false;
+
+  const preview = previewManager.getStatus(target.projectId);
+  if (!preview.port) {
+    socket.destroy();
+    return true;
+  }
+
+  const headers: http.OutgoingHttpHeaders = { ...request.headers, host: `127.0.0.1:${preview.port}` };
+  const proxyReq = http.request({
+    hostname: '127.0.0.1',
+    port: preview.port,
+    path: target.path,
+    method: 'GET',
+    headers,
+  });
+
+  proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+    const lines = ['HTTP/1.1 101 Switching Protocols'];
+    for (const [key, value] of Object.entries(proxyRes.headers)) {
+      if (value === undefined) continue;
+      const rendered = Array.isArray(value) ? value.join(', ') : value;
+      lines.push(`${key}: ${rendered}`);
+    }
+    socket.write(`${lines.join('\r\n')}\r\n\r\n`);
+    if (head.length) proxySocket.write(head);
+    if (proxyHead.length) socket.write(proxyHead);
+    proxySocket.pipe(socket);
+    socket.pipe(proxySocket);
+  });
+  proxyReq.on('error', () => {
+    socket.destroy();
+  });
+  proxyReq.end();
+  return true;
 }
 
 export default function handler(req: NextApiRequest, res: NextApiResponseWithSocket) {
@@ -71,6 +122,10 @@ export default function handler(req: NextApiRequest, res: NextApiResponseWithSoc
           wss.handleUpgrade(request, socket, head, (websocket: WebSocket) => {
             wss.emit('connection', websocket, request);
           });
+          return;
+        }
+
+        if (proxyPreviewWebSocket(request, socket, head)) {
           return;
         }
       } catch (error) {
