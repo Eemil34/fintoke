@@ -23,6 +23,7 @@ interface StoredCustomTemplate extends WebsiteTemplate {
   kind?: TemplateKind;
   sourceProjectId?: string | null;
   sourceUrl?: string | null;
+  savedAt?: string | null;
 }
 
 interface TemplateFileStore {
@@ -78,18 +79,15 @@ async function readStore(): Promise<TemplateFileStore> {
   const seed = await loadSeedStore();
   if (!seed?.custom.length) return store;
 
-  const seedIds = new Set(seed.custom.map((template) => template.id));
+  const have = new Set(store.custom.map((template) => template.id));
+  const missingSeed = seed.custom.filter((template) => !have.has(template.id));
   const next: TemplateFileStore = {
-    overrides: { ...store.overrides, ...seed.overrides },
-    custom: [
-      ...seed.custom,
-      ...store.custom.filter((template) => !seedIds.has(template.id)),
-    ],
+    overrides: { ...seed.overrides, ...store.overrides },
+    custom: [...store.custom, ...missingSeed],
     hidden: [...new Set([...(seed.hidden ?? []), ...(store.hidden ?? [])])],
   };
 
-  const changed = JSON.stringify(store) !== JSON.stringify(next);
-  if (changed) {
+  if (JSON.stringify(store) !== JSON.stringify(next)) {
     try {
       await writeStore(next);
     } catch (error) {
@@ -131,6 +129,7 @@ function snapshotMeta(raw: StoredCustomTemplate | WebsiteTemplate | undefined): 
   kind: TemplateKind;
   sourceProjectId?: string | null;
   sourceUrl?: string | null;
+  savedAt?: string | null;
 } {
   const record = (raw && typeof raw === 'object' ? raw : {}) as StoredCustomTemplate;
   const sourceUrl = record.sourceUrl ? parsePublicHttpUrl(record.sourceUrl) : null;
@@ -138,6 +137,7 @@ function snapshotMeta(raw: StoredCustomTemplate | WebsiteTemplate | undefined): 
     kind: record.kind === 'snapshot' ? 'snapshot' : 'catalog',
     sourceProjectId: record.sourceProjectId || null,
     sourceUrl,
+    savedAt: record.savedAt || null,
   };
 }
 
@@ -146,6 +146,7 @@ async function toManaged(
   source: ManagedTemplate['source'],
   overridden: boolean,
   extras: ReturnType<typeof snapshotMeta> = { kind: 'catalog' },
+  origin: ManagedTemplate['origin'] = 'pack',
 ): Promise<ManagedTemplate> {
   const hasSnapshot = await snapshotHasApp(template.id);
   return {
@@ -156,6 +157,8 @@ async function toManaged(
     sourceProjectId: extras.sourceProjectId ?? null,
     sourceUrl: extras.sourceUrl ?? null,
     hasSnapshot,
+    origin,
+    savedAt: extras.savedAt ?? null,
   };
 }
 
@@ -203,6 +206,7 @@ function persistCustom(template: StoredCustomTemplate): StoredCustomTemplate {
     kind: template.kind === 'snapshot' ? 'snapshot' : 'catalog',
     sourceProjectId: template.sourceProjectId || null,
     sourceUrl: template.sourceUrl || null,
+    savedAt: template.savedAt || null,
   };
 }
 
@@ -212,6 +216,8 @@ export function isBuiltinTemplateId(id: string): boolean {
 
 export async function listManagedTemplates(): Promise<ManagedTemplate[]> {
   const store = await enqueue(() => readStore());
+  const seed = await loadSeedStore();
+  const seedIds = new Set((seed?.custom ?? []).map((template) => template.id));
   const custom = await Promise.all(
     store.custom.map((template) =>
       toManaged(
@@ -219,9 +225,16 @@ export async function listManagedTemplates(): Promise<ManagedTemplate[]> {
         'custom',
         false,
         snapshotMeta(template),
+        seedIds.has(template.id) ? 'pack' : 'user',
       ),
     ),
   );
+  custom.sort((a, b) => {
+    if (a.origin === b.origin) {
+      return (b.savedAt || '').localeCompare(a.savedAt || '');
+    }
+    return a.origin === 'user' ? -1 : 1;
+  });
   const hasSavedSites = custom.some((template) => template.hasSnapshot);
   const builtins = hasSavedSites
     ? []
@@ -288,12 +301,13 @@ export async function createSnapshotTemplate(input: {
         sourceUrl: input.sourceUrl,
       }),
       sourceProjectId: input.projectId,
+      savedAt: new Date().toISOString(),
     });
 
     await writeProjectSnapshot(id, input.projectPath);
     store.custom.unshift(template);
     await writeStore(store);
-    return toManaged(template, 'custom', false, snapshotMeta(template));
+    return toManaged(template, 'custom', false, snapshotMeta(template), 'user');
   });
 }
 
@@ -350,7 +364,7 @@ export async function duplicateManagedTemplate(fromId: string): Promise<ManagedT
 
     store.custom.unshift(template);
     await writeStore(store);
-    return toManaged(template, 'custom', false, snapshotMeta(template));
+    return toManaged(template, 'custom', false, snapshotMeta(template), 'user');
   });
 }
 
@@ -362,23 +376,24 @@ export async function updateManagedTemplate(id: string, input: unknown): Promise
     const customIndex = store.custom.findIndex((item) => item.id === id);
     if (customIndex >= 0) {
       const current = store.custom[customIndex];
-      const merged = persistCustom({
-        ...current,
-        ...sanitizeWebsiteTemplate(
-          {
-            ...current,
-            name: asString(raw.name, current.name),
-            description: asString(raw.description, current.description),
-            niche: asString(raw.niche, current.niche),
-            category: raw.category ?? current.category,
-            keywords: raw.keywords ?? current.keywords,
-          },
-          { id },
-        ),
-        kind: current.kind === 'snapshot' ? 'snapshot' : 'catalog',
-        sourceProjectId: current.sourceProjectId,
-        sourceUrl: current.sourceUrl,
-      });
+    const merged = persistCustom({
+      ...current,
+      ...sanitizeWebsiteTemplate(
+        {
+          ...current,
+          name: asString(raw.name, current.name),
+          description: asString(raw.description, current.description),
+          niche: asString(raw.niche, current.niche),
+          category: raw.category ?? current.category,
+          keywords: raw.keywords ?? current.keywords,
+        },
+        { id },
+      ),
+      kind: current.kind === 'snapshot' ? 'snapshot' : 'catalog',
+      sourceProjectId: current.sourceProjectId,
+      sourceUrl: current.sourceUrl,
+      savedAt: current.savedAt,
+    });
       store.custom[customIndex] = merged;
       await writeStore(store);
       return toManaged(merged, 'custom', false, snapshotMeta(merged));

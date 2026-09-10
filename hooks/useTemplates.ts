@@ -30,6 +30,11 @@ export function useTemplates() {
 
   useEffect(() => {
     void load();
+    const onChanged = () => {
+      void load();
+    };
+    window.addEventListener('fintoke-templates-changed', onChanged);
+    return () => window.removeEventListener('fintoke-templates-changed', onChanged);
   }, [load]);
 
   const byId = useMemo(

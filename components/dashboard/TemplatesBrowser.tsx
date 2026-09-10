@@ -24,7 +24,9 @@ export default function TemplatesBrowser() {
     [category, templates],
   );
 
-  const customCount = templates.filter((template) => template.source === 'custom' || template.kind === 'snapshot').length;
+  const customCount = templates.filter((template) => template.origin === 'user').length;
+  const yours = filtered.filter((template) => template.origin === 'user');
+  const rest = filtered.filter((template) => template.origin !== 'user');
 
   const setCategoryFor = async (id: string, next: TemplateCategoryId) => {
     setBusyId(id);
@@ -83,15 +85,19 @@ export default function TemplatesBrowser() {
             }`}
           >
             {item.label}
-            {item.id === 'all' && customCount > 0 ? ` · ${customCount} custom` : ''}
+            {item.id === 'all' && customCount > 0 ? ` · ${customCount} yours` : ''}
           </button>
         ))}
       </div>
 
       {loading ? <p className="text-sm text-gray-500">Loading…</p> : null}
 
+      {yours.length > 0 ? (
+        <p className="mb-3 text-sm font-semibold text-gray-900">Saved by you</p>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((template) => (
+        {[...yours, ...rest].map((template) => (
           <article
             key={template.id}
             className="overflow-hidden rounded-2xl border border-gray-200 bg-white"
@@ -113,7 +119,11 @@ export default function TemplatesBrowser() {
                   <p className="truncate text-[11px] font-medium">{template.brand.name}</p>
                   <p className="truncate text-[10px] opacity-70">{template.hero.title}</p>
                 </div>
-                {template.source === 'custom' || template.overridden || template.kind === 'snapshot' ? (
+                {template.origin === 'user' ? (
+                  <span className="absolute right-2 top-2 rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
+                    Yours
+                  </span>
+                ) : template.source === 'custom' || template.overridden || template.kind === 'snapshot' ? (
                   <span className="absolute right-2 top-2 rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
                     {template.kind === 'snapshot' || template.hasSnapshot
                       ? 'Saved site'

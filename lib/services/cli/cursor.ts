@@ -34,7 +34,7 @@ import {
 import { serializeMessage, createRealtimeMessage } from '@/lib/serializers/chat';
 import { buildInitialAgentPrompt } from '@/lib/templates/agentPrompt';
 import { SITE_IMAGE_AGENT_RULES, buildSiteImageAgentRules } from '@/lib/templates/siteImages';
-import { resolveProjectWorkspace, makeTreeWritable } from '@/lib/server/projectWorkspace';
+import { resolveAndPersistProjectWorkspace, makeTreeWritable } from '@/lib/server/projectWorkspace';
 import {
   ensureCursorExecutable,
   resolveCursorApiKey,
@@ -95,7 +95,7 @@ async function ensureProjectPath(projectId: string, projectPath: string): Promis
     throw new Error(`Project not found: ${projectId}`);
   }
 
-  const workspace = await resolveProjectWorkspace(project, projectId);
+  const workspace = await resolveAndPersistProjectWorkspace(project, projectId);
   await fs.mkdir(workspace, { recursive: true });
   await makeTreeWritable(workspace);
   return workspace;

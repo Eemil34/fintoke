@@ -39,6 +39,7 @@ export default function SaveAsTemplateButton({
         }),
       });
       setSaved(template);
+      window.dispatchEvent(new Event('fintoke-templates-changed'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save template');
     } finally {
@@ -67,7 +68,7 @@ export default function SaveAsTemplateButton({
               <>
                 <h2 className="text-lg font-semibold text-gray-900">Saved as a template</h2>
                 <p className="mt-2 text-sm text-gray-600">
-                  “{saved.name}” is now a starting site. New projects copy these files, then the agent can rewrite them.
+                  “{saved.name}” is at the top of Templates (look for the Yours badge) and on Studio. It stays on the server volume, so the next deploy will not delete it.
                 </p>
                 <div className="mt-5 flex justify-end gap-2">
                   <button

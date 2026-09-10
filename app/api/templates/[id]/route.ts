@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getProjectById } from '@/lib/services/project';
+import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import {
   deleteManagedTemplate,
   getManagedTemplate,
@@ -42,10 +43,11 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 
     if (body?.projectId) {
       const project = await getProjectById(String(body.projectId));
-      if (!project?.repoPath) {
+      if (!project) {
         return createErrorResponse('The site has no files yet. Generate it with the agent first.', undefined, 400);
       }
-      const template = await refreshSnapshotTemplate(id, project.repoPath, project.id);
+      const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
+      const template = await refreshSnapshotTemplate(id, projectPath, project.id);
       if (body.name || body.description) {
         const updated = await updateManagedTemplate(id, {
           name: body.name,

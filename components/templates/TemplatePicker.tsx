@@ -65,9 +65,9 @@ function TemplateCard({
             Suggested
           </span>
         ) : null}
-        {templateKind(template) === 'snapshot' ? (
+        {templateKind(template) === 'snapshot' || (template as WebsiteTemplate & { origin?: string }).origin === 'user' ? (
           <span className="absolute left-2 top-2 rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
-            Saved
+            {(template as WebsiteTemplate & { origin?: string }).origin === 'user' ? 'Yours' : 'Saved'}
           </span>
         ) : null}
       </div>
@@ -88,13 +88,18 @@ export default function TemplatePicker({
 }: TemplatePickerProps) {
   const [category, setCategory] = useState<TemplateCategoryId | 'all'>('all');
   const catalog = templatesProp?.length ? templatesProp : WEBSITE_TEMPLATES;
+  const yours = catalog.filter((template) => (template as WebsiteTemplate & { origin?: string }).origin === 'user');
+  const pack = catalog.filter((template) => (template as WebsiteTemplate & { origin?: string }).origin !== 'user');
 
   const templates = useMemo(
-    () =>
-      catalog.filter(
-        (template) => category === 'all' || template.category === category,
-      ),
-    [catalog, category],
+    () => {
+      const filteredPack =
+        category === 'all' ? pack : pack.filter((template) => template.category === category);
+      const filteredYours =
+        category === 'all' ? yours : yours.filter((template) => template.category === category);
+      return [...filteredYours, ...filteredPack];
+    },
+    [category, pack, yours],
   );
 
   const selected = selectedId

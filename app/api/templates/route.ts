@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getProjectById } from '@/lib/services/project';
+import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import {
   createManagedTemplate,
   createSnapshotTemplate,
@@ -42,13 +43,11 @@ export async function POST(request: NextRequest) {
       if (!project) {
         return createErrorResponse('Site not found', undefined, 404);
       }
-      if (!project.repoPath) {
-        return createErrorResponse('The site has no files yet. Generate it with the agent first.', undefined, 400);
-      }
+      const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
 
       const settings = parseProjectSettings(project.settings);
       const template = await createSnapshotTemplate({
-        projectPath: project.repoPath,
+        projectPath,
         projectId: project.id,
         name: typeof body.name === 'string' && body.name.trim() ? body.name : project.name,
         description:

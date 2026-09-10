@@ -11,7 +11,7 @@ import { ensureProjectApp, restoreSnapshotIfMaterialized } from '@/lib/templates
 import { clearNextCache, ensureGeneratedDevScript, ensureIsolatedNextConfig, ensureRevealVisible, writePreviewNextConfig } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir } from '@/lib/server/paths';
-import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
+import { resolveAndPersistProjectWorkspace, resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
 
 function previewChildEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -735,7 +735,7 @@ class PreviewManager {
       throw new Error('Project not found');
     }
 
-    const projectPath = await resolveProjectWorkspace(project, projectId);
+    const projectPath = await resolveAndPersistProjectWorkspace(project, projectId);
     await fs.mkdir(projectPath, { recursive: true });
 
     const live = this.processes.get(projectId);
