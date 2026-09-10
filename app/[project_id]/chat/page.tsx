@@ -1183,8 +1183,6 @@ const persistProjectPreferences = useCallback(
         setIsFileUpdating(true);
         setTimeout(() => setIsFileUpdating(false), 800);
       }
-
-      refreshPreview();
     } catch (error) {
       console.error('Failed to save file:', error);
       setSaveFeedback('error');
@@ -1192,7 +1190,7 @@ const persistProjectPreferences = useCallback(
     } finally {
       setIsSavingFile(false);
     }
-  }, [selectedFile, isSavingFile, hasUnsavedChanges, projectId, refreshPreview]);
+  }, [selectedFile, isSavingFile, hasUnsavedChanges, projectId]);
 
   const handleEditorKeyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 
-const RELEASE = '2026-09-10-preview-live';
+const RELEASE = '2026-09-10-preview-hold';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
