@@ -2383,11 +2383,7 @@ const persistProjectPreferences = useCallback(
                     void start();
                     return;
                   }
-                  if (previewUrlRef.current) {
-                    void start({ restart: true }).then(() => {
-                      window.setTimeout(() => refreshPreview(), 2500);
-                    });
-                  }
+                  window.setTimeout(() => refreshPreview(), 1500);
                 }}
                 onSseFallbackActive={(active) => {
                   console.log('🔄 [SSE] Fallback status:', active);

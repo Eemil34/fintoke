@@ -14,6 +14,15 @@ import { projectsDir } from '@/lib/server/paths';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
 
+function previewChildEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return {
+    ...env,
+    NODE_ENV: 'development',
+    npm_config_production: 'false',
+    NPM_CONFIG_PRODUCTION: 'false',
+  };
+}
+
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const yarnCommand = process.platform === 'win32' ? 'yarn.cmd' : 'yarn';
@@ -693,15 +702,24 @@ class PreviewManager {
   }
 
   public async start(projectId: string, options?: { restart?: boolean }): Promise<PreviewInfo> {
-    if (options?.restart) {
-      await this.stop(projectId);
+    if (!options?.restart) {
+      const live = this.processes.get(projectId);
+      if (live?.process && live.status !== 'error' && live.status !== 'stopped') {
+        return this.toInfo(live);
+      }
     }
+
     const inflight = this.starting.get(projectId);
     if (inflight) {
       return inflight;
     }
 
-    const run = this.startPreview(projectId).finally(() => {
+    const run = (async () => {
+      if (options?.restart) {
+        await this.stop(projectId);
+      }
+      return this.startPreview(projectId);
+    })().finally(() => {
       if (this.starting.get(projectId) === run) {
         this.starting.delete(projectId);
       }
@@ -738,9 +756,8 @@ class PreviewManager {
     );
 
     const iframeUrl = previewIframeUrl(projectId, preferredPort);
-    const env: NodeJS.ProcessEnv = {
+    const env: NodeJS.ProcessEnv = previewChildEnv({
       ...process.env,
-      NODE_ENV: 'development',
       PORT: String(preferredPort),
       WEB_PORT: String(preferredPort),
       NEXT_PUBLIC_APP_URL: previewPublicUrl(projectId, preferredPort),
@@ -748,7 +765,7 @@ class PreviewManager {
       WATCHPACK_POLLING: 'true',
       CHOKIDAR_USEPOLLING: 'true',
       CHOKIDAR_INTERVAL: '1000',
-    };
+    });
 
     const pendingLogs: string[] = [
       `[PreviewManager] Queued preview on port ${preferredPort} at ${projectPath}`,
@@ -771,7 +788,7 @@ class PreviewManager {
       console.error('[PreviewManager] Failed to persist preview URL:', error);
     });
 
-    void this.bootPreviewProcess({
+    await this.bootPreviewProcess({
       projectId,
       projectPath,
       previewProcess,
@@ -929,7 +946,7 @@ class PreviewManager {
       ['run', 'dev', '--', '--hostname', '127.0.0.1', '--port', String(effectivePort)],
       {
         cwd: projectPath,
-        env,
+        env: previewChildEnv(env),
         shell: process.platform === 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
       }
@@ -1004,6 +1021,22 @@ class PreviewManager {
       processInfo.process?.kill('SIGTERM');
     } catch (error) {
       console.error('[PreviewManager] Failed to stop preview process:', error);
+    }
+
+    const child = processInfo.process;
+    if (child && child.exitCode === null) {
+      await new Promise<void>((resolve) => {
+        const finish = () => resolve();
+        child.once('exit', finish);
+        setTimeout(() => {
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            // already gone
+          }
+          finish();
+        }, 4000);
+      });
     }
 
     this.processes.delete(projectId);

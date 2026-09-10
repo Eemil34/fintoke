@@ -80,6 +80,8 @@ function resolvePort(preferredPort) {
   const url =
     process.env.NEXT_PUBLIC_APP_URL || \`http://localhost:\${port}\`;
 
+  process.env.NODE_ENV = 'development';
+  process.env.npm_config_production = 'false';
   process.env.PORT = String(port);
   process.env.WEB_PORT = String(port);
   process.env.NEXT_PUBLIC_APP_URL = url;
@@ -101,6 +103,7 @@ function resolvePort(preferredPort) {
       env: {
         ...process.env,
         NODE_ENV: 'development',
+        npm_config_production: 'false',
         PORT: String(port),
         WEB_PORT: String(port),
         NEXT_PUBLIC_APP_URL: url,
@@ -110,10 +113,7 @@ function resolvePort(preferredPort) {
   );
 
   child.on('exit', (code) => {
-    if (typeof code === 'number' && code !== 0) {
-      console.error(\`❌ Next.js dev server exited with code \${code}\`);
-      process.exit(code);
-    }
+    process.exit(typeof code === 'number' ? code : 1);
   });
 
   child.on('error', (error) => {
