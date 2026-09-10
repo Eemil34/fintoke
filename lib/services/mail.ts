@@ -118,10 +118,54 @@ export async function loadMailSettings(): Promise<MailSettings> {
 }
 
 export function isMailConfigured(settings: MailSettings = DEFAULT_SETTINGS): boolean {
-  const from = settings.fromEmail || settings.smtp.user;
-  if (!from) return false;
-  if (settings.provider === 'resend') return Boolean(settings.resendApiKey);
-  return Boolean(settings.smtp.host && settings.smtp.user && settings.smtp.password);
+  if (settings.provider === 'resend') return Boolean(settings.resendApiKey && resolveFromMailbox(settings).email);
+  return Boolean(resolveFromMailbox(settings).email && settings.smtp.host && settings.smtp.user && settings.smtp.password);
+}
+
+const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+
+function parseMailbox(value: string): { name: string; email: string } {
+  const trimmed = value.trim().replace(/^mailto:/i, '');
+  if (!trimmed) return { name: '', email: '' };
+  const angled = trimmed.match(/^(?:"([^"]*)"|([^<]*))\s*<([^>]+)>\s*$/);
+  if (angled) {
+    const email = angled[3].trim();
+    return {
+      name: (angled[1] || angled[2] || '').trim(),
+      email: EMAIL_RE.test(email) ? email : '',
+    };
+  }
+  if (EMAIL_RE.test(trimmed)) return { name: '', email: trimmed };
+  return { name: '', email: '' };
+}
+
+function quoteDisplayName(name: string): string {
+  const cleaned = name.replace(/[\r\n<>]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleaned) return '';
+  if (/^[A-Za-z0-9!#$%&'*+/=?^_`{|}~ .'-]+$/.test(cleaned) && !cleaned.includes(',')) {
+    return cleaned;
+  }
+  return `"${cleaned.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function resolveFromMailbox(settings: MailSettings): { name: string; email: string } {
+  const fromField = parseMailbox(settings.fromEmail);
+  const smtpField = parseMailbox(settings.smtp.user);
+  return {
+    name: (settings.fromName || '').trim() || fromField.name,
+    email: fromField.email || smtpField.email,
+  };
+}
+
+export function formatFromAddress(settings: MailSettings): string {
+  const { name, email } = resolveFromMailbox(settings);
+  if (!email) {
+    throw new Error(
+      'Set From email to a real address like you@yourdomain.com. Resend does not accept a name without an email, and the domain must be verified in Resend.',
+    );
+  }
+  const display = quoteDisplayName(name);
+  return display ? `${display} <${email}>` : email;
 }
 
 export function toPublicMailSettings(settings: MailSettings): PublicMailSettings {

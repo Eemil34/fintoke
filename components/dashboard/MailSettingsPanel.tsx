@@ -160,8 +160,12 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
             type="email"
             value={fromEmail}
             onChange={(event) => setFromEmail(event.target.value)}
+            placeholder="you@yourdomain.com"
             className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-gray-400"
           />
+          <span className="mt-1 block text-xs text-gray-500">
+            Address only. Put the name in From name. For Resend this domain must be verified.
+          </span>
         </label>
         <label className="block text-sm sm:col-span-2">
           <span className="mb-1 block text-gray-600">Reply-to (optional)</span>
