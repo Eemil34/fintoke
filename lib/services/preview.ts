@@ -705,7 +705,7 @@ class PreviewManager {
   public async start(projectId: string, options?: { restart?: boolean }): Promise<PreviewInfo> {
     if (!options?.restart) {
       const live = this.processes.get(projectId);
-      if (live?.process && live.status !== 'error' && live.status !== 'stopped') {
+      if (live?.process && live.status !== 'error' && live.status !== 'stopped' && live.port) {
         return this.toInfo(live);
       }
     }
@@ -739,8 +739,11 @@ class PreviewManager {
     await fs.mkdir(projectPath, { recursive: true });
 
     const live = this.processes.get(projectId);
-    if (live && live.status !== 'error' && live.port) {
+    if (live?.process && live.status !== 'error' && live.status !== 'stopped' && live.port) {
       return this.toInfo(live);
+    }
+    if (live && !live.process) {
+      this.processes.delete(projectId);
     }
 
     await restoreSnapshotIfMaterialized(

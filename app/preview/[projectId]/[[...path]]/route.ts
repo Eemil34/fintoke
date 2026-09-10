@@ -23,7 +23,7 @@ function previewPage(title: string, message: string, logs: string[]) {
     .map((line) => escapeHtml(line))
     .join('\n');
   const html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-fintoke-shell="1">
 <head>
   <meta charset="utf-8" />
   <title>${escapeHtml(title)}</title>
@@ -40,6 +40,20 @@ function previewPage(title: string, message: string, logs: string[]) {
     <p>${escapeHtml(message)}</p>
     <pre>${logBlock || 'Waiting for preview logs…'}</pre>
   </main>
+  <script>
+    (function () {
+      var path = location.pathname;
+      function tick() {
+        fetch(path + (path.indexOf('?') >= 0 ? '&' : '?') + 'fintoke_probe=1', { cache: 'no-store' })
+          .then(function (r) {
+            if (r.ok) location.replace(path);
+            else setTimeout(tick, 1500);
+          })
+          .catch(function () { setTimeout(tick, 1500); });
+      }
+      setTimeout(tick, 1200);
+    })();
+  </script>
 </body>
 </html>`;
   return new Response(html, {
@@ -101,27 +115,30 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   const prefix = `/preview/${encodeURIComponent(projectId)}`;
   const logs = () => previewManager.getLogs(projectId);
   const preview = previewManager.getStatus(projectId);
+  const isProbe = request.nextUrl.searchParams.get('fintoke_probe') === '1';
 
-  if (preview.status === 'error') {
+  if (preview.status === 'error' || !preview.port) {
+    void previewManager.start(projectId).catch((error) => {
+      console.error('[Preview proxy] Failed to start:', error);
+    });
+    if (isProbe || isAssetRequest(segments)) {
+      return new Response('wait', {
+        status: 503,
+        headers: { 'retry-after': '2', 'cache-control': 'no-store' },
+      });
+    }
     return previewPage(
-      'Preview failed',
-      'The site process exited. Use Refresh Now in chat to retry.',
+      'Starting preview',
+      preview.status === 'error' ? 'Restarting the site process…' : 'Preparing the site process…',
       preview.logs || logs(),
     );
   }
 
-  if (!preview.port) {
-    void previewManager.start(projectId).catch((error) => {
-      console.error('[Preview proxy] Failed to start:', error);
-    });
-    if (isAssetRequest(segments)) {
-      return new Response('', { status: 503, headers: { 'retry-after': '2' } });
-    }
-    return previewPage('Starting preview', 'Preparing the site process…', logs());
-  }
-
   const rest = childPath(segments);
-  const target = `http://127.0.0.1:${preview.port}${rest}${request.nextUrl.search}`;
+  const childParams = new URLSearchParams(request.nextUrl.searchParams);
+  childParams.delete('fintoke_probe');
+  const childSearch = childParams.toString();
+  const target = `http://127.0.0.1:${preview.port}${rest}${childSearch ? `?${childSearch}` : ''}`;
 
   const headers = new Headers();
   request.headers.forEach((value, key) => {
@@ -146,14 +163,25 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   try {
     upstream = await fetch(target, init);
   } catch {
-    if (isAssetRequest(segments)) {
-      return new Response('', { status: 503, headers: { 'retry-after': '1' } });
+    if (isProbe || isAssetRequest(segments)) {
+      return new Response('wait', {
+        status: 503,
+        headers: { 'retry-after': '1', 'cache-control': 'no-store' },
+      });
     }
     return previewPage(
-      'Preview is busy',
-      'Next.js is compiling. Keep this tab open; use Refresh Now if it stays blank.',
+      'Starting preview',
+      'Next.js is compiling. This frame will open the site when it is ready.',
       logs(),
     );
+  }
+
+  if (isProbe) {
+    const ok = upstream.ok && (upstream.headers.get('content-type') || '').includes('text/html');
+    return new Response(ok ? 'ready' : 'wait', {
+      status: ok ? 200 : 503,
+      headers: { 'cache-control': 'no-store' },
+    });
   }
 
   const contentType = upstream.headers.get('content-type') || '';

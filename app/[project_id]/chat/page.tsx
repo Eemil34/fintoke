@@ -852,22 +852,27 @@ const persistProjectPreferences = useCallback(
   };
 
   const refreshPreview = useCallback(() => {
-    if (!previewUrl || !iframeRef.current) {
+    const base = (previewUrlRef.current || previewUrl || '').split('?')[0];
+    if (!base || !iframeRef.current) {
       return;
     }
-
-    try {
-      const normalizedRoute =
-        currentRoute && currentRoute.startsWith('/')
-          ? currentRoute
-          : `/${currentRoute || ''}`;
-      const baseUrl = previewUrl.split('?')[0] || previewUrl;
-      const url = new URL(baseUrl + normalizedRoute);
-      url.searchParams.set('_ts', Date.now().toString());
-      iframeRef.current.src = url.toString();
-    } catch (error) {
-      console.warn('Failed to refresh preview iframe:', error);
-    }
+    const frame = iframeRef.current;
+    void (async () => {
+      for (let i = 0; i < 40; i += 1) {
+        try {
+          const probe = await fetch(`${base}?fintoke_probe=1`, { cache: 'no-store' });
+          if (probe.ok) {
+            const route =
+              currentRoute && currentRoute.startsWith('/') ? currentRoute : `/${currentRoute || ''}`;
+            frame.src = `${base}${route === '/' ? '' : route}`;
+            return;
+          }
+        } catch {
+          // compiling
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    })();
   }, [previewUrl, currentRoute]);
 
 
@@ -2216,16 +2221,10 @@ const persistProjectPreferences = useCallback(
       loadDeployStatusRef.current?.();
     };
 
-    const handleBeforeUnload = () => {
-      navigator.sendBeacon(`${API_BASE}/api/projects/${projectId}/preview/stop`);
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
     window.addEventListener('services-updated', handleServicesUpdate);
 
     return () => {
       canceled = true;
-      window.removeEventListener('beforeunload', handleBeforeUnload);
       window.removeEventListener('services-updated', handleServicesUpdate);
     };
   }, [projectId]);
@@ -2379,7 +2378,9 @@ const persistProjectPreferences = useCallback(
                     setAgentWorkComplete(true);
                     localStorage.setItem(`project_${projectId}_taskComplete`, 'true');
                     void start();
+                    return;
                   }
+                  window.setTimeout(() => refreshPreview(), 800);
                 }}
                 onSseFallbackActive={(active) => {
                   console.log('🔄 [SSE] Fallback status:', active);
