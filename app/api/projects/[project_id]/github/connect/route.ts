@@ -38,11 +38,12 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
   } catch (error) {
     console.error('[API] Failed to connect GitHub repository:', error);
     const status = error instanceof Error && 'status' in error ? (error as any).status ?? 500 : 500;
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
       {
         success: false,
-        error: 'Failed to connect GitHub repository',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        error: message,
+        message,
       },
       { status },
     );
@@ -51,3 +52,4 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 180;

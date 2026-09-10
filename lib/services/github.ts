@@ -107,7 +107,7 @@ export async function createRepository(options: CreateRepoOptions) {
         name: options.repoName,
         description: options.description ?? '',
         private: options.private ?? false,
-        auto_init: false,
+        auto_init: true,
       }),
     })) as any;
   } catch (error) {
@@ -203,6 +203,7 @@ export async function connectProjectToGitHub(projectId: string, options: CreateR
   await updateProject(projectId, { repoPath });
 
   try {
+    await sleep(1200);
     await publishFolderToGitHub({
       token,
       owner: user.login,

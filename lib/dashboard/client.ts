@@ -11,7 +11,11 @@ export async function fetchDashboardJson<T>(path: string, init?: RequestInit): P
 
   const payload = await response.json().catch(() => null);
   if (!response.ok || payload?.success === false) {
-    throw new Error(payload?.error || payload?.message || `Request failed (${response.status})`);
+    const detail =
+      (typeof payload?.message === 'string' && payload.message) ||
+      (typeof payload?.error === 'string' && payload.error) ||
+      `Request failed (${response.status})`;
+    throw new Error(detail);
   }
 
   return (payload?.data ?? payload) as T;

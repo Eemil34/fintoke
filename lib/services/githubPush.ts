@@ -17,6 +17,26 @@ const SKIP_NAMES = new Set([
 
 type GitHubFile = { path: string; content: string };
 
+function encodeGitHubPath(filePath: string): string {
+  return filePath
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isEmptyRepoError(error: unknown): boolean {
+  return /git repository is empty/i.test(errorMessage(error));
+}
+
 async function collectFiles(root: string, relative = ''): Promise<GitHubFile[]> {
   const dir = relative ? path.join(root, relative) : root;
   let entries;
@@ -64,6 +84,7 @@ export async function pushDirectoryViaGitHubApi(params: {
         Accept: 'application/vnd.github+json',
         Authorization: `Bearer ${params.token}`,
         'User-Agent': 'Fintoke',
+        'X-GitHub-Api-Version': '2022-11-28',
         'Content-Type': 'application/json',
         ...init?.headers,
       },
@@ -71,83 +92,160 @@ export async function pushDirectoryViaGitHubApi(params: {
     const body = await response.json().catch(() => null);
     if (!response.ok) {
       const message =
-        (body && typeof body === 'object' && typeof (body as { message?: string }).message === 'string'
+        body && typeof body === 'object' && typeof (body as { message?: string }).message === 'string'
           ? (body as { message: string }).message
-          : `GitHub API ${response.status}`);
+          : `GitHub API ${response.status}`;
       throw new Error(message);
     }
     return body as Record<string, unknown>;
   };
 
-  const blobs: Array<{ path: string; mode: string; type: string; sha: string }> = [];
-  for (let i = 0; i < files.length; i += 8) {
-    const chunk = files.slice(i, i + 8);
-    const created = await Promise.all(
-      chunk.map((file) =>
-        api(`/repos/${params.owner}/${params.repo}/git/blobs`, {
-          method: 'POST',
-          body: JSON.stringify({ content: file.content, encoding: 'base64' }),
-        }),
-      ),
-    );
-    created.forEach((blob, index) => {
-      const sha = typeof blob.sha === 'string' ? blob.sha : '';
-      if (!sha) return;
-      blobs.push({
-        path: chunk[index].path,
-        mode: '100644',
-        type: 'blob',
-        sha,
-      });
+  const headSha = async (): Promise<string | undefined> => {
+    for (const endpoint of [
+      `/repos/${params.owner}/${params.repo}/git/ref/heads/${branch}`,
+      `/repos/${params.owner}/${params.repo}/git/refs/heads/${branch}`,
+      `/repos/${params.owner}/${params.repo}/commits/${encodeURIComponent(branch)}`,
+    ]) {
+      try {
+        const body = await api(endpoint);
+        const direct = typeof body.sha === 'string' ? body.sha : '';
+        if (direct) return direct;
+        const object = body.object as { sha?: string } | undefined;
+        if (typeof object?.sha === 'string' && object.sha) return object.sha;
+      } catch {
+        // empty repos have no ref yet
+      }
+    }
+    return undefined;
+  };
+
+  const seedFirstCommit = async () => {
+    const seed =
+      files.find((file) => file.path === 'package.json') ||
+      files.find((file) => file.path === 'README.md') ||
+      files[0];
+    await api(`/repos/${params.owner}/${params.repo}/contents/${encodeGitHubPath(seed.path)}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        message: params.message,
+        content: seed.content,
+        branch,
+      }),
     });
-  }
+  };
 
-  const tree = await api(`/repos/${params.owner}/${params.repo}/git/trees`, {
-    method: 'POST',
-    body: JSON.stringify({ tree: blobs }),
-  });
-
-  let parent: string | undefined;
-  try {
-    const ref = await api(`/repos/${params.owner}/${params.repo}/git/ref/heads/${branch}`);
-    const object = ref.object as { sha?: string } | undefined;
-    parent = object?.sha;
-  } catch {
+  let parent = await headSha();
+  if (!parent) {
     try {
-      const ref = await api(`/repos/${params.owner}/${params.repo}/git/refs/heads/${branch}`);
-      const object = ref.object as { sha?: string } | undefined;
-      parent = object?.sha;
-    } catch {
-      parent = undefined;
+      await seedFirstCommit();
+    } catch (error) {
+      if (!/sha.*required|already exists/i.test(errorMessage(error))) {
+        // Contents API is the supported way to create the first commit on an empty repo.
+        console.warn('[github] Failed to seed empty repository:', error);
+      }
+    }
+    for (let attempt = 0; attempt < 8 && !parent; attempt += 1) {
+      await sleep(400 * (attempt + 1));
+      parent = await headSha();
     }
   }
 
-  const commit = await api(`/repos/${params.owner}/${params.repo}/git/commits`, {
-    method: 'POST',
-    body: JSON.stringify({
-      message: params.message,
-      tree: tree.sha,
-      parents: parent ? [parent] : [],
-    }),
-  });
+  const pushGitDatabase = async (parentSha?: string) => {
+    const blobs: Array<{ path: string; mode: string; type: string; sha: string }> = [];
+    for (let i = 0; i < files.length; i += 8) {
+      const chunk = files.slice(i, i + 8);
+      const created = await Promise.all(
+        chunk.map((file) =>
+          api(`/repos/${params.owner}/${params.repo}/git/blobs`, {
+            method: 'POST',
+            body: JSON.stringify({ content: file.content, encoding: 'base64' }),
+          }),
+        ),
+      );
+      created.forEach((blob, index) => {
+        const sha = typeof blob.sha === 'string' ? blob.sha : '';
+        if (!sha) return;
+        blobs.push({
+          path: chunk[index].path,
+          mode: '100644',
+          type: 'blob',
+          sha,
+        });
+      });
+    }
 
-  if (parent) {
-    await api(`/repos/${params.owner}/${params.repo}/git/refs/heads/${branch}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ sha: commit.sha, force: true }),
+    const tree = await api(`/repos/${params.owner}/${params.repo}/git/trees`, {
+      method: 'POST',
+      body: JSON.stringify({ tree: blobs }),
     });
-    return;
-  }
 
-  try {
+    const commit = await api(`/repos/${params.owner}/${params.repo}/git/commits`, {
+      method: 'POST',
+      body: JSON.stringify({
+        message: params.message,
+        tree: tree.sha,
+        parents: parentSha ? [parentSha] : [],
+      }),
+    });
+
+    const sha = typeof commit.sha === 'string' ? commit.sha : '';
+    if (!sha) throw new Error('GitHub did not return a commit SHA.');
+
+    if (parentSha) {
+      await api(`/repos/${params.owner}/${params.repo}/git/refs/heads/${branch}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ sha, force: true }),
+      });
+      return;
+    }
+
     await api(`/repos/${params.owner}/${params.repo}/git/refs`, {
       method: 'POST',
-      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: commit.sha }),
+      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha }),
     });
-  } catch {
-    await api(`/repos/${params.owner}/${params.repo}/git/refs/heads/${branch}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ sha: commit.sha, force: true }),
-    });
+  };
+
+  const pushViaContentsApi = async () => {
+    for (const file of files) {
+      let sha: string | undefined;
+      try {
+        const existing = await api(
+          `/repos/${params.owner}/${params.repo}/contents/${encodeGitHubPath(file.path)}?ref=${encodeURIComponent(branch)}`,
+        );
+        if (typeof existing.sha === 'string') sha = existing.sha;
+      } catch {
+        sha = undefined;
+      }
+      await api(`/repos/${params.owner}/${params.repo}/contents/${encodeGitHubPath(file.path)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          message: params.message,
+          content: file.content,
+          branch,
+          ...(sha ? { sha } : {}),
+        }),
+      });
+    }
+  };
+
+  try {
+    await pushGitDatabase(parent);
+  } catch (error) {
+    if (!isEmptyRepoError(error) && !/not found|reference does not exist/i.test(errorMessage(error))) {
+      try {
+        await seedFirstCommit();
+        parent = (await headSha()) || parent;
+        await pushGitDatabase(parent);
+        return;
+      } catch {
+        // Fall through to the Contents API, which can populate empty repos.
+      }
+    }
+    try {
+      if (!parent) await seedFirstCommit();
+    } catch {
+      // already seeded or still empty; Contents API upload will surface the real error
+    }
+    await pushViaContentsApi();
   }
 }

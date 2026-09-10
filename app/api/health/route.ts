@@ -3,7 +3,7 @@ import path from 'path';
 import { NextResponse } from 'next/server';
 import { projectsDir, volumeDataDir, writableDataDir } from '@/lib/server/paths';
 
-const RELEASE = '2026-09-10-mail-types';
+const RELEASE = '2026-09-10-github-contents';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');

@@ -17,6 +17,7 @@ import { dataFile } from '@/lib/server/paths';
 import bundledSeedJson from '@/seed/templates.json';
 
 const STORE_PATH = dataFile('templates.json');
+const USER_STORE_PATH = dataFile('templates-user.json');
 const BUILTIN_IDS = new Set(WEBSITE_TEMPLATES.map((template) => template.id));
 const RESERVED_IDS = new Set(['blank', 'new', 'all']);
 
@@ -53,14 +54,42 @@ function parseStore(raw: string): TemplateFileStore {
   return { overrides, custom, hidden };
 }
 
-async function readStoreFile(): Promise<TemplateFileStore> {
+async function readUserTemplates(): Promise<StoredCustomTemplate[]> {
   try {
-    return parseStore(await fs.readFile(STORE_PATH, 'utf8'));
+    const parsed = JSON.parse(await fs.readFile(USER_STORE_PATH, 'utf8')) as {
+      custom?: StoredCustomTemplate[];
+    };
+    return Array.isArray(parsed.custom) ? parsed.custom : [];
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') return { overrides: {}, custom: [], hidden: [] };
+    if (code === 'ENOENT') return [];
     throw error;
   }
+}
+
+async function writeUserTemplates(custom: StoredCustomTemplate[]): Promise<void> {
+  const seed = await loadSeedStore();
+  const seedIds = new Set((seed?.custom ?? []).map((template) => template.id));
+  const users = custom.filter((template) => !seedIds.has(template.id) && !BUILTIN_IDS.has(template.id));
+  await fs.mkdir(path.dirname(USER_STORE_PATH), { recursive: true });
+  await fs.writeFile(USER_STORE_PATH, JSON.stringify({ custom: users }, null, 2), 'utf8');
+}
+
+async function readStoreFile(): Promise<TemplateFileStore> {
+  let store: TemplateFileStore;
+  try {
+    store = parseStore(await fs.readFile(STORE_PATH, 'utf8'));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') store = { overrides: {}, custom: [], hidden: [] };
+    else throw error;
+  }
+  const extras = await readUserTemplates();
+  if (extras.length === 0) return store;
+  const have = new Set(store.custom.map((template) => template.id));
+  const missing = extras.filter((template) => !have.has(template.id));
+  if (missing.length === 0) return store;
+  return { ...store, custom: [...missing, ...store.custom] };
 }
 
 async function loadSeedStore(): Promise<TemplateFileStore | null> {
@@ -132,6 +161,7 @@ async function readStore(): Promise<TemplateFileStore> {
 async function writeStore(store: TemplateFileStore): Promise<void> {
   await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
   await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
+  await writeUserTemplates(store.custom);
 }
 
 function existingIds(store: TemplateFileStore): Set<string> {

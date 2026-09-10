@@ -97,7 +97,7 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
         '/api/workspace/mail',
         { method: 'POST', body: JSON.stringify({ action: 'verify' }) },
       );
-      setMessage(`Connection works. Mail will send from ${result.from}.`);
+      setMessage(`Connection works. A test email was sent from ${result.from}. Check that inbox.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not verify the mail connection');
     } finally {
@@ -111,7 +111,7 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
         <div>
           <p className="text-sm font-semibold text-gray-900">Sending</p>
           <p className="mt-1 text-sm text-gray-500">
-            Claude uses this connection to deliver template emails. For Gmail use an App Password, smtp.gmail.com, port 587, and your full Gmail address as the username.
+            Claude uses this connection to deliver template emails. Gmail SMTP often does not work on Railway. Prefer Resend (HTTPS). For Gmail SMTP use an App Password, smtp.gmail.com, port 587, and your full Gmail address.
           </p>
         </div>
         <span
@@ -255,7 +255,7 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
           onClick={() => void verify()}
           className="rounded-xl px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
         >
-          {checking ? 'Checking…' : 'Test connection'}
+          {checking ? 'Testing…' : 'Send test email'}
         </button>
         <button
           type="button"

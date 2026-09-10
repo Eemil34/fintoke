@@ -11,8 +11,6 @@ import { copyWebsiteTemplate } from '@/lib/templates/copyTemplate';
 import { serializeProjectSettings } from '@/lib/templates/settings';
 import { projectsDir } from '@/lib/server/paths';
 
-const PROJECTS_DIR_ABSOLUTE = projectsDir();
-
 /**
  * Retrieve all projects
  */
@@ -46,7 +44,7 @@ export async function getProjectById(id: string): Promise<Project | null> {
  * Create new project
  */
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  const projectPath = path.join(PROJECTS_DIR_ABSOLUTE, input.project_id);
+  const projectPath = path.join(projectsDir(), input.project_id);
   await fs.mkdir(projectPath, { recursive: true });
 
   const project = await prisma.project.create({
