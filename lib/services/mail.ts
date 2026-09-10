@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import dns from 'dns';
 import nodemailer from 'nodemailer';
 import type { MailProvider, MailSettings, MailSettingsPatch, MailSmtpSettings, PublicMailSettings } from '@/types/workspace';
 import { dataFile } from '@/lib/server/paths';
@@ -221,7 +222,9 @@ function createSmtpTransport(settings: MailSettings) {
       pass: smtpAuthPassword(settings.smtp.password),
     },
     tls: { minVersion: 'TLSv1.2' },
-    family: 4,
+    lookup: (hostname, options, callback) => {
+      dns.lookup(hostname, { ...options, family: 4 }, callback);
+    },
     connectionTimeout: 20_000,
     greetingTimeout: 20_000,
     socketTimeout: 20_000,
