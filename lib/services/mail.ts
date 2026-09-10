@@ -109,7 +109,12 @@ async function readStoredSettings(): Promise<MailSettings> {
 
 export async function loadMailSettings(): Promise<MailSettings> {
   const stored = await readStoredSettings();
-  return mergeSettings(stored, envSettings());
+  const env = envSettings();
+  if (stored.smtp.host || stored.smtp.user || stored.smtp.password) {
+    const { smtp: _smtp, ...rest } = env;
+    return mergeSettings(stored, rest);
+  }
+  return mergeSettings(stored, env);
 }
 
 export function isMailConfigured(settings: MailSettings = DEFAULT_SETTINGS): boolean {
@@ -163,7 +168,7 @@ export async function updateMailSettings(input: MailSettingsPatch): Promise<Publ
     });
     await fs.mkdir(path.dirname(SETTINGS_PATH), { recursive: true });
     await fs.writeFile(SETTINGS_PATH, JSON.stringify(next, null, 2), 'utf8');
-    return toPublicMailSettings(mergeSettings(next, envSettings()));
+    return toPublicMailSettings(next);
   });
 }
 

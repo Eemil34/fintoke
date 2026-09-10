@@ -21,8 +21,8 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
   const [replyTo, setReplyTo] = useState('');
   const [provider, setProvider] = useState<'smtp' | 'resend'>('smtp');
   const [host, setHost] = useState('smtp.gmail.com');
-  const [port, setPort] = useState('465');
-  const [secure, setSecure] = useState(true);
+  const [port, setPort] = useState('587');
+  const [secure, setSecure] = useState(false);
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
   const [resendKey, setResendKey] = useState('');
@@ -37,9 +37,12 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
     setFromEmail(next.fromEmail);
     setReplyTo(next.replyTo);
     setProvider(next.provider);
-    setHost(next.smtp.host || 'smtp.gmail.com');
-    setPort(String(next.smtp.port || 587));
-    setSecure(Boolean(next.smtp.port === 465));
+    const nextHost = next.smtp.host || 'smtp.gmail.com';
+    const gmail = /gmail\.com$/i.test(nextHost);
+    const ssl = next.smtp.port === 465 && next.smtp.secure;
+    setHost(nextHost);
+    setPort(String(ssl ? 465 : gmail ? 587 : next.smtp.port || 587));
+    setSecure(ssl);
     setUser(next.smtp.user);
     setPassword('');
     setResendKey('');
@@ -57,6 +60,8 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
     setError(null);
     setMessage(null);
     try {
+      const gmail = /gmail\.com$/i.test(host);
+      const useSsl = secure && Number(port) === 465;
       const next = await fetchDashboardJson<PublicMailSettings>('/api/workspace/mail', {
         method: 'PUT',
         body: JSON.stringify({
@@ -67,8 +72,8 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
           resendApiKey: resendKey,
           smtp: {
             host,
-            port: Number(port) || 587,
-            secure,
+            port: useSsl ? 465 : gmail ? 587 : Number(port) || 587,
+            secure: useSsl,
             user,
             password,
           },
@@ -212,8 +217,20 @@ export default function MailSettingsPanel({ onStatus }: { onStatus?: (configured
             />
           </label>
           <label className="flex items-center gap-2 text-sm text-gray-700 sm:col-span-2">
-            <input type="checkbox" checked={secure} onChange={(event) => setSecure(event.target.checked)} />
-            Use SSL (port 465). Leave off for Gmail on port 587.
+            <input
+              type="checkbox"
+              checked={secure && port === '465'}
+              onChange={(event) => {
+                if (event.target.checked) {
+                  setPort('465');
+                  setSecure(true);
+                } else {
+                  setPort('587');
+                  setSecure(false);
+                }
+              }}
+            />
+            Use SSL on port 465. Leave this off for Gmail (port 587).
           </label>
         </div>
       ) : (
