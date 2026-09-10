@@ -3,7 +3,7 @@ import path from 'path';
 import { NextResponse } from 'next/server';
 import { projectsDir, volumeDataDir, writableDataDir } from '@/lib/server/paths';
 
-const RELEASE = '2026-09-10-git-api-volume';
+const RELEASE = '2026-09-10-git-api-volume2';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
