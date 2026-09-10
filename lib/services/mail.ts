@@ -212,6 +212,7 @@ function createSmtpTransport(settings: MailSettings) {
   const host = settings.smtp.host || (isGmailHost(settings.smtp.host) ? 'smtp.gmail.com' : settings.smtp.host);
   const port = settings.smtp.port || 587;
   const secure = port === 465;
+  // Nodemailer 10's public types omit lookup/family; keep IPv4 at runtime for Railway.
   return nodemailer.createTransport({
     host: host || 'smtp.gmail.com',
     port,
@@ -222,13 +223,17 @@ function createSmtpTransport(settings: MailSettings) {
       pass: smtpAuthPassword(settings.smtp.password),
     },
     tls: { minVersion: 'TLSv1.2' },
-    lookup: (hostname, options, callback) => {
-      dns.lookup(hostname, { ...options, family: 4 }, callback);
+    lookup: (
+      hostname: string,
+      _options: unknown,
+      callback: (err: NodeJS.ErrnoException | null, address: string, family: number) => void,
+    ) => {
+      dns.lookup(hostname, { family: 4 }, callback);
     },
     connectionTimeout: 20_000,
     greetingTimeout: 20_000,
     socketTimeout: 20_000,
-  });
+  } as Parameters<typeof nodemailer.createTransport>[0]);
 }
 
 function withGmailPortFallback(settings: MailSettings): MailSettings[] {
