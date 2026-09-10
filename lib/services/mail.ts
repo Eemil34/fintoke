@@ -221,6 +221,7 @@ function createSmtpTransport(settings: MailSettings) {
       pass: smtpAuthPassword(settings.smtp.password),
     },
     tls: { minVersion: 'TLSv1.2' },
+    family: 4,
     connectionTimeout: 20_000,
     greetingTimeout: 20_000,
     socketTimeout: 20_000,

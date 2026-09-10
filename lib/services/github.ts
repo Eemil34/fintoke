@@ -2,7 +2,7 @@ import { getPlainServiceToken } from '@/lib/services/tokens';
 import { getProjectById, updateProject } from '@/lib/services/project';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { getProjectService, upsertProjectServiceConnection, updateProjectServiceData } from '@/lib/services/project-services';
-import { ensureGitRepository, ensureGitConfig, initializeMainBranch, addOrUpdateRemote, commitAll, pushToRemote, getCurrentBranch } from '@/lib/services/git';
+import { pushDirectoryViaGitHubApi } from '@/lib/services/githubPush';
 import type { GitHubUserInfo, CreateRepoOptions, GitHubRepositoryInfo } from '@/types/shared';
 
 class GitHubError extends Error {
@@ -125,14 +125,6 @@ export async function createRepository(options: CreateRepoOptions) {
   }
 }
 
-function githubAuthenticatedCloneUrl(cloneUrl: string, token: string) {
-  const encodedToken = encodeURIComponent(token);
-  if (cloneUrl.startsWith('https://')) {
-    return cloneUrl.replace('https://', `https://x-access-token:${encodedToken}@`);
-  }
-  return cloneUrl;
-}
-
 export async function ensureProjectRepository(projectId: string, repoPath?: string | null) {
   return resolveAndPersistProjectWorkspace({ repoPath }, projectId);
 }
@@ -171,6 +163,25 @@ export async function getGithubRepositoryDetails(owner: string, repo: string): P
   }
 }
 
+async function publishFolderToGitHub(params: {
+  token: string;
+  owner: string;
+  repoName: string;
+  repoPath: string;
+  branch: string;
+  message: string;
+}) {
+  await pushDirectoryViaGitHubApi({
+    token: params.token,
+    owner: params.owner,
+    repo: params.repoName,
+    branch: params.branch,
+    directory: params.repoPath,
+    message: params.message,
+  });
+  return params.branch;
+}
+
 export async function connectProjectToGitHub(projectId: string, options: CreateRepoOptions) {
   const project = await getProjectById(projectId);
   if (!project) {
@@ -184,32 +195,26 @@ export async function connectProjectToGitHub(projectId: string, options: CreateR
 
   const user = await getGithubUser();
   const repo = await createRepository(options);
-
   const repoPath = await ensureProjectRepository(projectId, project.repoPath);
-  ensureGitRepository(repoPath);
   const repoUrl = repo.html_url as string;
   const cloneUrl = repo.clone_url as string;
   const defaultBranch = (typeof repo.default_branch === 'string' && repo.default_branch) || 'main';
 
   await updateProject(projectId, { repoPath });
 
-  const userName = user.name || user.login;
-  const userEmail = user.email || `${user.login}@users.noreply.github.com`;
-
-  ensureGitConfig(repoPath, userName, userEmail);
-  initializeMainBranch(repoPath);
-
-  addOrUpdateRemote(repoPath, 'origin', cloneUrl);
-  commitAll(repoPath, 'Initial commit - connected to GitHub');
-
-  const authenticatedUrl = githubAuthenticatedCloneUrl(cloneUrl, token);
-  const localBranch = getCurrentBranch(repoPath) || defaultBranch;
   try {
-    pushToRemote(repoPath, 'origin', localBranch, authenticatedUrl);
+    await publishFolderToGitHub({
+      token,
+      owner: user.login,
+      repoName: options.repoName,
+      repoPath,
+      branch: defaultBranch,
+      message: 'Initial commit from Fintoke',
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     throw new GitHubError(
-      `Created the GitHub repository but failed to push the project: ${message}`,
+      `Created the GitHub repository but failed to upload the site files: ${message}`,
       400,
     );
   }
@@ -218,7 +223,7 @@ export async function connectProjectToGitHub(projectId: string, options: CreateR
     repo_url: repoUrl,
     repo_name: options.repoName,
     clone_url: cloneUrl,
-    default_branch: localBranch,
+    default_branch: defaultBranch,
     owner: user.login,
   });
 
@@ -282,22 +287,20 @@ export async function pushProjectToGitHub(projectId: string) {
     }
 
     const repoPath = await ensureProjectRepository(projectId, project.repoPath);
-    ensureGitRepository(repoPath);
-    const user = await getGithubUser();
-    const userName = user.name || user.login;
-    const userEmail = user.email || `${user.login}@users.noreply.github.com`;
-    ensureGitConfig(repoPath, userName, userEmail);
-
-    initializeMainBranch(repoPath);
-    const committed = commitAll(repoPath, 'Update from Claudable');
-    if (!committed) {
-      console.log('[GitHubService] No new changes to commit; pushing existing commits');
+    const branch = (typeof data.default_branch === 'string' && data.default_branch) || 'main';
+    const repoName = String(data.repo_name || '').trim();
+    if (!repoName) {
+      throw new GitHubError('GitHub repository name is missing. Connect the repo again.', 400);
     }
 
-    const localBranch = getCurrentBranch(repoPath);
-    const branch = localBranch || (typeof data.default_branch === 'string' && data.default_branch) || 'main';
-    const authenticatedUrl = githubAuthenticatedCloneUrl(String(data.clone_url), token);
-    pushToRemote(repoPath, 'origin', branch, authenticatedUrl);
+    await publishFolderToGitHub({
+      token,
+      owner: String(data.owner),
+      repoName,
+      repoPath,
+      branch,
+      message: 'Update from Fintoke',
+    });
 
     await updateProjectServiceData(projectId, 'github', {
       last_pushed_at: new Date().toISOString(),

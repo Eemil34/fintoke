@@ -1,11 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
+import { projectsDir, volumeDataDir, writableDataDir } from '@/lib/server/paths';
 
-const RELEASE = '2026-09-10-github-mail-keep';
+const RELEASE = '2026-09-10-git-api-volume';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
+  const volume = volumeDataDir();
+  const dataDir = writableDataDir();
+  const projects = projectsDir();
+
   let savedTemplates: string[] = [];
   try {
     savedTemplates = fs
@@ -20,6 +25,23 @@ export async function GET() {
     savedTemplates = [];
   }
 
+  let volumeTemplates: string[] = [];
+  try {
+    volumeTemplates = fs
+      .readdirSync(path.join(dataDir, 'templates', 'snapshots'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    volumeTemplates = [];
+  }
+
+  let projectCount = 0;
+  try {
+    projectCount = fs.readdirSync(projects).filter((name) => !name.startsWith('.')).length;
+  } catch {
+    projectCount = 0;
+  }
+
   return NextResponse.json(
     {
       ok: true,
@@ -27,6 +49,14 @@ export async function GET() {
       release: RELEASE,
       templatePack: 'saved-sites',
       savedTemplates,
+      persistence: {
+        volumeMounted: Boolean(volume),
+        dataDir,
+        projectsDir: projects,
+        projectCount,
+        volumeTemplates,
+        databaseUrl: (process.env.DATABASE_URL || '').replace(/\/\/.*@/, '//***@'),
+      },
     },
     {
       headers: {

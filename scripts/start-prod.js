@@ -31,15 +31,28 @@ function withCursorPath(env) {
   return { ...env, PATH: `${extra}${path.delimiter}${env.PATH || ''}` };
 }
 
-const dataDir = process.env.SETTINGS_DIR || path.join(root, 'data');
+function writableVolume() {
+  try {
+    fs.mkdirSync('/app/data/projects', { recursive: true });
+    fs.accessSync('/app/data', fs.constants.W_OK);
+    return '/app/data';
+  } catch {
+    return null;
+  }
+}
+
+const volume = writableVolume();
+const dataDir = process.env.SETTINGS_DIR || volume || path.join(root, 'data');
 const projects = process.env.PROJECTS_DIR || path.join(dataDir, 'projects');
 fs.mkdirSync(projects, { recursive: true });
 
-if (!process.env.DATABASE_URL) {
+process.env.SETTINGS_DIR = process.env.SETTINGS_DIR || dataDir;
+process.env.PROJECTS_DIR = process.env.PROJECTS_DIR || projects;
+
+if (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('file:')) {
   process.env.DATABASE_URL = `file:${path.join(dataDir, 'cc.db')}`;
 }
 
-process.env.SETTINGS_DIR = process.env.SETTINGS_DIR || dataDir;
 process.env.PATH = withCursorPath(process.env).PATH;
 process.env.PATH = `${path.join(dataDir, '.local', 'bin')}${path.delimiter}${process.env.PATH}`;
 
