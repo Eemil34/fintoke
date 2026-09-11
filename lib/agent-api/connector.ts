@@ -1,6 +1,5 @@
 import { promises as fs } from 'fs';
-import path from 'path';
-import { listAgentApiKeys, type AgentApiKeyRecord } from './keys';
+import { createAgentApiKey, listAgentApiKeys, type AgentApiKeyRecord } from './keys';
 import { AGENT_SCOPES } from './scopes';
 import { dataFile } from '@/lib/server/paths';
 
@@ -29,11 +28,23 @@ export async function linkConnectorKey(keyId: string): Promise<void> {
 }
 
 export async function getLinkedConnectorKey(): Promise<AgentApiKeyRecord | null> {
-  const keys = await listAgentApiKeys();
-  if (keys.length === 0) return null;
+  let keys = await listAgentApiKeys();
+  if (keys.length === 0) {
+    try {
+      const created = await createAgentApiKey({ name: 'Claude.ai' });
+      await linkConnectorKey(created.id);
+      keys = [created];
+    } catch (error) {
+      console.error('[agent] Could not create a default Claude API key:', error);
+      return null;
+    }
+  }
   const store = await readStore();
   const linked = store.keyId ? keys.find((key) => key.id === store.keyId) : null;
   const key = linked || keys[0];
   if (!key) return null;
+  if (!store.keyId || store.keyId !== key.id) {
+    await linkConnectorKey(key.id).catch(() => undefined);
+  }
   return { ...key, scopes: [...AGENT_SCOPES] };
 }

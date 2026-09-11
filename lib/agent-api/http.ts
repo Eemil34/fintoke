@@ -134,7 +134,7 @@ export async function requireMcpAgentKey(
   }
 
   throw new AgentApiError(
-    'No Claudable API key is active. Open Settings → Claude API, generate a key, keep the public URL running, then ask again. Do not rebuild the site in chat.',
+    'No Claudable API key is active. Open https://www.fintoke.com/dashboard/settings?tab=api-keys , click Generate API key, then ask again in this chat.',
     401,
   );
 }
