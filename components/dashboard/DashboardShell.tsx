@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
+import Image from 'next/image';
 import PersistenceBanner from '@/components/PersistenceBanner';
 import {
   Building2,
@@ -67,14 +68,14 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
       <aside className="hidden w-64 shrink-0 flex-col border-r border-gray-200 bg-white md:flex">
         <div className="flex h-16 items-center gap-2.5 border-b border-gray-200 px-5">
           <Image
-            src="/Claudable_Icon.png"
-            alt="Claudable"
+            src="/fintoke-icon.png"
+            alt="Fintoke"
             width={28}
             height={28}
             className="h-7 w-7 rounded-lg"
           />
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-gray-900">Claudable</p>
+            <p className="truncate text-sm font-semibold text-gray-900">Fintoke</p>
             <p className="truncate text-xs text-gray-500">Workspace</p>
           </div>
         </div>
