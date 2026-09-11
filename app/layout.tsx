@@ -10,9 +10,10 @@ export const metadata: Metadata = {
   description: 'Fintoke — websites, web apps, SEO, marketing, and software care.',
   icons: {
     icon: [
+      { url: '/fintoke-icon.png', type: 'image/png' },
       { url: '/favicon.ico' },
-      { url: '/Claudable_Icon.png', type: 'image/png' },
     ],
+    apple: '/fintoke-icon.png',
   },
 }
 

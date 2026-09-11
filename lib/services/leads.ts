@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import type { LeadInput, LeadResponse, WorkspaceLead } from '@/types/leads';
 import { dataFile } from '@/lib/server/paths';
+import { writeJsonAtomic } from '@/lib/server/atomicJson';
 
 const STORE_PATH = dataFile('leads.json');
 
@@ -103,8 +104,7 @@ async function readStore(): Promise<LeadStore> {
 }
 
 async function writeStore(store: LeadStore): Promise<void> {
-  await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
+  await writeJsonAtomic(STORE_PATH, store);
 }
 
 export async function listLeads(): Promise<WorkspaceLead[]> {

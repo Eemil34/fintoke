@@ -1,4 +1,5 @@
 import { appOrigin } from '@/lib/agent-api/http';
+import { sharePreviewUrl } from '@/lib/server/publicUrl';
 import { getProjectById } from '@/lib/services/project';
 import { listProjectServices } from '@/lib/services/project-services';
 import { getActiveRequests } from '@/lib/services/user-requests';
@@ -27,13 +28,16 @@ export async function serializeAgentSite(project: ProjectEntity, origin: string)
   const githubData = (github?.serviceData ?? {}) as Record<string, string>;
   const vercelData = (vercel?.serviceData ?? {}) as Record<string, string>;
 
+  const shareUrl = sharePreviewUrl(project.id);
+
   return {
     ...serializeProject(project),
     templateId: getWebsiteTemplateId(project.settings),
     chatUrl: `${appOrigin()}/${project.id}/chat`,
+    shareUrl,
     apiBase: `${origin.replace(/\/$/, '')}/api/v1`,
     preview: {
-      url: preview.url || project.previewUrl,
+      url: shareUrl,
       port: preview.port || project.previewPort,
       status: preview.status,
     },

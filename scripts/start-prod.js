@@ -52,18 +52,16 @@ function copyMissing(from, to) {
   }
 }
 
-function copyLargerSqlite(from, to) {
+function copySqliteIfMissing(from, to) {
   try {
-    if (!fs.existsSync(from)) return;
+    if (!fs.existsSync(from) || fs.existsSync(to)) return;
     const fromSize = fs.statSync(from).size;
     if (fromSize < 100) return;
-    const toSize = fs.existsSync(to) ? fs.statSync(to).size : 0;
-    if (toSize >= fromSize) return;
     fs.mkdirSync(path.dirname(to), { recursive: true });
     fs.copyFileSync(from, to);
-    console.log(`[start-prod] Copied SQLite database to ${to}`);
+    console.log(`[start-prod] Restored SQLite database to ${to}`);
   } catch (error) {
-    console.error('[start-prod] Could not copy SQLite database:', error);
+    console.error('[start-prod] Could not restore SQLite database:', error);
   }
 }
 
@@ -84,7 +82,7 @@ const volumeDb = path.join(dataDir, 'cc.db');
   path.join(root, 'data', 'cc.db'),
   path.join(root, 'cc.db'),
   path.join(dataDir, 'data', 'cc.db'),
-].forEach((candidate) => copyLargerSqlite(candidate, volumeDb));
+].forEach((candidate) => copySqliteIfMissing(candidate, volumeDb));
 
 [
   'mail.json',
@@ -92,6 +90,8 @@ const volumeDb = path.join(dataDir, 'cc.db');
   'templates-user.json',
   'service-tokens.json',
   'agent-mcp.json',
+  'workspace.json',
+  'leads.json',
 ].forEach((name) => {
   copyMissing(path.join(root, 'data', name), path.join(dataDir, name));
 });

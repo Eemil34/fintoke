@@ -128,7 +128,7 @@ export const MCP_TOOLS = [
   {
     name: 'claudable_send_email',
     description:
-      'Fill a saved email template and actually send it through the workspace mail connection (SMTP or Resend). Do not pretend to send. Use templateId or templateName from claudable_list_email_templates. Pass to or personId, plus any {{variables}} in the template.',
+      'Fill a saved email template and send it through Resend/SMTP. For {{site_url}} pass variables.projectId or variables.site_url using the Fintoke preview link (https://www.fintoke.com/preview/<projectId>), not a Vercel URL and not the studio/chat URL.',
     inputSchema: {
       type: 'object',
       properties: {

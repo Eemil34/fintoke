@@ -22,9 +22,16 @@ export function previewIframeUrl(projectId: string, port: number): string {
   return `/preview/${encodeURIComponent(projectId)}`;
 }
 
-export function previewPublicUrl(projectId: string, port: number): string {
-  if (!usesPreviewProxy()) return `http://localhost:${port}`;
-  return `${publicAppOrigin()}${previewBasePath(projectId)}`;
+export function sharePreviewUrl(projectId: string): string {
+  const origin = publicAppOrigin() || 'https://www.fintoke.com';
+  return `${origin.replace(/\/$/, '')}/preview/${encodeURIComponent(projectId)}`;
+}
+
+export function previewPublicUrl(projectId: string, port?: number): string {
+  if (!usesPreviewProxy()) {
+    return port ? `http://localhost:${port}` : sharePreviewUrl(projectId);
+  }
+  return sharePreviewUrl(projectId);
 }
 
 export function previewInternalUrl(_projectId: string, port: number): string {

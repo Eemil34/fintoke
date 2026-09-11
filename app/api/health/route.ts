@@ -5,7 +5,7 @@ import { projectsDir, volumeDataDir, writableDataDir } from '@/lib/server/paths'
 import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 
-const RELEASE = '2026-09-11-keep-secrets2';
+const RELEASE = '2026-09-12-persist-share';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
@@ -77,6 +77,13 @@ export async function GET() {
           vercel,
           resend,
           smtp,
+        },
+        files: {
+          workspace: fs.existsSync(path.join(dataDir, 'workspace.json')),
+          leads: fs.existsSync(path.join(dataDir, 'leads.json')),
+          mail: fs.existsSync(path.join(dataDir, 'mail.json')),
+          templates: fs.existsSync(path.join(dataDir, 'templates.json')),
+          userTemplates: fs.existsSync(path.join(dataDir, 'templates-user.json')),
         },
       },
     },

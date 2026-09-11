@@ -14,6 +14,7 @@ import {
 import type { ManagedTemplate, TemplateKind, WebsiteTemplate } from './types';
 import { sanitizeWebsiteTemplate, slugifyTemplateId } from './validate';
 import { dataFile } from '@/lib/server/paths';
+import { writeJsonAtomic } from '@/lib/server/atomicJson';
 import bundledSeedJson from '@/seed/templates.json';
 
 const STORE_PATH = dataFile('templates.json');
@@ -71,8 +72,7 @@ async function writeUserTemplates(custom: StoredCustomTemplate[]): Promise<void>
   const seed = await loadSeedStore();
   const seedIds = new Set((seed?.custom ?? []).map((template) => template.id));
   const users = custom.filter((template) => !seedIds.has(template.id) && !BUILTIN_IDS.has(template.id));
-  await fs.mkdir(path.dirname(USER_STORE_PATH), { recursive: true });
-  await fs.writeFile(USER_STORE_PATH, JSON.stringify({ custom: users }, null, 2), 'utf8');
+  await writeJsonAtomic(USER_STORE_PATH, { custom: users });
 }
 
 async function readStoreFile(): Promise<TemplateFileStore> {
@@ -159,8 +159,7 @@ async function readStore(): Promise<TemplateFileStore> {
 }
 
 async function writeStore(store: TemplateFileStore): Promise<void> {
-  await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
+  await writeJsonAtomic(STORE_PATH, store);
   await writeUserTemplates(store.custom);
 }
 

@@ -8,7 +8,7 @@ import {
   type WorkspaceEmail,
   type WorkspaceEmailTemplate,
 } from '@/lib/services/workspace';
-import { deliverEmail, loadMailSettings } from '@/lib/services/mail';
+import { sharePreviewUrl } from '@/lib/server/publicUrl';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const recentSends: number[] = [];
@@ -105,11 +105,14 @@ export async function composeEmail(input: ComposeEmailInput): Promise<ComposedEm
     company: person?.company || extra.company || '',
     role: person?.role || extra.role || '',
     notes: person?.notes || extra.notes || '',
-    sender_name: settings.fromName || extra.sender_name || 'Claudable',
+    sender_name: settings.fromName || extra.sender_name || 'Fintoke',
     sender_email: settings.fromEmail || settings.smtp.user || extra.sender_email || '',
     message,
     site_name: extra.site_name || extra.sitename || '',
-    site_url: extra.site_url || extra.url || '',
+    site_url:
+      extra.projectId || extra.project_id
+        ? sharePreviewUrl(String(extra.projectId || extra.project_id))
+        : extra.site_url || extra.url || extra.preview_url || '',
     ...extra,
   };
 

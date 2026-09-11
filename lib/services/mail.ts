@@ -3,6 +3,7 @@ import path from 'path';
 import nodemailer from 'nodemailer';
 import type { MailProvider, MailSettings, MailSettingsPatch, MailSmtpSettings, PublicMailSettings } from '@/types/workspace';
 import { dataFile } from '@/lib/server/paths';
+import { writeJsonAtomic } from '@/lib/server/atomicJson';
 
 const SETTINGS_PATH = dataFile('mail.json');
 
@@ -230,8 +231,7 @@ export async function updateMailSettings(input: MailSettingsPatch): Promise<Publ
       next.fromEmail = mailbox.email;
       if (!next.fromName.trim() && mailbox.name) next.fromName = mailbox.name;
     }
-    await fs.mkdir(path.dirname(SETTINGS_PATH), { recursive: true });
-    await fs.writeFile(SETTINGS_PATH, JSON.stringify(next, null, 2), 'utf8');
+    await writeJsonAtomic(SETTINGS_PATH, next);
     return toPublicMailSettings(next);
   });
 }

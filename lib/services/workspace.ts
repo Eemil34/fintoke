@@ -10,7 +10,7 @@ import type {
   WorkspaceStore,
 } from '@/types/workspace';
 import { BUILT_IN_EMAIL_TEMPLATES } from '@/lib/templates/emailCatalog';
-import { dataFile } from '@/lib/server/paths';
+import { writeJsonAtomic } from '@/lib/server/atomicJson';
 
 export type {
   EmailStatus,
@@ -107,8 +107,7 @@ function normalizeStore(store: WorkspaceStore): WorkspaceStore {
 }
 
 async function writeStore(store: WorkspaceStore): Promise<void> {
-  await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), 'utf8');
+  await writeJsonAtomic(STORE_PATH, store);
 }
 
 function nowIso(): string {

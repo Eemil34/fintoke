@@ -1,17 +1,30 @@
-export const ADMIN_COOKIE = 'claudable_admin';
+export const ADMIN_COOKIE = 'fintoke_admin';
 
 function secret() {
-  return process.env.ADMIN_SESSION_SECRET?.trim() || process.env.ADMIN_PASSWORD?.trim() || 'claudable-local-secret';
+  return (
+    process.env.ADMIN_SESSION_SECRET?.trim() ||
+    process.env.ADMIN_PASSWORD?.trim() ||
+    'change-this-in-production'
+  );
+}
+
+export function adminUsername() {
+  return (process.env.ADMIN_USERNAME?.trim() || 'admin').toLowerCase();
 }
 
 export function adminPassword() {
   return process.env.ADMIN_PASSWORD?.trim() || 'admin';
 }
 
+export function isDefaultAdminPassword() {
+  const password = adminPassword();
+  return !password || password === 'admin';
+}
+
 export function adminCookieOptions(overrides: Record<string, unknown> = {}) {
   return {
     httpOnly: true,
-    sameSite: 'lax' as const,
+    sameSite: 'strict' as const,
     path: '/',
     secure: process.env.VERCEL === '1' || process.env.NODE_ENV === 'production',
     ...overrides,
@@ -58,5 +71,5 @@ export async function verifyAdminToken(token: string | undefined | null) {
   const expected = await hmacHex(issued);
   if (!timingSafeEqualHex(mac, expected)) return false;
   const age = Date.now() - Number(issued);
-  return Number.isFinite(age) && age < 1000 * 60 * 60 * 24 * 30;
+  return Number.isFinite(age) && age < 1000 * 60 * 60 * 24 * 7;
 }

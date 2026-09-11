@@ -55,7 +55,7 @@ function LoginForm() {
           <span className="text-sm font-medium text-white">Fintoke</span>
         </Link>
         <h1 className="text-xl font-semibold text-white">Sign in</h1>
-        <p className="mt-2 text-sm text-zinc-400">Opens the website creation studio on this machine.</p>
+        <p className="mt-2 text-sm text-zinc-400">Staff sign-in for the Fintoke studio. There is no public signup.</p>
         <label className="mt-6 block text-sm">
           <span className="mb-1 block text-zinc-400">User</span>
           <input
@@ -82,7 +82,7 @@ function LoginForm() {
           {busy ? 'Signing in…' : 'Open Dashboard'}
         </button>
         <p className="mt-4 text-xs text-zinc-600">
-          Local default password is <code>admin</code> unless you set ADMIN_PASSWORD.
+          Public registration is disabled. Set ADMIN_USERNAME and ADMIN_PASSWORD on the server.
         </p>
       </form>
     </div>

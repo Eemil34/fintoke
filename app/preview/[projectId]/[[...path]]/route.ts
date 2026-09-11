@@ -61,6 +61,8 @@ function previewPage(title: string, message: string, logs: string[]) {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
+      'x-robots-tag': 'noindex, nofollow',
+      'referrer-policy': 'no-referrer',
     },
   });
 }
@@ -77,7 +79,9 @@ function rewriteHtml(source: string, prefix: string, port: number) {
   return source
     .replace(origin, '')
     .replace(/(["'`(=])\/_next\//g, `$1${base}/_next/`)
-    .replace(/(\s(?:href|src))="\/(?!\/|preview\/)/gi, `$1="${base}/`);
+    .replace(/(\s(?:href|src))="\/(?!\/|preview\/)/gi, `$1="${base}/`)
+    .replace(/https?:\/\/(?:www\.)?fintoke\.com\/(?:dashboard|studio|login|api)[^"'>\s]*/gi, '#')
+    .replace(/(\s(?:href|src))="(?:\/preview\/[^/]+)?\/(?:dashboard|studio|login)(?:\/[^"]*)?"/gi, '$1="#"');
 }
 
 function childPath(segments?: string[]) {
@@ -86,13 +90,31 @@ function childPath(segments?: string[]) {
   return `/${segments.join('/')}`;
 }
 
+function previewSecurityHeaders(headers: Headers) {
+  headers.delete('set-cookie');
+  headers.set('x-robots-tag', 'noindex, nofollow');
+  headers.set('referrer-policy', 'no-referrer');
+  headers.set('x-content-type-options', 'nosniff');
+  headers.set('x-frame-options', 'SAMEORIGIN');
+  headers.set(
+    'content-security-policy',
+    "frame-ancestors 'self' https://www.fintoke.com; form-action 'self'; base-uri 'self'",
+  );
+  headers.set('cache-control', 'no-store');
+  return headers;
+}
+
 function copyHeaders(upstream: Response, prefix: string, port: number) {
   const out = new Headers();
   upstream.headers.forEach((value, key) => {
-    if (key === 'content-encoding' || key === 'transfer-encoding') return;
+    if (key === 'content-encoding' || key === 'transfer-encoding' || key === 'set-cookie') return;
     if (key === 'location') {
       try {
         const location = new URL(value, `http://127.0.0.1:${port}`);
+        if (/^\/(dashboard|studio|login|api)(\/|$)/i.test(location.pathname)) {
+          out.set('location', prefix);
+          return;
+        }
         const pathName = location.pathname.startsWith(prefix)
           ? location.pathname
           : `${prefix}${location.pathname}`;
@@ -105,8 +127,7 @@ function copyHeaders(upstream: Response, prefix: string, port: number) {
     }
     out.set(key, value);
   });
-  out.set('cache-control', 'no-store');
-  return out;
+  return previewSecurityHeaders(out);
 }
 
 async function proxy(request: NextRequest, { params }: RouteContext) {

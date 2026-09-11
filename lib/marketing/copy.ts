@@ -6,7 +6,7 @@ const en = {
   underAttack: 'projects@fintoke.com',
   login: 'Log in',
   contactUs: 'Contact us',
-  signUp: 'Sign up for free',
+  signUp: 'Log in',
   nav: [
     { href: '#product', label: 'Services' },
     { href: '#pricing', label: 'Packages' },
@@ -180,7 +180,7 @@ const fi: typeof en = {
   underAttack: 'projects@fintoke.com',
   login: 'Kirjaudu',
   contactUs: 'Ota yhteyttä',
-  signUp: 'Aloita ilmaiseksi',
+  signUp: 'Kirjaudu',
   nav: [
     { href: '#product', label: 'Palvelut' },
     { href: '#pricing', label: 'Paketit' },
