@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
   const userOk = timingSafeEqualHex(await sha256Hex(username), await sha256Hex(adminUsername()));
   const passOk = timingSafeEqualHex(await sha256Hex(password), await sha256Hex(expectedPassword));
   if (!userOk || !passOk) {
+    recordFailure(ip);
     return NextResponse.json({ success: false, error: 'Invalid username or password' }, { status: 401 });
   }
 

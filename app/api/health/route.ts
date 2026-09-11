@@ -5,7 +5,7 @@ import { projectsDir, volumeDataDir, volumeHeartbeat, writableDataDir } from '@/
 import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 
-const RELEASE = '2026-09-12-real-volume3';
+const RELEASE = '2026-09-12-volume-test';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
