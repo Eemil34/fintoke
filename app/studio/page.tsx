@@ -18,6 +18,7 @@ import {
   hostnameFromUrl,
 } from '@/lib/templates';
 import PersistenceBanner from '@/components/PersistenceBanner';
+import TemplatePicker from '@/components/templates/TemplatePicker';
 import { useTemplates } from '@/hooks/useTemplates';
 import {
   ACTIVE_CLI_BRAND_COLORS,
