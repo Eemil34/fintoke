@@ -22,12 +22,24 @@ export function volumeDataDir(): string | null {
 }
 
 export function writableDataDir(): string {
+  const volume = volumeDataDir();
+  if (volume) {
+    const configured = process.env.SETTINGS_DIR?.trim();
+    if (configured) {
+      const resolved = path.resolve(configured);
+      if (
+        (resolved === volume || resolved.startsWith(`${volume}${path.sep}`)) &&
+        canUseDir(resolved)
+      ) {
+        return resolved;
+      }
+    }
+    return volume;
+  }
   if (process.env.SETTINGS_DIR?.trim()) {
     const configured = path.resolve(process.env.SETTINGS_DIR.trim());
     if (canUseDir(configured)) return configured;
   }
-  const volume = volumeDataDir();
-  if (volume) return volume;
   if (isVercelRuntime()) {
     return path.join(os.tmpdir(), 'fintoke-data');
   }
@@ -41,18 +53,27 @@ export function dataFile(...segments: string[]): string {
 }
 
 export function projectsDir(): string {
+  const volume = volumeDataDir();
+  if (volume) {
+    const configured = process.env.PROJECTS_DIR?.trim();
+    if (configured) {
+      const resolved = path.isAbsolute(configured)
+        ? configured
+        : path.resolve(process.cwd(), configured);
+      if (resolved === path.join(volume, 'projects') || resolved.startsWith(`${volume}${path.sep}`)) {
+        if (canUseDir(resolved)) return resolved;
+      }
+    }
+    const dir = path.join(volume, 'projects');
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
   const configured = process.env.PROJECTS_DIR?.trim();
   if (configured) {
     const resolved = path.isAbsolute(configured)
       ? configured
       : path.resolve(process.cwd(), configured);
     if (canUseDir(resolved)) return resolved;
-  }
-  const volume = volumeDataDir();
-  if (volume) {
-    const dir = path.join(volume, 'projects');
-    fs.mkdirSync(dir, { recursive: true });
-    return dir;
   }
   if (isVercelRuntime()) {
     return path.join(os.tmpdir(), 'fintoke-projects');

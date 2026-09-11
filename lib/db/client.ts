@@ -2,9 +2,9 @@ import { copyFileSync, existsSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-import { isVercelRuntime } from '@/lib/server/paths';
+import { isVercelRuntime, writableDataDir } from '@/lib/server/paths';
 
-const PRISMA_CLIENT_VERSION = 3;
+const PRISMA_CLIENT_VERSION = 4;
 
 const globalForPrisma = global as unknown as {
   prisma?: PrismaClient;
@@ -14,11 +14,15 @@ const globalForPrisma = global as unknown as {
 function resolveDatabaseUrl(): string | undefined {
   const configured = process.env.DATABASE_URL?.trim();
   if (configured && !configured.startsWith('file:')) return configured;
-  if (!isVercelRuntime()) return configured;
-  const dest = path.join(os.tmpdir(), 'fintoke.db');
-  const bundled = path.join(process.cwd(), 'prisma', 'vercel.db');
-  if (!existsSync(dest) && existsSync(bundled)) {
-    copyFileSync(bundled, dest);
+  const dest = path.join(writableDataDir(), 'cc.db');
+  process.env.DATABASE_URL = `file:${dest}`;
+  if (isVercelRuntime()) {
+    const tmp = path.join(os.tmpdir(), 'fintoke.db');
+    const bundled = path.join(process.cwd(), 'prisma', 'vercel.db');
+    if (!existsSync(tmp) && existsSync(bundled)) {
+      copyFileSync(bundled, tmp);
+    }
+    return `file:${tmp}`;
   }
   return `file:${dest}`;
 }

@@ -110,9 +110,24 @@ async function readStoredSettings(): Promise<MailSettings> {
 export async function loadMailSettings(): Promise<MailSettings> {
   const stored = await readStoredSettings();
   const env = envSettings();
-  if (stored.smtp.host || stored.smtp.user || stored.smtp.password) {
-    const { smtp: _smtp, ...rest } = env;
-    return mergeSettings(stored, rest);
+  const storedReady = Boolean(
+    stored.resendApiKey || stored.smtp.host || stored.smtp.user || stored.smtp.password || stored.fromEmail,
+  );
+  if (storedReady) {
+    return {
+      provider: stored.provider,
+      fromName: stored.fromName || env.fromName || '',
+      fromEmail: stored.fromEmail || env.fromEmail || '',
+      replyTo: stored.replyTo || env.replyTo || '',
+      smtp: {
+        host: stored.smtp.host,
+        port: stored.smtp.port,
+        secure: stored.smtp.secure,
+        user: stored.smtp.user,
+        password: stored.smtp.password,
+      },
+      resendApiKey: stored.resendApiKey || env.resendApiKey || '',
+    };
   }
   return mergeSettings(stored, env);
 }

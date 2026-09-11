@@ -1,4 +1,10 @@
 import { prisma } from '@/lib/db/client';
+import {
+  removeTokenBackup,
+  restoreServiceTokens,
+  snapshotServiceTokens,
+  upsertTokenBackup,
+} from '@/lib/services/tokenBackup';
 
 const SUPPORTED_PROVIDERS = ['github', 'supabase', 'vercel'] as const;
 export type ServiceProvider = (typeof SUPPORTED_PROVIDERS)[number];
@@ -58,26 +64,31 @@ export async function createServiceToken(
       token: token.trim(),
     },
   });
+  await upsertTokenBackup(provider, stored.name, stored.token);
 
   return toResponse(stored);
 }
 
 export async function getServiceToken(provider: string): Promise<ServiceTokenRecord | null> {
   assertProvider(provider);
+  await restoreServiceTokens();
 
   const record = await prisma.serviceToken.findFirst({
     where: { provider },
     orderBy: { createdAt: 'desc' },
   });
+  if (record) await snapshotServiceTokens().catch(() => undefined);
 
   return record ? toResponse(record) : null;
 }
 
 export async function deleteServiceToken(tokenId: string): Promise<boolean> {
   try {
+    const existing = await prisma.serviceToken.findUnique({ where: { id: tokenId } });
     await prisma.serviceToken.delete({
       where: { id: tokenId },
     });
+    if (existing?.provider) await removeTokenBackup(existing.provider);
     return true;
   } catch (error) {
     return false;
@@ -85,17 +96,8 @@ export async function deleteServiceToken(tokenId: string): Promise<boolean> {
 }
 
 export async function getPlainServiceToken(provider: string): Promise<string | null> {
-  assertProvider(provider);
-
-  const record = await prisma.serviceToken.findFirst({
-    where: { provider },
-  });
-
-  if (!record) {
-    return null;
-  }
-
-  return record.token;
+  const record = await getServiceToken(provider);
+  return record?.token ?? null;
 }
 
 export async function touchServiceToken(provider: string): Promise<void> {
