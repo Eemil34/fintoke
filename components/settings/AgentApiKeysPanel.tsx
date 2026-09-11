@@ -166,7 +166,10 @@ export default function AgentApiKeysPanel() {
     setTimeout(() => setCopied(null), 1600);
   }
 
-  const publicUrl = tunnel?.publicUrl;
+  const hosted =
+    /^https?:\/\//i.test(origin) &&
+    !/^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\])/i.test(origin);
+  const publicUrl = tunnel?.publicUrl || (hosted ? origin.replace(/\/$/, '') : '');
   const cloudReady = Boolean(publicUrl);
   const connectorUrl = publicUrl ? `${publicUrl.replace(/\/$/, '')}/api/v1/mcp` : '';
 
@@ -184,13 +187,16 @@ export default function AgentApiKeysPanel() {
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm font-medium text-gray-900">Public URL for Claude.ai</p>
+            <p className="text-sm font-medium text-gray-900">
+              {hosted ? 'This site is already public' : 'Public URL for Claude.ai'}
+            </p>
             <p className="mt-1 text-xs text-gray-500">
-              Required for Claude.ai. Exposes only <code>/api/v1</code> over HTTPS, including the
-              MCP connector. Keep this computer awake. Stop the URL when you are done.
+              {hosted
+                ? 'Claude.ai must use the MCP URL below, not the homepage. Generate a key on this page first.'
+                : 'Required for Claude.ai on localhost. Keep this computer awake, then stop the URL when you are done.'}
             </p>
           </div>
-          {cloudReady ? (
+          {hosted ? null : cloudReady ? (
             <button
               type="button"
               onClick={stopPublicUrl}
@@ -294,7 +300,7 @@ export default function AgentApiKeysPanel() {
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
         <p className="text-sm font-medium text-gray-900">Add as a Claude.ai connector</p>
         <ol className="list-decimal space-y-1 pl-5 text-sm text-gray-700">
-          <li>Start the public URL and generate a key. The newest active key is used automatically.</li>
+          <li>Generate a key on this page. The newest active key is used automatically.</li>
           <li>
             In Claude.ai: <span className="font-medium">Customize → Connectors → Add custom connector</span>.
           </li>
