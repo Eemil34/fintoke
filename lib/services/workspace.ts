@@ -10,6 +10,7 @@ import type {
   WorkspaceStore,
 } from '@/types/workspace';
 import { BUILT_IN_EMAIL_TEMPLATES } from '@/lib/templates/emailCatalog';
+import { dataFile } from '@/lib/server/paths';
 import { writeJsonAtomic } from '@/lib/server/atomicJson';
 
 export type {
