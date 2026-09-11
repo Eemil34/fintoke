@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import path from 'path';
 import { createAgentApiKey, listAgentApiKeys, type AgentApiKeyRecord } from './keys';
 import { AGENT_SCOPES } from './scopes';
 import { dataFile } from '@/lib/server/paths';
