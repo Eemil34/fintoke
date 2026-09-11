@@ -1,11 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
-import { projectsDir, volumeDataDir, writableDataDir } from '@/lib/server/paths';
+import { projectsDir, volumeDataDir, volumeHeartbeat, writableDataDir } from '@/lib/server/paths';
 import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 
-const RELEASE = '2026-09-12-persist-share3';
+const RELEASE = '2026-09-12-real-volume';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
@@ -67,6 +67,9 @@ export async function GET() {
       savedTemplates,
       persistence: {
         volumeMounted: Boolean(volume),
+        railwayVolumeMountPath: process.env.RAILWAY_VOLUME_MOUNT_PATH || null,
+        railwayVolumeName: process.env.RAILWAY_VOLUME_NAME || null,
+        volumeSince: volumeHeartbeat(),
         dataDir,
         projectsDir: projects,
         projectCount,

@@ -17,7 +17,7 @@ import {
   parsePublicHttpUrl,
   hostnameFromUrl,
 } from '@/lib/templates';
-import TemplatePicker from '@/components/templates/TemplatePicker';
+import PersistenceBanner from '@/components/PersistenceBanner';
 import { useTemplates } from '@/hooks/useTemplates';
 import {
   ACTIVE_CLI_BRAND_COLORS,
@@ -725,6 +725,9 @@ export default function HomePage() {
 
   return (
     <div className="flex h-screen relative overflow-hidden bg-white ">
+      <div className="absolute top-0 inset-x-0 z-50">
+        <PersistenceBanner />
+      </div>
       {/* Radial gradient background from bottom center */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 bg-white " />

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState, type ReactNode } from 'react';
-import Image from 'next/image';
+import PersistenceBanner from '@/components/PersistenceBanner';
 import {
   Building2,
   Globe,
@@ -140,6 +140,7 @@ export default function DashboardShell({ children }: { children: ReactNode }) {
             <Plus size={18} />
           </Link>
         </div>
+        <PersistenceBanner />
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
       </div>
     </div>

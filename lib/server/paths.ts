@@ -6,6 +6,14 @@ export function isVercelRuntime(): boolean {
   return process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
 }
 
+export function isRailwayRuntime(): boolean {
+  return Boolean(
+    process.env.RAILWAY_ENVIRONMENT ||
+      process.env.RAILWAY_PROJECT_ID ||
+      process.env.RAILWAY_SERVICE_ID,
+  );
+}
+
 function canUseDir(dir: string): boolean {
   try {
     fs.mkdirSync(dir, { recursive: true });
@@ -16,26 +24,59 @@ function canUseDir(dir: string): boolean {
   }
 }
 
-export function volumeDataDir(): string | null {
-  if (canUseDir('/app/data')) return '/app/data';
+function procMountPoints(): string[] {
+  try {
+    return fs
+      .readFileSync('/proc/mounts', 'utf8')
+      .split('\n')
+      .map((line) => line.split(/\s+/)[1])
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+export function persistentVolumeDir(): string | null {
+  const fromEnv = process.env.RAILWAY_VOLUME_MOUNT_PATH?.trim();
+  if (fromEnv) {
+    const resolved = path.resolve(fromEnv);
+    if (canUseDir(resolved)) return resolved;
+  }
+
+  const mounts = procMountPoints();
+  for (const candidate of ['/app/data', '/data']) {
+    if (mounts.includes(candidate) && canUseDir(candidate)) return candidate;
+  }
   return null;
 }
 
-export function writableDataDir(): string {
-  const volume = volumeDataDir();
-  if (volume) {
-    const configured = process.env.SETTINGS_DIR?.trim();
-    if (configured) {
-      const resolved = path.resolve(configured);
-      if (
-        (resolved === volume || resolved.startsWith(`${volume}${path.sep}`)) &&
-        canUseDir(resolved)
-      ) {
-        return resolved;
-      }
-    }
-    return volume;
+export function volumeDataDir(): string | null {
+  return persistentVolumeDir();
+}
+
+export function volumeHeartbeat(): string | null {
+  const dir = persistentVolumeDir();
+  if (!dir) return null;
+  const file = path.join(dir, '.fintoke-volume');
+  try {
+    const existing = fs.readFileSync(file, 'utf8').trim();
+    if (existing) return existing;
+  } catch {
+    // create on first real volume boot
   }
+  const stamp = new Date().toISOString();
+  try {
+    fs.writeFileSync(file, `${stamp}\n`);
+    return stamp;
+  } catch {
+    return null;
+  }
+}
+
+export function writableDataDir(): string {
+  const volume = persistentVolumeDir();
+  if (volume) return volume;
+
   if (process.env.SETTINGS_DIR?.trim()) {
     const configured = path.resolve(process.env.SETTINGS_DIR.trim());
     if (canUseDir(configured)) return configured;
@@ -53,17 +94,8 @@ export function dataFile(...segments: string[]): string {
 }
 
 export function projectsDir(): string {
-  const volume = volumeDataDir();
+  const volume = persistentVolumeDir();
   if (volume) {
-    const configured = process.env.PROJECTS_DIR?.trim();
-    if (configured) {
-      const resolved = path.isAbsolute(configured)
-        ? configured
-        : path.resolve(process.cwd(), configured);
-      if (resolved === path.join(volume, 'projects') || resolved.startsWith(`${volume}${path.sep}`)) {
-        if (canUseDir(resolved)) return resolved;
-      }
-    }
     const dir = path.join(volume, 'projects');
     fs.mkdirSync(dir, { recursive: true });
     return dir;
