@@ -72,13 +72,18 @@ process.env.PROJECTS_DIR = projects;
 process.env.PATH = withCursorPath(process.env).PATH;
 process.env.PATH = `${path.join(dataDir, '.local', 'bin')}${path.delimiter}${process.env.PATH}`;
 
+function sqliteFileUrl(dbPath) {
+  const abs = path.resolve(dbPath);
+  return abs.startsWith('/') ? `file://${abs}` : `file:${abs}`;
+}
+
 if (!process.env.DATABASE_URL || process.env.DATABASE_URL.startsWith('file:')) {
-  process.env.DATABASE_URL = `file:${path.join(dataDir, 'cc.db')}`;
+  process.env.DATABASE_URL = sqliteFileUrl(path.join(dataDir, 'cc.db'));
 }
 
 if (String(process.env.DATABASE_URL || '').startsWith('file:')) {
-  const dbFile = String(process.env.DATABASE_URL).replace(/^file:/, '');
-  const existing = fs.existsSync(dbFile) && fs.statSync(dbFile).size > 4096;
+  const dbFile = String(process.env.DATABASE_URL).replace(/^file:\/\//, '').replace(/^file:/, '');
+  const existing = [dbFile, `${dbFile}-wal`, `${dbFile}-shm`].some((file) => fs.existsSync(file));
   if (existing) {
     console.log('[start-prod] Keeping existing SQLite database at', dbFile);
   } else {

@@ -5,7 +5,7 @@ import { projectsDir, volumeDataDir, volumeHeartbeat, writableDataDir } from '@/
 import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 
-const RELEASE = '2026-09-12-volume-test';
+const RELEASE = '2026-09-12-tokens-json';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
@@ -87,6 +87,7 @@ export async function GET() {
           mail: fs.existsSync(path.join(dataDir, 'mail.json')),
           templates: fs.existsSync(path.join(dataDir, 'templates.json')),
           userTemplates: fs.existsSync(path.join(dataDir, 'templates-user.json')),
+          serviceTokens: fs.existsSync(path.join(dataDir, 'service-tokens.json')),
         },
       },
     },
