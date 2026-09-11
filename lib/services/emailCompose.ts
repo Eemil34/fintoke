@@ -9,6 +9,7 @@ import {
   type WorkspaceEmailTemplate,
 } from '@/lib/services/workspace';
 import { sharePreviewUrl } from '@/lib/server/publicUrl';
+import { deliverEmail, loadMailSettings } from '@/lib/services/mail';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const recentSends: number[] = [];

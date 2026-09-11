@@ -5,7 +5,7 @@ import { projectsDir, volumeDataDir, writableDataDir } from '@/lib/server/paths'
 import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 
-const RELEASE = '2026-09-12-persist-share';
+const RELEASE = '2026-09-12-persist-share2';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
