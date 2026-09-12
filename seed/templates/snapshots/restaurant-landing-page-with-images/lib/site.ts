@@ -158,7 +158,7 @@ export const site = {
       name: 'Sara Niemi',
       role: 'Pastry & Fermentation',
       bio: 'Runs our larder — misos, vinegars, and the desserts that land after the savoury arc.',
-      image: 'https://images.unsplash.com/photo-1583394293214-28ded15ee548?w=400&q=80',
+      image: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&q=80',
     },
   ],
   contact: {

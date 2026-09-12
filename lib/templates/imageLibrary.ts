@@ -523,7 +523,7 @@ export function photosIn(id: ImageCategoryId) {
 `;
 }
 
-export const SITE_IMAGE_AGENT_RULES = `Photos must match the site topic. If the user uploaded files under public/uploads, use those exact /uploads/... paths first. Otherwise read lib/imageLibrary.ts — it is a large categorized Unsplash catalog. Use unsplash() IDs from the matching category only. A hospital or clinic uses medical photos only — never restaurant, food, bar, sushi, or cocktail photos. A hotel uses hotel photos. Never invent Unsplash IDs (they 404 and leave empty frames). Use components/SiteImage.tsx for every photo. Keep instrumentation-client.ts and ImageGuard.`;
+export const SITE_IMAGE_AGENT_RULES = `Photos must match the site topic. If the user uploaded files under public/uploads, use those exact /uploads/... paths first. Otherwise read lib/imageLibrary.ts — it is a large categorized Unsplash catalog. Use unsplash() IDs from the matching category only. A hospital or clinic uses medical photos only — never restaurant, food, bar, sushi, or cocktail photos. A hotel uses hotel photos. Never invent Unsplash IDs (they 404 and leave empty frames). Never use placeholder.com, placehold.co, or source.unsplash.com. Use components/SiteImage.tsx for every photo. Keep instrumentation-client.ts and ImageGuard.`;
 
 export function buildSiteImageAgentRules(userPrompt: string): string {
   const category = matchImageCategory(userPrompt || '');

@@ -10,7 +10,6 @@ import {
   pickLibraryPhoto,
   scoreImageCategory,
 } from './imageLibrary';
-import { dataFile } from '@/lib/server/paths';
 
 export {
   SITE_IMAGE_AGENT_RULES,
@@ -74,23 +73,47 @@ const FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 
 </svg>
 `;
 
+const RELIABLE_PHOTO_URL =
+  'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80';
+
+const FALLBACK_DATA_URI = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(FALLBACK_SVG)}`;
+
+const DEAD_IMAGE_HOSTS =
+  /https?:\/\/(?:via\.placeholder\.com|placehold\.it|placehold\.co|placekitten\.com|source\.unsplash\.com|picsum\.photos|loremflickr\.com|dummyimage\.com|placedog\.net)[^"'`)\s]*/gi;
+
+const IMAGE_PATCH_HELPER = `const RELIABLE = ${JSON.stringify(RELIABLE_PHOTO_URL)};
+const DATA_URI = ${JSON.stringify(FALLBACK_DATA_URI)};
+
+function patchBrokenImage(img: HTMLImageElement) {
+  const src = img.getAttribute('src') || img.currentSrc || '';
+  if (src.startsWith('data:image/')) return;
+  img.removeAttribute('srcset');
+  img.srcset = '';
+  img.style.opacity = '1';
+  img.style.visibility = 'visible';
+  img.style.objectFit = 'cover';
+  if (src !== RELIABLE && img.dataset.clbReliable !== '1') {
+    img.dataset.clbReliable = '1';
+    img.src = RELIABLE;
+    return;
+  }
+  img.dataset.clbFallback = '1';
+  img.src = DATA_URI;
+}
+
+function isBrokenImage(img: HTMLImageElement) {
+  const src = (img.getAttribute('src') || '').trim();
+  if (!src || src === 'undefined' || src === 'null' || src === '#') return true;
+  if (src.startsWith('data:image/')) return false;
+  return img.complete && img.naturalWidth === 0;
+}
+`;
+
 const IMAGE_GUARD_SOURCE = `'use client';
 
 import { useEffect } from 'react';
 
-const FALLBACK = '/images/fallback.svg';
-
-function patchBrokenImage(img: HTMLImageElement) {
-  if (img.dataset.clbFallback === '1') return;
-  if (img.getAttribute('src') === FALLBACK) return;
-  img.dataset.clbFallback = '1';
-  img.removeAttribute('srcset');
-  img.srcset = '';
-  img.src = FALLBACK;
-  img.style.opacity = '1';
-  img.style.visibility = 'visible';
-  img.style.objectFit = 'cover';
-}
+${IMAGE_PATCH_HELPER}
 
 export function ImageGuard() {
   useEffect(() => {
@@ -102,23 +125,18 @@ export function ImageGuard() {
 
     const scan = () => {
       document.querySelectorAll('img').forEach((img) => {
-        if (
-          img.complete &&
-          img.naturalWidth === 0 &&
-          img.getAttribute('src') &&
-          img.getAttribute('src') !== FALLBACK
-        ) {
-          patchBrokenImage(img);
-        }
+        if (isBrokenImage(img)) patchBrokenImage(img);
       });
     };
 
     scan();
+    const timer = window.setInterval(scan, 1200);
     const observer = new MutationObserver(scan);
     observer.observe(document.documentElement, { childList: true, subtree: true });
     return () => {
       document.removeEventListener('error', onError, true);
       observer.disconnect();
+      window.clearInterval(timer);
     };
   }, []);
 
@@ -127,19 +145,7 @@ export function ImageGuard() {
 `;
 
 const INSTRUMENTATION_CLIENT_SOURCE = `// Managed by Claudable. Restores broken photos so generated sites never show empty frames.
-const FALLBACK = '/images/fallback.svg';
-
-function patchBrokenImage(img: HTMLImageElement) {
-  if (img.dataset.clbFallback === '1') return;
-  if (img.getAttribute('src') === FALLBACK) return;
-  img.dataset.clbFallback = '1';
-  img.removeAttribute('srcset');
-  img.srcset = '';
-  img.src = FALLBACK;
-  img.style.opacity = '1';
-  img.style.visibility = 'visible';
-  img.style.objectFit = 'cover';
-}
+${IMAGE_PATCH_HELPER}
 
 try {
   window.addEventListener(
@@ -153,14 +159,7 @@ try {
 
   const scan = () => {
     document.querySelectorAll('img').forEach((img) => {
-      if (
-        img.complete &&
-        img.naturalWidth === 0 &&
-        img.getAttribute('src') &&
-        img.getAttribute('src') !== FALLBACK
-      ) {
-        patchBrokenImage(img);
-      }
+      if (isBrokenImage(img)) patchBrokenImage(img);
     });
   };
 
@@ -170,6 +169,7 @@ try {
     scan();
   }
 
+  window.setInterval(scan, 1200);
   new MutationObserver(scan).observe(document.documentElement, { childList: true, subtree: true });
 } catch {
   // Preview should still boot if this file is evaluated too early.
@@ -178,10 +178,10 @@ try {
 
 const SITE_IMAGE_SOURCE = `'use client';
 
-import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-const FALLBACK = '/images/fallback.svg';
+const RELIABLE = ${JSON.stringify(RELIABLE_PHOTO_URL)};
+const DATA_URI = ${JSON.stringify(FALLBACK_DATA_URI)};
 
 type SiteImageProps = {
   src: string;
@@ -202,35 +202,30 @@ export function SiteImage({
   width,
   height,
   priority,
-  sizes = '(max-width: 768px) 100vw, 50vw',
 }: SiteImageProps) {
-  const [currentSrc, setCurrentSrc] = useState(src || FALLBACK);
+  const sources = useMemo(() => {
+    const next = [src, RELIABLE, DATA_URI].filter((value, index, all) => value && all.indexOf(value) === index);
+    return next.length ? next : [DATA_URI];
+  }, [src]);
+  const [index, setIndex] = useState(0);
+  const currentSrc = sources[Math.min(index, sources.length - 1)] || DATA_URI;
 
-  if (fill) {
-    return (
-      <Image
-        src={currentSrc}
-        alt={alt}
-        fill
-        className={className}
-        sizes={sizes}
-        priority={priority}
-        referrerPolicy="no-referrer"
-        onError={() => setCurrentSrc(FALLBACK)}
-      />
-    );
-  }
+  useEffect(() => {
+    setIndex(0);
+  }, [src]);
 
   return (
-    <Image
+    // Native img so preview iframes never depend on /_next/image.
+    <img
       src={currentSrc}
       alt={alt}
-      width={width ?? 800}
-      height={height ?? 600}
-      className={className}
-      priority={priority}
+      width={fill ? undefined : width ?? 1600}
+      height={fill ? undefined : height ?? 900}
+      className={fill ? \`absolute inset-0 h-full w-full object-cover \${className}\` : className}
+      loading={priority ? 'eager' : 'lazy'}
+      decoding="async"
       referrerPolicy="no-referrer"
-      onError={() => setCurrentSrc(FALLBACK)}
+      onError={() => setIndex((current) => Math.min(current + 1, sources.length - 1))}
     />
   );
 }
@@ -444,47 +439,6 @@ function replacementIdFor(deadId: string, context = ''): string {
   return pickLibraryPhoto(category, deadId).id;
 }
 
-type StatusCache = Record<string, { ok: boolean; checkedAt: number }>;
-
-function statusCachePath(): string {
-  return dataFile('unsplash-status.json');
-}
-
-async function loadStatusCache(): Promise<StatusCache> {
-  try {
-    const raw = await fs.readFile(statusCachePath(), 'utf8');
-    const parsed = JSON.parse(raw) as StatusCache;
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-async function saveStatusCache(cache: StatusCache): Promise<void> {
-  await fs.mkdir(path.dirname(statusCachePath()), { recursive: true });
-  await fs.writeFile(statusCachePath(), `${JSON.stringify(cache, null, 2)}\n`, 'utf8');
-}
-
-async function unsplashExists(photoId: string): Promise<boolean> {
-  if (SAFE_ID_SET.has(photoId)) return true;
-  if (KNOWN_DEAD_UNSPLASH_IDS.has(photoId)) return false;
-
-  const url = `https://images.unsplash.com/${photoId}?w=64&q=60`;
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      redirect: 'follow',
-      headers: { 'User-Agent': 'ClaudableImageCheck/1.0' },
-      signal: AbortSignal.timeout(8000),
-    });
-    const type = response.headers.get('content-type') || '';
-    await response.body?.cancel().catch(() => undefined);
-    return response.ok && (type.includes('image') || type.includes('octet-stream') || type === '');
-  } catch {
-    return true;
-  }
-}
-
 const SOURCE_FILE = /\.(tsx|ts|jsx|js|mjs|cjs)$/;
 const SKIP_DIR = new Set(['node_modules', '.next', '.git', 'dist', 'build', '.turbo', '.vercel']);
 
@@ -510,7 +464,6 @@ async function collectSourceFiles(dir: string, out: string[] = []): Promise<stri
 export async function repairBrokenRemoteImages(projectPath: string): Promise<boolean> {
   const files = await collectSourceFiles(projectPath);
   const idPattern = /images\.unsplash\.com\/(photo-[a-zA-Z0-9-]+)/g;
-  const found = new Set<string>();
   const fileTexts = new Map<string, string>();
 
   for (const file of files) {
@@ -521,44 +474,25 @@ export async function repairBrokenRemoteImages(projectPath: string): Promise<boo
       continue;
     }
     fileTexts.set(file, text);
-    for (const match of text.matchAll(idPattern)) {
-      found.add(match[1]);
-    }
   }
 
-  if (found.size === 0) return false;
-
-  const cache = await loadStatusCache();
-  const now = Date.now();
-  const ttl = 1000 * 60 * 60 * 24 * 7;
-  const dead = new Set<string>();
-
-  for (const id of found) {
-    if (SAFE_ID_SET.has(id)) {
-      cache[id] = { ok: true, checkedAt: now };
-      continue;
-    }
-    const cached = cache[id];
-    if (cached && now - cached.checkedAt < ttl) {
-      if (!cached.ok) dead.add(id);
-      continue;
-    }
-    const ok = await unsplashExists(id);
-    cache[id] = { ok, checkedAt: now };
-    if (!ok) dead.add(id);
-  }
-
-  await saveStatusCache(cache);
-  if (dead.size === 0) return false;
+  if (fileTexts.size === 0) return false;
 
   let changed = false;
   for (const [file, original] of fileTexts) {
-    let next = original;
-    for (const id of dead) {
-      const replacement = replacementIdFor(id, original);
+    let next = original.replace(DEAD_IMAGE_HOSTS, (url) => {
+      const id = replacementIdFor(url, original);
+      return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1400&q=80`;
+    });
+
+    const ids = [...next.matchAll(idPattern)].map((match) => match[1]);
+    for (const id of new Set(ids)) {
+      if (SAFE_ID_SET.has(id) && !KNOWN_DEAD_UNSPLASH_IDS.has(id)) continue;
+      const replacement = replacementIdFor(id, next);
       if (replacement === id) continue;
       next = next.split(id).join(replacement);
     }
+
     if (next !== original) {
       await fs.writeFile(file, next, 'utf8');
       changed = true;
@@ -623,8 +557,10 @@ export async function settleGeneratedSiteImages(projectPath: string): Promise<Si
   } catch (error) {
     console.warn('[SiteImages] Failed to retarget photos:', error);
   }
-  void repairBrokenRemoteImages(projectPath).catch((error) => {
+  try {
+    await repairBrokenRemoteImages(projectPath);
+  } catch (error) {
     console.warn('[SiteImages] Failed to repair remote photos:', error);
-  });
+  }
   return result;
 }

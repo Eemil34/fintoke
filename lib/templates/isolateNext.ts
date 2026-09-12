@@ -185,8 +185,10 @@ export async function normalizeGeneratedProject(projectPath: string): Promise<bo
   } catch (error) {
     console.warn('[Preview] Failed to retarget photos:', error);
   }
-  void repairBrokenRemoteImages(projectPath).catch((error) => {
+  try {
+    await repairBrokenRemoteImages(projectPath);
+  } catch (error) {
     console.warn('[Preview] Failed to repair remote photos:', error);
-  });
+  }
   return configChanged || revealChanged || images.needsPreviewRestart;
 }

@@ -79,7 +79,7 @@ function rewriteHtml(source: string, prefix: string, port: number) {
   return source
     .replace(origin, '')
     .replace(/(["'`(=])\/_next\//g, `$1${base}/_next/`)
-    .replace(/(\s(?:href|src))="\/(?!\/|preview\/)/gi, `$1="${base}/`)
+    .replace(/(\s(?:href|src|srcset|srcSet))="\/(?!\/|preview\/)/gi, `$1="${base}/`)
     .replace(/https?:\/\/(?:www\.)?fintoke\.com\/(?:dashboard|studio|login|api)[^"'>\s]*/gi, '#')
     .replace(/(\s(?:href|src))="(?:\/preview\/[^/]+)?\/(?:dashboard|studio|login)(?:\/[^"]*)?"/gi, '$1="#"');
 }
