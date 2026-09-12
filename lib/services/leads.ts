@@ -1,11 +1,12 @@
 import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
-import path from 'path';
 import type { LeadInput, LeadResponse, WorkspaceLead } from '@/types/leads';
 import { dataFile } from '@/lib/server/paths';
 import { writeJsonAtomic } from '@/lib/server/atomicJson';
 
-const STORE_PATH = dataFile('leads.json');
+function storePath(): string {
+  return dataFile('leads.json');
+}
 
 interface LeadStore {
   openaiApiKey: string;
@@ -82,7 +83,7 @@ function normalizeLead(raw: Partial<WorkspaceLead> & { id?: string }): Workspace
 
 async function readStore(): Promise<LeadStore> {
   try {
-    const raw = await fs.readFile(STORE_PATH, 'utf8');
+    const raw = await fs.readFile(storePath(), 'utf8');
     const parsed = JSON.parse(raw) as unknown;
     if (Array.isArray(parsed)) {
       return {
@@ -104,7 +105,7 @@ async function readStore(): Promise<LeadStore> {
 }
 
 async function writeStore(store: LeadStore): Promise<void> {
-  await writeJsonAtomic(STORE_PATH, store);
+  await writeJsonAtomic(storePath(), store);
 }
 
 export async function listLeads(): Promise<WorkspaceLead[]> {

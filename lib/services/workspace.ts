@@ -10,7 +10,7 @@ import type {
   WorkspaceStore,
 } from '@/types/workspace';
 import { BUILT_IN_EMAIL_TEMPLATES } from '@/lib/templates/emailCatalog';
-import { dataFile } from '@/lib/server/paths';
+import { dataFile, dataFileCandidates, volumeDataDir } from '@/lib/server/paths';
 import { writeJsonAtomic } from '@/lib/server/atomicJson';
 
 export type {
@@ -22,7 +22,26 @@ export type {
   WorkspaceStore,
 };
 
-const STORE_PATH = dataFile('workspace.json');
+function volumeFile(name: string): string {
+  const volume = volumeDataDir();
+  return volume ? path.join(volume, name) : dataFile(name);
+}
+
+function workspacePath(): string {
+  return volumeFile('workspace.json');
+}
+
+function emailsPath(): string {
+  return volumeFile('emails.json');
+}
+
+function peoplePath(): string {
+  return volumeFile('people.json');
+}
+
+function emailTemplatesPath(): string {
+  return volumeFile('email-templates.json');
+}
 
 export type PersonInput = {
   kind?: PersonKind;
@@ -71,24 +90,74 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   return next;
 }
 
-async function readStore(): Promise<WorkspaceStore> {
+async function readJsonFile(filePath: string): Promise<unknown | null> {
   try {
-    const raw = await fs.readFile(STORE_PATH, 'utf8');
-    const parsed = JSON.parse(raw) as Partial<WorkspaceStore>;
-    return normalizeStore({
-      people: Array.isArray(parsed.people)
-        ? parsed.people.map((person) => ({ ...person, phone: person.phone || '' }))
-        : [],
-      emails: Array.isArray(parsed.emails) ? parsed.emails : [],
-      emailTemplates: Array.isArray(parsed.emailTemplates) ? parsed.emailTemplates : [],
-    });
+    return JSON.parse(await fs.readFile(filePath, 'utf8')) as unknown;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code === 'ENOENT') {
-      return normalizeStore({ ...EMPTY_STORE });
-    }
+    if (code === 'ENOENT') return null;
     throw error;
   }
+}
+
+function asPeople(value: unknown): WorkspacePerson[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((person) => ({
+    ...(person as WorkspacePerson),
+    phone: (person as WorkspacePerson).phone || '',
+  }));
+}
+
+function asEmails(value: unknown): WorkspaceEmail[] {
+  return Array.isArray(value) ? (value as WorkspaceEmail[]) : [];
+}
+
+function asTemplates(value: unknown): WorkspaceEmailTemplate[] {
+  return Array.isArray(value) ? (value as WorkspaceEmailTemplate[]) : [];
+}
+
+function mergeById<T extends { id: string; updatedAt?: string }>(rows: T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const row of rows) {
+    if (!row?.id) continue;
+    const existing = byId.get(row.id);
+    if (!existing) {
+      byId.set(row.id, row);
+      continue;
+    }
+    if ((row.updatedAt || '') > (existing.updatedAt || '')) {
+      byId.set(row.id, row);
+    }
+  }
+  return [...byId.values()];
+}
+
+async function readStore(): Promise<WorkspaceStore> {
+  const people: WorkspacePerson[] = [];
+  const emails: WorkspaceEmail[] = [];
+  const emailTemplates: WorkspaceEmailTemplate[] = [];
+
+  const files = [
+    ...dataFileCandidates('workspace.json'),
+    ...dataFileCandidates('emails.json'),
+    ...dataFileCandidates('people.json'),
+    ...dataFileCandidates('email-templates.json'),
+  ];
+
+  for (const filePath of files) {
+    const parsed = await readJsonFile(filePath);
+    if (!parsed || typeof parsed !== 'object') continue;
+    const row = parsed as Record<string, unknown>;
+    people.push(...asPeople(row.people));
+    emails.push(...asEmails(row.emails));
+    emailTemplates.push(...asTemplates(row.emailTemplates ?? row.templates));
+  }
+
+  return normalizeStore({
+    people: mergeById(people),
+    emails: mergeById(emails),
+    emailTemplates: mergeById(emailTemplates),
+  });
 }
 
 function normalizeStore(store: WorkspaceStore): WorkspaceStore {
@@ -108,7 +177,18 @@ function normalizeStore(store: WorkspaceStore): WorkspaceStore {
 }
 
 async function writeStore(store: WorkspaceStore): Promise<void> {
-  await writeJsonAtomic(STORE_PATH, store);
+  const customTemplates = store.emailTemplates.filter(
+    (template) => !template.builtIn || template.updatedAt !== template.createdAt,
+  );
+  const payload = {
+    people: store.people,
+    emails: store.emails,
+    emailTemplates: customTemplates,
+  };
+  await writeJsonAtomic(emailsPath(), { emails: store.emails });
+  await writeJsonAtomic(peoplePath(), { people: store.people });
+  await writeJsonAtomic(emailTemplatesPath(), { emailTemplates: customTemplates });
+  await writeJsonAtomic(workspacePath(), payload);
 }
 
 function nowIso(): string {

@@ -2,15 +2,19 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
+function envValue(name: string): string {
+  return String(process.env[name] ?? '').trim();
+}
+
 export function isVercelRuntime(): boolean {
-  return process.env.VERCEL === '1' || Boolean(process.env.VERCEL_ENV);
+  return envValue('VERCEL') === '1' || Boolean(envValue('VERCEL_ENV'));
 }
 
 export function isRailwayRuntime(): boolean {
   return Boolean(
-    process.env.RAILWAY_ENVIRONMENT ||
-      process.env.RAILWAY_PROJECT_ID ||
-      process.env.RAILWAY_SERVICE_ID,
+    envValue('RAILWAY_ENVIRONMENT') ||
+      envValue('RAILWAY_PROJECT_ID') ||
+      envValue('RAILWAY_SERVICE_ID'),
   );
 }
 
@@ -37,7 +41,7 @@ function procMountPoints(): string[] {
 }
 
 export function persistentVolumeDir(): string | null {
-  const fromEnv = process.env.RAILWAY_VOLUME_MOUNT_PATH?.trim();
+  const fromEnv = envValue('RAILWAY_VOLUME_MOUNT_PATH');
   if (fromEnv) {
     const resolved = path.resolve(fromEnv);
     if (canUseDir(resolved)) return resolved;
@@ -77,8 +81,9 @@ export function writableDataDir(): string {
   const volume = persistentVolumeDir();
   if (volume) return volume;
 
-  if (process.env.SETTINGS_DIR?.trim()) {
-    const configured = path.resolve(process.env.SETTINGS_DIR.trim());
+  const settingsDir = envValue('SETTINGS_DIR');
+  if (settingsDir) {
+    const configured = path.resolve(settingsDir);
     if (canUseDir(configured)) return configured;
   }
   if (isVercelRuntime()) {
@@ -93,6 +98,25 @@ export function dataFile(...segments: string[]): string {
   return path.join(writableDataDir(), ...segments);
 }
 
+export function dataFileCandidates(...segments: string[]): string[] {
+  const seen = new Set<string>();
+  const files: string[] = [];
+  const addDir = (dir: string | null | undefined) => {
+    const trimmed = dir?.trim();
+    if (!trimmed) return;
+    const file = path.join(path.resolve(trimmed), ...segments);
+    if (seen.has(file)) return;
+    seen.add(file);
+    files.push(file);
+  };
+  addDir(persistentVolumeDir() || undefined);
+  addDir(envValue('SETTINGS_DIR'));
+  addDir(writableDataDir());
+  addDir(path.join(process.cwd(), 'data'));
+  addDir(path.join(os.tmpdir(), 'fintoke-data'));
+  return files;
+}
+
 export function projectsDir(): string {
   const volume = persistentVolumeDir();
   if (volume) {
@@ -100,7 +124,7 @@ export function projectsDir(): string {
     fs.mkdirSync(dir, { recursive: true });
     return dir;
   }
-  const configured = process.env.PROJECTS_DIR?.trim();
+  const configured = envValue('PROJECTS_DIR');
   if (configured) {
     const resolved = path.isAbsolute(configured)
       ? configured

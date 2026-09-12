@@ -5,7 +5,9 @@ import type { MailProvider, MailSettings, MailSettingsPatch, MailSmtpSettings, P
 import { dataFile } from '@/lib/server/paths';
 import { writeJsonAtomic } from '@/lib/server/atomicJson';
 
-const SETTINGS_PATH = dataFile('mail.json');
+function settingsPath(): string {
+  return dataFile('mail.json');
+}
 
 const DEFAULT_SMTP: MailSmtpSettings = {
   host: '',
@@ -98,7 +100,7 @@ function mergeSettings(base: MailSettings, patch: MailSettingsPatch): MailSettin
 
 async function readStoredSettings(): Promise<MailSettings> {
   try {
-    const raw = await fs.readFile(SETTINGS_PATH, 'utf8');
+    const raw = await fs.readFile(settingsPath(), 'utf8');
     const parsed = JSON.parse(raw) as MailSettingsPatch;
     return mergeSettings(DEFAULT_SETTINGS, parsed);
   } catch (error) {
@@ -231,7 +233,7 @@ export async function updateMailSettings(input: MailSettingsPatch): Promise<Publ
       next.fromEmail = mailbox.email;
       if (!next.fromName.trim() && mailbox.name) next.fromName = mailbox.name;
     }
-    await writeJsonAtomic(SETTINGS_PATH, next);
+    await writeJsonAtomic(settingsPath(), next);
     return toPublicMailSettings(next);
   });
 }

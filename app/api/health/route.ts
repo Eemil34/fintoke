@@ -4,8 +4,9 @@ import { NextResponse } from 'next/server';
 import { projectsDir, volumeDataDir, volumeHeartbeat, writableDataDir } from '@/lib/server/paths';
 import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
+import { listEmails, listPeople } from '@/lib/services/workspace';
 
-const RELEASE = '2026-09-12-tokens-json';
+const RELEASE = '2026-09-12-emails-json';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
@@ -58,6 +59,15 @@ export async function GET() {
     console.error('[health] Could not read saved secrets:', error);
   }
 
+  let emailCount = 0;
+  let peopleCount = 0;
+  try {
+    emailCount = (await listEmails()).length;
+    peopleCount = (await listPeople()).length;
+  } catch (error) {
+    console.error('[health] Could not read saved emails:', error);
+  }
+
   return NextResponse.json(
     {
       ok: true,
@@ -67,12 +77,14 @@ export async function GET() {
       savedTemplates,
       persistence: {
         volumeMounted: Boolean(volume),
-        railwayVolumeMountPath: process.env.RAILWAY_VOLUME_MOUNT_PATH || null,
-        railwayVolumeName: process.env.RAILWAY_VOLUME_NAME || null,
+        railwayVolumeMountPath: process.env['RAILWAY_VOLUME_MOUNT_PATH'] || null,
+        railwayVolumeName: process.env['RAILWAY_VOLUME_NAME'] || null,
         volumeSince: volumeHeartbeat(),
         dataDir,
         projectsDir: projects,
         projectCount,
+        emailCount,
+        peopleCount,
         volumeTemplates,
         databaseUrl: (process.env.DATABASE_URL || '').replace(/\/\/.*@/, '//***@'),
         secrets: {
@@ -83,6 +95,9 @@ export async function GET() {
         },
         files: {
           workspace: fs.existsSync(path.join(dataDir, 'workspace.json')),
+          emails: fs.existsSync(path.join(dataDir, 'emails.json')),
+          people: fs.existsSync(path.join(dataDir, 'people.json')),
+          emailTemplates: fs.existsSync(path.join(dataDir, 'email-templates.json')),
           leads: fs.existsSync(path.join(dataDir, 'leads.json')),
           mail: fs.existsSync(path.join(dataDir, 'mail.json')),
           templates: fs.existsSync(path.join(dataDir, 'templates.json')),

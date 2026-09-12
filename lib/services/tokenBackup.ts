@@ -3,7 +3,9 @@ import fs from 'fs/promises';
 import { dataFile } from '@/lib/server/paths';
 import { writeJsonAtomic } from '@/lib/server/atomicJson';
 
-const BACKUP_PATH = dataFile('service-tokens.json');
+function backupPath(): string {
+  return dataFile('service-tokens.json');
+}
 
 export type TokenBackupRecord = {
   id: string;
@@ -57,7 +59,7 @@ function asRecord(provider: string, value: unknown): TokenBackupRecord | null {
 
 export async function readTokenBackup(): Promise<TokenBackup> {
   try {
-    const parsed = JSON.parse(await fs.readFile(BACKUP_PATH, 'utf8')) as unknown;
+    const parsed = JSON.parse(await fs.readFile(backupPath(), 'utf8')) as unknown;
     if (!parsed || typeof parsed !== 'object') return {};
     const next: TokenBackup = {};
     for (const [provider, value] of Object.entries(parsed as Record<string, unknown>)) {
@@ -71,7 +73,7 @@ export async function readTokenBackup(): Promise<TokenBackup> {
 }
 
 async function writeTokenBackup(backup: TokenBackup): Promise<void> {
-  await writeJsonAtomic(BACKUP_PATH, backup);
+  await writeJsonAtomic(backupPath(), backup);
 }
 
 export async function upsertTokenBackup(
