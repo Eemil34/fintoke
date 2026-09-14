@@ -5,6 +5,32 @@ export function claudeRemoteMcpUrl(origin: string): string {
   return `${origin.replace(/\/$/, '')}/api/v1/mcp`;
 }
 
+export function chatgptRemoteMcpUrl(origin: string): string {
+  return `${origin.replace(/\/$/, '')}/mcp`;
+}
+
+export function chatgptConnectorInstructions(origin: string): string {
+  const mcp = chatgptRemoteMcpUrl(origin);
+  const local = isLocalOrigin(origin);
+
+  if (local) {
+    return `ChatGPT cannot use localhost. Start the public URL in Settings → Connectors, then add that HTTPS /mcp URL in ChatGPT Developer mode.`;
+  }
+
+  return `You have a Fintoke remote MCP server for ChatGPT.
+
+MCP URL: ${mcp}
+In ChatGPT (web):
+1. Settings → Security and login → turn on Developer mode
+2. Open Apps / Plugins → plus button → create a developer-mode app
+3. Server URL: ${mcp}
+4. Authentication: None
+5. Name it Fintoke. Create it, then in a new chat open + → Developer mode and enable Fintoke
+6. Ask Fintoke to make or edit a site. Confirm write actions when ChatGPT asks.
+
+Do not generate HTML/React artifacts. Use Claudable tools. Never print API keys.`;
+}
+
 export function claudeConnectorInstructions(origin: string, apiKey = '<PASTE_CLAUDABLE_API_KEY>'): string {
   const mcp = claudeRemoteMcpUrl(origin);
   const local = isLocalOrigin(origin);

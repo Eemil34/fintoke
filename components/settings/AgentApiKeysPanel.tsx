@@ -29,11 +29,11 @@ type TunnelStatus = {
 
 export default function AgentApiKeysPanel() {
   const [keys, setKeys] = useState<StoredKey[]>([]);
-  const [name, setName] = useState('Claude');
+  const [name, setName] = useState('Claude / ChatGPT');
   const [scopes, setScopes] = useState<AgentScope[]>([...AGENT_SCOPES]);
   const [creating, setCreating] = useState(false);
   const [freshKey, setFreshKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState<'key' | 'mcpUrl' | 'mcp' | 'command' | null>(null);
+  const [copied, setCopied] = useState<'key' | 'mcpUrl' | 'chatgptUrl' | 'mcp' | 'command' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [origin, setOrigin] = useState('http://localhost:3002');
   const [tunnel, setTunnel] = useState<TunnelStatus | null>(null);
@@ -64,7 +64,7 @@ export default function AgentApiKeysPanel() {
 
   useEffect(() => {
     Promise.all([loadKeys(), loadTunnel()]).catch((err) =>
-      setError(err instanceof Error ? err.message : 'Failed to load Claude API settings'),
+      setError(err instanceof Error ? err.message : 'Failed to load connector settings'),
     );
     const timer = window.setInterval(() => {
       loadTunnel().catch(() => undefined);
@@ -105,7 +105,7 @@ export default function AgentApiKeysPanel() {
         throw new Error(payload?.error || payload?.message || 'Failed to create key');
       }
       setFreshKey(payload.data.key);
-      setName('Claude');
+      setName('Claude / ChatGPT');
       await loadKeys();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create key');
@@ -160,7 +160,7 @@ export default function AgentApiKeysPanel() {
     }
   }
 
-  async function copy(text: string, kind: 'key' | 'mcpUrl' | 'mcp' | 'command') {
+  async function copy(text: string, kind: 'key' | 'mcpUrl' | 'chatgptUrl' | 'mcp' | 'command') {
     await navigator.clipboard.writeText(text);
     setCopied(kind);
     setTimeout(() => setCopied(null), 1600);
@@ -172,15 +172,16 @@ export default function AgentApiKeysPanel() {
   const publicUrl = tunnel?.publicUrl || (hosted ? origin.replace(/\/$/, '') : '');
   const cloudReady = Boolean(publicUrl);
   const connectorUrl = publicUrl ? `${publicUrl.replace(/\/$/, '')}/api/v1/mcp` : '';
+  const chatgptUrl = publicUrl ? `${publicUrl.replace(/\/$/, '')}/mcp` : '';
 
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-medium text-gray-900">Claude API access</h3>
+        <h3 className="text-lg font-medium text-gray-900">Claude and ChatGPT connectors</h3>
         <p className="mt-1 text-sm text-gray-600">
-          Pasting instructions into Claude.ai cannot give it localhost access. Add Claudable as a
-          <span className="font-medium"> custom connector</span> (remote MCP) so the tools appear
-          in Claude’s toolset. Claude Code on this Mac can use the local MCP server instead.
+          Add Fintoke as a remote MCP app in Claude.ai or ChatGPT so the same tools can create sites,
+          send email, and edit the workspace. Claude Code on this Mac can use the local MCP server
+          instead.
         </p>
       </div>
 
@@ -188,12 +189,12 @@ export default function AgentApiKeysPanel() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm font-medium text-gray-900">
-              {hosted ? 'This site is already public' : 'Public URL for Claude.ai'}
+              {hosted ? 'This site is already public' : 'Public URL for Claude.ai and ChatGPT'}
             </p>
             <p className="mt-1 text-xs text-gray-500">
               {hosted
-                ? 'Claude.ai must use the MCP URL below, not the homepage. Generate a key on this page first.'
-                : 'Required for Claude.ai on localhost. Keep this computer awake, then stop the URL when you are done.'}
+                ? 'Claude.ai and ChatGPT must use an MCP URL below, not the homepage. Generate a key on this page first.'
+                : 'Required for Claude.ai or ChatGPT on localhost. Keep this computer awake, then stop the URL when you are done.'}
             </p>
           </div>
           {hosted ? null : cloudReady ? (
@@ -222,8 +223,8 @@ export default function AgentApiKeysPanel() {
           </code>
         ) : (
           <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            Without this, Claude.ai has no path to this computer and will offer to write HTML in
-            the chat. That is not Claudable and does not publish to Vercel.
+            Without this, Claude.ai and ChatGPT have no path to this computer and will offer to write
+            HTML in the chat. That is not Fintoke and does not publish to Vercel.
           </p>
         )}
         {tunnel?.error ? <p className="text-sm text-red-600">{tunnel.error}</p> : null}
@@ -236,7 +237,7 @@ export default function AgentApiKeysPanel() {
             value={name}
             onChange={(event) => setName(event.target.value)}
             className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
-            placeholder="Claude"
+            placeholder="Claude / ChatGPT"
           />
         </label>
 
@@ -344,6 +345,53 @@ export default function AgentApiKeysPanel() {
           </>
         ) : (
           <p className="text-xs text-gray-500">Start the public URL to get the MCP address Claude.ai can add.</p>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+        <p className="text-sm font-medium text-gray-900">Add as a ChatGPT connector</p>
+        <ol className="list-decimal space-y-1 pl-5 text-sm text-gray-700">
+          <li>Generate a key on this page if you do not already have one.</li>
+          <li>
+            In ChatGPT (web): <span className="font-medium">Settings → Security and login → Developer mode</span>.
+          </li>
+          <li>
+            Open <span className="font-medium">Apps / Plugins</span>, click the plus button, and create a
+            developer-mode app.
+          </li>
+          <li>
+            Paste the ChatGPT MCP URL. Authentication: <span className="font-medium">None</span>. Name it
+            Fintoke.
+          </li>
+          <li>
+            Start a new chat, open <span className="font-medium">+</span> → Developer mode, enable Fintoke,
+            then ask it to make a site. Confirm write actions when ChatGPT asks.
+          </li>
+        </ol>
+        {cloudReady ? (
+          <>
+            <div>
+              <p className="text-xs font-medium text-gray-700">ChatGPT MCP server URL</p>
+              <div className="mt-1 flex flex-col gap-2 sm:flex-row">
+                <code className="flex-1 break-all rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-800">
+                  {chatgptUrl}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => copy(chatgptUrl, 'chatgptUrl')}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium"
+                >
+                  {copied === 'chatgptUrl' ? 'Copied' : 'Copy URL'}
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              Plus and Pro need Developer mode for write tools (create site, send email). ChatGPT will
+              ask you to confirm those actions.
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-gray-500">Start the public URL to get the MCP address ChatGPT can add.</p>
         )}
       </div>
 

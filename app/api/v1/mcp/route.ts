@@ -15,7 +15,21 @@ export function OPTIONS() {
   return agentOptions();
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const accept = request.headers.get('accept') || '';
+  if (accept.includes('text/event-stream')) {
+    const sessionId = mcpSessionId(request);
+    return new NextResponse(': connected\n\n', {
+      status: 200,
+      headers: {
+        ...mcpHeaders(sessionId),
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+      },
+    });
+  }
+
   return agentCors(
     NextResponse.json({
       name: 'claudable',

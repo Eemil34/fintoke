@@ -182,11 +182,11 @@ export default function OverviewPanel() {
                 href: '/dashboard/settings?tab=services',
               },
               {
-                name: 'Claude API',
+                name: 'Claude & ChatGPT',
                 ok: connections.agentKey,
                 detail: connections.agentKey
-                  ? 'Key ready — add the public MCP URL in Claude.ai Connectors'
-                  : 'Generate a key and add the public MCP connector in Claude.ai',
+                  ? 'Key ready — add the MCP URL in Claude.ai or ChatGPT'
+                  : 'Generate a key and add the MCP connector in Claude.ai or ChatGPT',
                 href: '/dashboard/settings?tab=api-keys',
               },
               {

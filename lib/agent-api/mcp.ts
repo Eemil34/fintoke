@@ -47,7 +47,7 @@ type JsonRpcMessage = {
   params?: Record<string, unknown> & { name?: string; arguments?: Record<string, unknown> };
 };
 
-export const MCP_TOOLS = [
+const RAW_MCP_TOOLS = [
   {
     name: 'claudable_list_templates',
     description: 'List website templates in this Claudable workspace.',
@@ -357,6 +357,33 @@ export const MCP_TOOLS = [
     },
   },
 ];
+
+const READ_ONLY_TOOLS = new Set([
+  'claudable_list_templates',
+  'claudable_list_sites',
+  'claudable_get_site',
+  'claudable_list_email_templates',
+  'claudable_list_people',
+  'claudable_list_emails',
+  'claudable_list_work_rows',
+  'claudable_get_work_row',
+  'claudable_get_workspace',
+  'claudable_get_mail_status',
+  'claudable_get_email',
+  'claudable_get_template',
+]);
+
+export const MCP_TOOLS = RAW_MCP_TOOLS.map((tool) => {
+  const readOnly = READ_ONLY_TOOLS.has(tool.name);
+  return {
+    ...tool,
+    annotations: {
+      readOnlyHint: readOnly,
+      destructiveHint: !readOnly,
+      openWorldHint: false,
+    },
+  };
+});
 
 function siteNameFromPrompt(prompt: string, name?: string): string {
   if (name?.trim()) return name.trim().slice(0, 50);
@@ -671,7 +698,7 @@ export async function handleMcpMessage(request: NextRequest, message: JsonRpcMes
           capabilities: { tools: {} },
           serverInfo: { name: 'claudable', version: '2.0.0' },
           instructions:
-            'You are connected to the full Claudable workspace: overview, sites, website templates, emails, users, clients, work table, and mail status. Use these tools instead of generating HTML/React in chat. Use claudable_get_workspace first if you need a map of what exists.',
+            'You are connected to the Fintoke / Claudable workspace (sites, templates, emails, people, work table). Use these tools instead of generating HTML or React in chat. Start with claudable_get_workspace if you need a map. ChatGPT and Claude should call the tools directly.',
         }),
       };
     }

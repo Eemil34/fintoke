@@ -32,7 +32,7 @@ export async function getLinkedConnectorKey(): Promise<AgentApiKeyRecord | null>
   let keys = await listAgentApiKeys();
   if (keys.length === 0) {
     try {
-      const created = await createAgentApiKey({ name: 'Claude.ai' });
+      const created = await createAgentApiKey({ name: 'Claude.ai / ChatGPT' });
       await linkConnectorKey(created.id);
       keys = [created];
     } catch (error) {

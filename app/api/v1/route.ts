@@ -15,9 +15,10 @@ export async function GET(request: NextRequest) {
     docs: {
       openapi: `${origin}/api/v1/openapi`,
       claude: `${origin}/api/v1/claude`,
+      chatgpt: `${origin}/api/v1/chatgpt`,
     },
     endpoints: {
-      mcp: 'POST /mcp',
+      mcp: 'POST /mcp or POST /api/v1/mcp',
       me: 'GET /me',
       workspace: 'GET /workspace',
       mail: 'GET /mail',

@@ -17,7 +17,7 @@ function SettingsBody() {
     <div className="mx-auto flex h-full min-h-0 max-w-6xl flex-col px-6 py-8">
       <DashboardPageHeader
         title="Settings"
-        description="Connect Claude Code, Cursor Agent, publishing services, and Claude API keys."
+        description="Connect Claude, ChatGPT, Cursor, and publishing services."
       />
       <div className="min-h-0 flex-1">
         <GlobalSettings variant="page" isOpen initialTab={initialTab} />

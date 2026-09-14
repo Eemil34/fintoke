@@ -391,7 +391,7 @@ export default function GlobalSettings({
                 { id: 'general' as const, label: 'General' },
                 { id: 'ai-agents' as const, label: 'AI Agents' },
                 { id: 'services' as const, label: 'Services' },
-                { id: 'api-keys' as const, label: 'Claude API' },
+                { id: 'api-keys' as const, label: 'Connectors' },
                 { id: 'about' as const, label: 'About' }
               ].map(tab => (
                 <button
