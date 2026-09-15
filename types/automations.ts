@@ -1,4 +1,4 @@
-export type AutomationKind = 'generate_work' | 'enrich_empty';
+export type AutomationKind = 'outreach' | 'generate_work' | 'enrich_empty';
 export type AutomationStatus = 'scheduled' | 'running' | 'paused' | 'completed' | 'failed';
 
 export interface AutomationRun {
@@ -12,10 +12,16 @@ export interface WorkspaceAutomation {
   name: string;
   kind: AutomationKind;
   prompt: string;
+  websitePrompt: string;
+  messagePrompt: string;
+  emailSubject: string;
+  emailTemplateId: string;
   count: number;
   city: string;
   country: string;
   businessKind: string;
+  sitesPerRun: number;
+  emailsPerRun: number;
   repeatTotal: number;
   intervalMinutes: number;
   windowStart: string;

@@ -5,6 +5,20 @@ import type { AutomationInput, AutomationKind, AutomationStatus, WorkspaceAutoma
 import { dataFile, dataFileCandidates, volumeDataDir } from '@/lib/server/paths';
 import { writeJsonAtomic } from '@/lib/server/atomicJson';
 import { enrichEmptyLeads, generateWorkRows } from '@/lib/services/leadEnrich';
+import { listLeads, updateLead } from '@/lib/services/leads';
+import { createPerson, findPersonByRecipient } from '@/lib/services/workspace';
+import { createProject } from '@/lib/services/project';
+import { startProjectInstruction } from '@/lib/services/agentRun';
+import { generateProjectId } from '@/lib/utils';
+import { suggestWebsiteTemplate } from '@/lib/templates/match';
+import { listManagedTemplates } from '@/lib/templates/store';
+import { getSerializedAgentSite } from '@/lib/agent-api/serialize';
+import { getAgentWorkspaceSnapshot } from '@/lib/agent-api/workspaceAccess';
+import { appOrigin } from '@/lib/agent-api/http';
+import { sharePreviewUrl } from '@/lib/server/publicUrl';
+import { composeAndSendEmail } from '@/lib/services/emailCompose';
+import { getPublicMailSettings } from '@/lib/services/mail';
+import { getDefaultModelForCli } from '@/lib/constants/cliModels';
 
 function volumeFile(name: string): string {
   const volume = volumeDataDir();
@@ -36,7 +50,8 @@ function clean(value: unknown): string {
 }
 
 function asKind(value: unknown): AutomationKind {
-  return value === 'enrich_empty' ? 'enrich_empty' : 'generate_work';
+  if (value === 'enrich_empty' || value === 'generate_work' || value === 'outreach') return value;
+  return 'outreach';
 }
 
 function asStatus(value: unknown): AutomationStatus {
@@ -63,13 +78,19 @@ function normalize(raw: Partial<WorkspaceAutomation> & { id?: string }): Workspa
   if (runCount >= repeatTotal) status = 'completed';
   return {
     id: clean(raw.id) || randomUUID(),
-    name: clean(raw.name) || 'ChatGPT task',
+    name: clean(raw.name) || 'Outreach',
     kind: asKind(raw.kind),
     prompt: clean(raw.prompt),
-    count: asCount(raw.count, 10, 40),
+    websitePrompt: clean(raw.websitePrompt),
+    messagePrompt: clean(raw.messagePrompt),
+    emailSubject: clean(raw.emailSubject),
+    emailTemplateId: clean(raw.emailTemplateId) || 'tpl-site-ready',
+    count: asCount(raw.count, 8, 40),
     city: clean(raw.city),
     country: clean(raw.country),
     businessKind: clean(raw.businessKind) || 'local businesses',
+    sitesPerRun: asCount(raw.sitesPerRun, 1, 3),
+    emailsPerRun: asCount(raw.emailsPerRun, 3, 10),
     repeatTotal,
     intervalMinutes,
     windowStart,
@@ -123,6 +144,9 @@ function isRateLimit(message: string): boolean {
 }
 
 async function execute(job: WorkspaceAutomation): Promise<string> {
+  if (job.kind === 'outreach') {
+    return runOutreach(job);
+  }
   if (job.kind === 'enrich_empty') {
     const result = await enrichEmptyLeads();
     return `Filled ${result.filled.length} work rows.`;
@@ -136,6 +160,167 @@ async function execute(job: WorkspaceAutomation): Promise<string> {
     count: job.count,
   });
   return `Added ${created.created.length} businesses from ChatGPT.`;
+}
+
+function hasEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+async function ensureClient(lead: {
+  email: string;
+  business: string;
+  contactName: string;
+  personId?: string;
+}): Promise<string | undefined> {
+  if (lead.personId) return lead.personId;
+  if (!hasEmail(lead.email)) return undefined;
+  const existing = await findPersonByRecipient(lead.email);
+  if (existing) return existing.id;
+  const person = await createPerson({
+    kind: 'client',
+    name: lead.contactName || lead.business,
+    email: lead.email,
+    company: lead.business,
+  });
+  return person.id;
+}
+
+async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnType<typeof listLeads>>[number]) {
+  const origin = appOrigin();
+  const snapshot = await getAgentWorkspaceSnapshot();
+  const templates = await listManagedTemplates();
+  const brief = [job.websitePrompt, lead.whatTheyDo, lead.business, job.businessKind, lead.city].filter(Boolean).join('\n');
+  const template = suggestWebsiteTemplate(brief, templates);
+  const projectId = generateProjectId();
+  const instruction = `You are the Cursor agent inside Fintoke. Build a real Next.js marketing site for this business. Do not write a chat-only mock.
+
+Business:
+${JSON.stringify(
+    {
+      name: lead.business,
+      contactName: lead.contactName,
+      whatTheyDo: lead.whatTheyDo,
+      city: lead.city,
+      currentWebsite: lead.website,
+      email: lead.email,
+      phone: lead.phone,
+      instagram: lead.instagram,
+      style: lead.style,
+      audience: lead.audience,
+      notes: lead.notes,
+    },
+    null,
+    2,
+  )}
+
+Website instructions from the operator:
+${job.websitePrompt || 'Create a clean, specific one-page site that matches this business and city.'}
+
+Workspace snapshot (same data the Claude/ChatGPT connector can read):
+${JSON.stringify(snapshot, null, 2)}
+
+Use SiteImage for photos. Do not invent Unsplash IDs. Keep copy about this business only.`;
+
+  await createProject({
+    project_id: projectId,
+    name: lead.business.slice(0, 50) || 'Outreach site',
+    initialPrompt: instruction,
+    preferredCli: 'cursor',
+    selectedModel: getDefaultModelForCli('cursor'),
+    description: lead.whatTheyDo.slice(0, 180) || instruction.slice(0, 180),
+    websiteTemplateId: template?.id,
+  });
+  await startProjectInstruction({
+    projectId,
+    instruction,
+    cliPreference: 'cursor',
+    isInitialPrompt: true,
+  });
+  const personId = await ensureClient(lead);
+  await updateLead(lead.id, {
+    projectId,
+    personId,
+    vercelUrl: sharePreviewUrl(projectId),
+    notes: [lead.notes, `Site ${projectId} started from automation ${job.name}`].filter(Boolean).join('\n'),
+  });
+  return { projectId, shareUrl: sharePreviewUrl(projectId), origin };
+}
+
+async function sendOfferForLead(job: WorkspaceAutomation, lead: Awaited<ReturnType<typeof listLeads>>[number]) {
+  if (!lead.projectId || !hasEmail(lead.email) || lead.offerSent) return null;
+  const origin = appOrigin();
+  const site = await getSerializedAgentSite(lead.projectId, origin);
+  if (!site) return null;
+  if (site.job.running) return null;
+  const liveUrl = site.vercel.deploymentUrl || site.shareUrl;
+  const personId = await ensureClient(lead);
+  const result = await composeAndSendEmail({
+    to: lead.email,
+    personId,
+    templateId: job.emailTemplateId || 'tpl-site-ready',
+    subject: job.emailSubject || undefined,
+    message: job.messagePrompt,
+    variables: {
+      name: lead.contactName || lead.business,
+      first_name: (lead.contactName || lead.business).split(/\s+/)[0],
+      company: lead.business,
+      site_name: lead.business,
+      site_url: liveUrl,
+      projectId: lead.projectId,
+      message: job.messagePrompt,
+    },
+    send: true,
+  });
+  await updateLead(lead.id, {
+    personId,
+    offerSent: true,
+    messageSent: true,
+    vercelUrl: liveUrl,
+    responded: lead.responded === 'none' ? 'waiting' : lead.responded,
+  });
+  return { to: lead.email, liveUrl, delivered: result.delivered };
+}
+
+async function runOutreach(job: WorkspaceAutomation): Promise<string> {
+  const parts: string[] = [];
+  if (job.prompt) {
+    const found = await generateWorkRows({
+      query: job.prompt,
+      kind: job.businessKind,
+      city: job.city,
+      country: job.country,
+      count: job.count,
+    });
+    parts.push(`Researched ${found.created.length} businesses.`);
+  }
+
+  const leads = await listLeads();
+  const needSite = leads.filter((lead) => !lead.projectId).slice(0, job.sitesPerRun);
+  let sites = 0;
+  for (const lead of needSite) {
+    await startSiteForLead(job, lead);
+    sites += 1;
+  }
+  if (sites) parts.push(`Started ${sites} Cursor site builds.`);
+
+  const latest = await listLeads();
+  const mail = await getPublicMailSettings();
+  let sent = 0;
+  if (mail.configured) {
+    const ready = latest.filter((lead) => lead.projectId && hasEmail(lead.email) && !lead.offerSent);
+    for (const lead of ready.slice(0, job.emailsPerRun)) {
+      const result = await sendOfferForLead(job, lead);
+      if (result?.delivered) sent += 1;
+    }
+    if (sent) parts.push(`Sent ${sent} offer emails with live preview links.`);
+  } else {
+    parts.push('Mail is not configured, so offers were not sent.');
+  }
+
+  if (!parts.length) {
+    return 'Nothing to do this run. Add a research prompt or wait for sites to finish before sending.';
+  }
+  return parts.join(' ');
 }
 
 function stillInWindow(job: WorkspaceAutomation, now: number): boolean {
@@ -169,6 +354,9 @@ export async function createAutomation(input: AutomationInput): Promise<Workspac
   });
   if (!job.prompt && job.kind === 'generate_work') {
     throw new Error('Describe what ChatGPT should find, for example “cafes in Tampere”.');
+  }
+  if (job.kind === 'outreach' && !job.prompt && !job.websitePrompt && !job.messagePrompt) {
+    throw new Error('Add a research prompt, website instructions, or an offer message.');
   }
   return enqueue(async () => {
     const rows = await readAll();

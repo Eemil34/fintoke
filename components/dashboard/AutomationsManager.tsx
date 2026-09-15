@@ -22,14 +22,19 @@ function fromLocalInput(value: string): string {
 
 const EMPTY_FORM = {
   name: '',
-  kind: 'generate_work' as AutomationKind,
+  kind: 'outreach' as AutomationKind,
   prompt: '',
-  count: 10,
+  websitePrompt: '',
+  messagePrompt: '',
+  emailSubject: '',
+  count: 8,
   city: '',
   country: '',
   businessKind: 'local businesses',
-  repeatTotal: 3,
-  intervalMinutes: 60,
+  sitesPerRun: 1,
+  emailsPerRun: 3,
+  repeatTotal: 8,
+  intervalMinutes: 30,
   windowStart: '',
   windowEnd: '',
 };
@@ -142,7 +147,7 @@ export default function AutomationsManager() {
     <div className="p-6">
       <DashboardPageHeader
         title="Automations"
-        description="Ask ChatGPT (OpenAI API) to add or fill work-table rows on a schedule. This does not log into ChatGPT.com or rotate Google accounts."
+        description="Research a field, hand the brief to the Cursor agent to build a site, then email the live preview. Uses the same workspace data as the Claude/ChatGPT connector."
       />
 
       {error ? <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
@@ -174,7 +179,7 @@ export default function AutomationsManager() {
       </div>
 
       <div className="mb-6 rounded-2xl border border-gray-200 bg-white p-5 space-y-4">
-        <p className="text-sm font-semibold text-gray-900">New scheduled task</p>
+        <p className="text-sm font-semibold text-gray-900">New outreach pipeline</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm text-gray-700">
             Name
@@ -192,25 +197,26 @@ export default function AutomationsManager() {
               onChange={(event) => setForm({ ...defaultsReady, kind: event.target.value as AutomationKind })}
               className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
             >
-              <option value="generate_work">Add businesses to the work table</option>
+              <option value="outreach">Research → build site → send offer</option>
+              <option value="generate_work">Research only (work table)</option>
               <option value="enrich_empty">Fill empty work-table rows</option>
             </select>
           </label>
         </div>
-        {defaultsReady.kind === 'generate_work' ? (
+        {defaultsReady.kind !== 'enrich_empty' ? (
           <>
             <label className="block text-sm text-gray-700">
-              What should ChatGPT find
+              Research
               <textarea
                 value={defaultsReady.prompt}
                 onChange={(event) => setForm({ ...defaultsReady, prompt: event.target.value })}
                 className="mt-1 h-24 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
-                placeholder="20 independent cafes in Tampere with public email or phone"
+                placeholder="Independent cafes in Tampere with a public email"
               />
             </label>
             <div className="grid gap-3 sm:grid-cols-4">
               <label className="text-sm text-gray-700">
-                Count each run
+                Find each run
                 <input
                   type="number"
                   min={1}
@@ -221,11 +227,12 @@ export default function AutomationsManager() {
                 />
               </label>
               <label className="text-sm text-gray-700">
-                Type
+                Field
                 <input
                   value={defaultsReady.businessKind}
                   onChange={(event) => setForm({ ...defaultsReady, businessKind: event.target.value })}
                   className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                  placeholder="cafes"
                 />
               </label>
               <label className="text-sm text-gray-700">
@@ -245,6 +252,65 @@ export default function AutomationsManager() {
                 />
               </label>
             </div>
+          </>
+        ) : null}
+        {defaultsReady.kind === 'outreach' ? (
+          <>
+            <label className="block text-sm text-gray-700">
+              Website instructions for Cursor
+              <textarea
+                value={defaultsReady.websitePrompt}
+                onChange={(event) => setForm({ ...defaultsReady, websitePrompt: event.target.value })}
+                className="mt-1 h-28 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                placeholder="One-page cafe site: warm photos, menu teaser, hours, booking, Finnish and English. Match their city."
+              />
+            </label>
+            <label className="block text-sm text-gray-700">
+              Offer message
+              <textarea
+                value={defaultsReady.messagePrompt}
+                onChange={(event) => setForm({ ...defaultsReady, messagePrompt: event.target.value })}
+                className="mt-1 h-28 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                placeholder="I built a draft site for you. If you like it we can publish this week. Reply and I will adjust anything."
+              />
+            </label>
+            <label className="block text-sm text-gray-700">
+              Email subject (optional)
+              <input
+                value={defaultsReady.emailSubject}
+                onChange={(event) => setForm({ ...defaultsReady, emailSubject: event.target.value })}
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                placeholder="Your website is ready, {{name}}"
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-sm text-gray-700">
+                Sites to start each run
+                <input
+                  type="number"
+                  min={1}
+                  max={3}
+                  value={defaultsReady.sitesPerRun}
+                  onChange={(event) => setForm({ ...defaultsReady, sitesPerRun: Number(event.target.value) })}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="text-sm text-gray-700">
+                Offers to send each run
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={defaultsReady.emailsPerRun}
+                  onChange={(event) => setForm({ ...defaultsReady, emailsPerRun: Number(event.target.value) })}
+                  className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                />
+              </label>
+            </div>
+            <p className="text-xs text-gray-500">
+              Each run researches, sends the brief to Cursor, then emails clients whose site job has finished.
+              Configure Resend in Emails first. Offers include the live preview link.
+            </p>
           </>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-4">
@@ -295,9 +361,11 @@ export default function AutomationsManager() {
           disabled={saving || !hasKey}
           className="rounded-lg bg-[#DE7356] px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {saving ? 'Saving…' : 'Schedule ChatGPT task'}
+          {saving ? 'Saving…' : 'Schedule pipeline'}
         </button>
-        {!hasKey ? <p className="text-xs text-amber-800">Save an OpenAI API key first.</p> : null}
+        {!hasKey && defaultsReady.kind !== 'enrich_empty' ? (
+          <p className="text-xs text-amber-800">Save an OpenAI API key first so research can run.</p>
+        ) : null}
       </div>
 
       {loading ? <p className="text-sm text-gray-500">Loading…</p> : null}
@@ -308,8 +376,12 @@ export default function AutomationsManager() {
               <div>
                 <p className="text-sm font-semibold text-gray-900">{job.name}</p>
                 <p className="mt-1 text-xs text-gray-500">
-                  {job.kind === 'generate_work' ? job.prompt : 'Fill empty work-table rows'} · {job.runCount}/
-                  {job.repeatTotal} runs · {job.status}
+                  {job.kind === 'outreach'
+                    ? `${job.prompt || 'Existing work-table rows'} → Cursor sites → offers`
+                    : job.kind === 'generate_work'
+                      ? job.prompt
+                      : 'Fill empty work-table rows'}{' '}
+                  · {job.runCount}/{job.repeatTotal} runs · {job.status}
                 </p>
                 <p className="mt-1 text-xs text-gray-500">
                   Window {formatDashboardDate(job.windowStart)} → {formatDashboardDate(job.windowEnd)}
