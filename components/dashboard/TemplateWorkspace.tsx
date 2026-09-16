@@ -107,7 +107,8 @@ export default function TemplateWorkspace({ templateId }: { templateId: string }
     if (!window.confirm(label)) return;
     setSaving(true);
     try {
-      await fetchDashboardJson(`/api/templates/${templateId}`, { method: 'DELETE' });
+      await fetchDashboardJson(`/api/templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' });
+      window.dispatchEvent(new Event('fintoke-templates-changed'));
       router.push('/dashboard/templates');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete');

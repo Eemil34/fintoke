@@ -154,18 +154,26 @@ export async function updateProject(
  * Delete project
  */
 export async function deleteProject(id: string): Promise<void> {
-  // Delete project directory
+  try {
+    const { previewManager } = await import('@/lib/services/preview');
+    await previewManager.stop(id);
+  } catch (error) {
+    console.warn(`[ProjectService] Could not stop preview before delete:`, error);
+  }
+
   const project = await getProjectById(id);
-  if (project?.repoPath) {
+  const dirs = new Set<string>();
+  if (project?.repoPath) dirs.add(project.repoPath);
+  dirs.add(path.join(projectsDir(), id));
+  for (const dir of dirs) {
     try {
-      await fs.rm(project.repoPath, { recursive: true, force: true });
+      await fs.rm(dir, { recursive: true, force: true });
     } catch (error) {
-      console.warn(`[ProjectService] Failed to delete project directory:`, error);
+      console.warn(`[ProjectService] Failed to delete project directory ${dir}:`, error);
     }
   }
 
-  // Delete project from database (related data automatically deleted via Cascade)
-  await prisma.project.delete({
+  await prisma.project.deleteMany({
     where: { id },
   });
 

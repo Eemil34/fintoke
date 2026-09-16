@@ -46,7 +46,8 @@ export default function TemplatesBrowser() {
     if (!window.confirm(`Remove “${name}” from templates?`)) return;
     setBusyId(id);
     try {
-      await fetchDashboardJson(`/api/templates/${id}`, { method: 'DELETE' });
+      await fetchDashboardJson(`/api/templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      window.dispatchEvent(new Event('fintoke-templates-changed'));
       await reload();
     } finally {
       setBusyId(null);

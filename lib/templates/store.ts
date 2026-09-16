@@ -106,10 +106,11 @@ async function loadSeedStore(): Promise<TemplateFileStore | null> {
 
 async function recoverVolumeTemplates(store: TemplateFileStore): Promise<TemplateFileStore> {
   const known = new Set(store.custom.map((template) => template.id));
+  const hidden = new Set(store.hidden);
   const volumeIds = await listVolumeSnapshotIds();
   let changed = false;
   for (const id of volumeIds) {
-    if (known.has(id) || BUILTIN_IDS.has(id) || RESERVED_IDS.has(id)) continue;
+    if (known.has(id) || hidden.has(id) || BUILTIN_IDS.has(id) || RESERVED_IDS.has(id)) continue;
     const name = id
       .replace(/[-_]+/g, ' ')
       .replace(/\b\w/g, (letter) => letter.toUpperCase())
@@ -140,13 +141,20 @@ async function recoverVolumeTemplates(store: TemplateFileStore): Promise<Templat
 async function readStore(): Promise<TemplateFileStore> {
   const store = await readStoreFile();
   const seed = await loadSeedStore();
+  const hidden = new Set([...(seed?.hidden ?? []), ...(store.hidden ?? [])]);
   const have = new Set(store.custom.map((template) => template.id));
-  const missingSeed = (seed?.custom ?? []).filter((template) => !have.has(template.id));
+  const missingSeed = (seed?.custom ?? []).filter(
+    (template) => !have.has(template.id) && !hidden.has(template.id) && !RESERVED_IDS.has(template.id),
+  );
   const next: TemplateFileStore = {
     overrides: { ...(seed?.overrides ?? {}), ...store.overrides },
-    custom: [...store.custom, ...missingSeed],
-    hidden: [...new Set([...(seed?.hidden ?? []), ...(store.hidden ?? [])])],
+    custom: store.custom.filter((template) => !hidden.has(template.id)),
+    hidden: [...hidden],
   };
+
+  if (missingSeed.length > 0) {
+    next.custom = [...next.custom, ...missingSeed];
+  }
 
   if (JSON.stringify(store) !== JSON.stringify(next)) {
     try {
@@ -280,7 +288,9 @@ export async function listManagedTemplates(): Promise<ManagedTemplate[]> {
   const seed = await loadSeedStore();
   const seedIds = new Set((seed?.custom ?? []).map((template) => template.id));
   const custom = await Promise.all(
-    store.custom.map((template) =>
+    store.custom
+      .filter((template) => !store.hidden.includes(template.id))
+      .map((template) =>
       toManaged(
         sanitizeWebsiteTemplate(template, { id: template.id }),
         'custom',
@@ -497,21 +507,19 @@ export async function deleteManagedTemplate(id: string): Promise<{ reset: boolea
   return enqueue(async () => {
     const store = await readStore();
     const customIndex = store.custom.findIndex((item) => item.id === id);
+    const isBuiltin = BUILTIN_IDS.has(id);
+    if (customIndex < 0 && !isBuiltin) {
+      throw new Error('Template not found');
+    }
+
     if (customIndex >= 0) {
       store.custom.splice(customIndex, 1);
-      await writeStore(store);
-      await deleteProjectSnapshot(id);
-      return { reset: false };
     }
-
-    if (BUILTIN_IDS.has(id)) {
-      if (!store.hidden.includes(id)) store.hidden.push(id);
-      delete store.overrides[id];
-      await writeStore(store);
-      return { reset: false };
-    }
-
-    throw new Error('Template not found');
+    if (!store.hidden.includes(id)) store.hidden.push(id);
+    delete store.overrides[id];
+    await writeStore(store);
+    await deleteProjectSnapshot(id);
+    return { reset: isBuiltin };
   });
 }
 
