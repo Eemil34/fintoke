@@ -10,6 +10,12 @@ import { mkdirpSync } from '@/lib/server/paths';
 
 const TEMPLATE_MARK = '.fintoke-from';
 
+const SNAPSHOT_FALLBACKS: Record<string, string[]> = {
+  'food-hospitality': ['restaurant-3', 'restaurant-2', 'restaurant-starter', 'restaurant-1'],
+  'health-wellness': ['medical-1', 'medicine-2', 'medicine-3'],
+  'saas-tech': ['saas-2', 'saas-1', 'saas-3-world'],
+};
+
 async function readTemplateMark(projectPath: string): Promise<string | null> {
   try {
     const value = (await fs.readFile(path.join(projectPath, TEMPLATE_MARK), 'utf8')).trim();
@@ -72,6 +78,19 @@ export async function copyWebsiteTemplate(
 
   const template = await getManagedTemplate(templateId);
   if (!template) return false;
+
+  for (const fallbackId of SNAPSHOT_FALLBACKS[template.category] || []) {
+    if (fallbackId === templateId) continue;
+    const copied = await copySnapshotToProject(fallbackId, projectPath, projectId, {
+      normalize: false,
+    });
+    if (copied) {
+      console.warn(
+        `[templates] "${templateId}" did not have a complete site; started from "${fallbackId}".`,
+      );
+      return true;
+    }
+  }
 
   if (template.kind === 'snapshot') {
     console.warn(

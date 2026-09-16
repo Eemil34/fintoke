@@ -39,7 +39,7 @@ async function isUserVolumeSnapshot(templateId: string): Promise<boolean> {
   } catch {
     return false;
   }
-  return directoryHasApp(dir);
+  return directoryHasRenderableSite(dir);
 }
 
 export async function markUserVolumeSnapshot(templateId: string): Promise<void> {
@@ -55,9 +55,11 @@ export function seedSnapshotDir(templateId: string): string {
 export async function resolveSnapshotDir(templateId: string): Promise<string | null> {
   // Explicit Cursor/user edits on the volume win. Otherwise git seed files win over
   // leftover lookalikes copied onto the Railway volume in an earlier deploy.
-  if (await isUserVolumeSnapshot(templateId)) return snapshotDir(templateId);
-  if (await directoryHasApp(seedSnapshotDir(templateId))) return seedSnapshotDir(templateId);
-  if (await directoryHasApp(snapshotDir(templateId))) return snapshotDir(templateId);
+  if (await directoryHasRenderableSite(snapshotDir(templateId)) && (await isUserVolumeSnapshot(templateId))) {
+    return snapshotDir(templateId);
+  }
+  if (await directoryHasRenderableSite(seedSnapshotDir(templateId))) return seedSnapshotDir(templateId);
+  if (await directoryHasRenderableSite(snapshotDir(templateId))) return snapshotDir(templateId);
   return null;
 }
 
@@ -103,6 +105,30 @@ export async function directoryHasApp(dir: string): Promise<boolean> {
   }
 }
 
+const PAGE_FILES = [
+  'app/page.tsx',
+  'app/page.jsx',
+  'app/page.ts',
+  'src/app/page.tsx',
+  'src/app/page.jsx',
+  'pages/index.tsx',
+  'pages/index.jsx',
+  'pages/index.js',
+];
+
+export async function directoryHasRenderableSite(dir: string): Promise<boolean> {
+  if (!(await directoryHasApp(dir))) return false;
+  for (const rel of PAGE_FILES) {
+    try {
+      await fs.access(path.join(dir, rel));
+      return true;
+    } catch {
+      // try next
+    }
+  }
+  return false;
+}
+
 export async function listVolumeSnapshotIds(): Promise<string[]> {
   let entries;
   try {
@@ -113,7 +139,7 @@ export async function listVolumeSnapshotIds(): Promise<string[]> {
   const ids: string[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    if (await directoryHasApp(path.join(SNAPSHOTS_DIR, entry.name))) {
+    if (await directoryHasRenderableSite(path.join(SNAPSHOTS_DIR, entry.name))) {
       ids.push(entry.name);
     }
   }

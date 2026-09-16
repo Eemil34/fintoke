@@ -108,6 +108,7 @@ function copyHeaders(upstream: Response, prefix: string, port: number) {
   const out = new Headers();
   upstream.headers.forEach((value, key) => {
     if (key === 'content-encoding' || key === 'transfer-encoding' || key === 'set-cookie') return;
+    if (key === 'content-disposition') return;
     if (key === 'location') {
       try {
         const location = new URL(value, `http://127.0.0.1:${port}`);
@@ -207,6 +208,27 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   const contentType = upstream.headers.get('content-type') || '';
   const out = copyHeaders(upstream, prefix, preview.port);
+  const documentRequest = !isAssetRequest(segments);
+  const looksLikePlainError =
+    !contentType.includes('text/html') &&
+    (upstream.status >= 500 || /internal server error/i.test(contentType));
+
+  if (documentRequest && (!upstream.ok || looksLikePlainError) && !contentType.includes('text/html')) {
+    const detail = (await upstream.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 400);
+    if (isProbe) {
+      return new Response('wait', {
+        status: 503,
+        headers: { 'retry-after': '2', 'cache-control': 'no-store' },
+      });
+    }
+    return previewPage(
+      upstream.status >= 500 ? 'Site is compiling' : 'Preview not ready',
+      detail && !/^internal server error$/i.test(detail)
+        ? detail
+        : 'The site process returned an error. This frame will open the page when Next.js finishes compiling.',
+      logs(),
+    );
+  }
 
   if (contentType.includes('text/html')) {
     const body = rewriteHtml(await upstream.text(), prefix, preview.port);

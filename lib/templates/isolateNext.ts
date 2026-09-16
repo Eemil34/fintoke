@@ -91,15 +91,17 @@ export async function ensureIsolatedNextConfig(projectPath: string): Promise<boo
 export async function writePreviewNextConfig(projectPath: string, assetPrefix: string): Promise<void> {
   const configPath = path.join(projectPath, 'next.config.js');
   const prefix = assetPrefix
-    ? `  assetPrefix: ${JSON.stringify(assetPrefix)},`
+    ? `  assetPrefix: ${JSON.stringify(assetPrefix)},\n`
     : '';
   const contents = `const path = require('path');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   outputFileTracingRoot: path.join(__dirname),
-${prefix}
-  ${GENERATED_IMAGES_CONFIG},
+  turbopack: {
+    root: path.join(__dirname),
+  },
+${prefix}  ${GENERATED_IMAGES_CONFIG},
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {
