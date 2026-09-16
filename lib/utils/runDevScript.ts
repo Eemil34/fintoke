@@ -108,6 +108,10 @@ function resolvePort(preferredPort) {
         WEB_PORT: String(port),
         NEXT_PUBLIC_APP_URL: url,
         NEXT_TELEMETRY_DISABLED: '1',
+        WATCHPACK_POLLING: 'true',
+        CHOKIDAR_USEPOLLING: 'true',
+        CHOKIDAR_INTERVAL: '800',
+        WATCHPACK_POLLING_INTERVAL: '800',
       },
     }
   );

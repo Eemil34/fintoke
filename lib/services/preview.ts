@@ -21,6 +21,10 @@ function previewChildEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     NODE_ENV: 'development',
     npm_config_production: 'false',
     NPM_CONFIG_PRODUCTION: 'false',
+    WATCHPACK_POLLING: 'true',
+    CHOKIDAR_USEPOLLING: 'true',
+    CHOKIDAR_INTERVAL: '800',
+    WATCHPACK_POLLING_INTERVAL: '800',
   });
 }
 
@@ -1085,6 +1089,41 @@ class PreviewManager {
   public getLogs(projectId: string): string[] {
     const processInfo = this.processes.get(projectId);
     return processInfo ? [...processInfo.logs] : [];
+  }
+
+  public async nudgeWatchers(projectId: string): Promise<void> {
+    const project = await getProjectById(projectId);
+    if (!project) return;
+    const root = await resolveProjectWorkspace(project, projectId);
+    const now = new Date();
+    const walk = async (dir: string, depth: number) => {
+      if (depth > 4) return;
+      let entries;
+      try {
+        entries = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (entry.name === 'node_modules' || entry.name === '.next' || entry.name === '.git') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full, depth + 1);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        if (!/\.(tsx|ts|jsx|js|css)$/.test(entry.name)) continue;
+        try {
+          await fs.utimes(full, now, now);
+        } catch {
+          // ignore
+        }
+      }
+    };
+    for (const folder of ['app', 'components', 'lib', 'src', 'styles']) {
+      await walk(path.join(root, folder), 0);
+    }
+    this.stampCache.delete(projectId);
   }
 
   public async sourceStamp(projectId: string): Promise<string> {

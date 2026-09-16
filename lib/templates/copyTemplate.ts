@@ -42,15 +42,16 @@ export async function restoreSnapshotIfMaterialized(
   if (!templateId) return false;
   if (!(await snapshotHasApp(templateId))) return false;
 
+  const alreadyCopied = await readTemplateMark(projectPath);
+  // Never replace a copied or generated site. Cursor edits live here.
+  if (alreadyCopied) return false;
+  if (await projectHasApp(projectPath)) return false;
+
   const materialized = await fs
     .access(path.join(projectPath, 'lib', 'site.ts'))
     .then(() => true)
     .catch(() => false);
-  const alreadyCopied = await readTemplateMark(projectPath);
-  // Catalog lookalikes still have lib/site.ts. Real sites and Cursor edits must stay.
-  if (!materialized && (alreadyCopied || (await projectHasApp(projectPath)))) {
-    return false;
-  }
+  if (!materialized) return false;
 
   const entries = await fs.readdir(projectPath).catch(() => [] as string[]);
   for (const name of entries) {

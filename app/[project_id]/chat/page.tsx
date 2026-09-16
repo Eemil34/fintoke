@@ -226,6 +226,7 @@ export default function ChatPage() {
   const [projectDescription, setProjectDescription] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
+  const [previewNonce, setPreviewNonce] = useState(() => Date.now());
   const agentWasRunningRef = useRef(false);
   const [tree, setTree] = useState<Entry[]>([]);
   const [content, setContent] = useState<string>('');
@@ -297,6 +298,12 @@ export default function ChatPage() {
   const [thinkingMode, setThinkingMode] = useState<boolean>(false);
   const [isUpdatingModel, setIsUpdatingModel] = useState<boolean>(false);
   const [currentRoute, setCurrentRoute] = useState<string>('/');
+  const previewFrameSrc = useMemo(() => {
+    const base = (previewUrl || '').split('?')[0];
+    if (!base) return '';
+    const route = currentRoute && currentRoute !== '/' ? currentRoute : '';
+    return `${base}${route}?v=${previewNonce}`;
+  }, [previewUrl, currentRoute, previewNonce]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const previewImageInputRef = useRef<HTMLInputElement>(null);
   const [previewUploading, setPreviewUploading] = useState(false);
@@ -828,6 +835,7 @@ const persistProjectPreferences = useCallback(
       const data = payload?.data ?? payload ?? {};
       const url = typeof data.url === 'string' ? data.url : `/preview/${encodeURIComponent(projectId)}`;
       setPreviewUrl(url);
+      setPreviewNonce(Date.now());
       if (!keepVisible) {
         setPreviewInitializationMessage('Waiting for the site to compile…');
         setCurrentRoute('/');
@@ -854,27 +862,26 @@ const persistProjectPreferences = useCallback(
 
   const refreshPreview = useCallback(() => {
     const base = (previewUrlRef.current || previewUrl || '').split('?')[0];
-    if (!base || !iframeRef.current) {
-      return;
-    }
-    const frame = iframeRef.current;
+    if (!base) return;
     void (async () => {
-      for (let i = 0; i < 40; i += 1) {
+      await fetch(`${API_BASE}/api/projects/${projectId}/preview/reload`, {
+        method: 'POST',
+      }).catch(() => null);
+      for (let i = 0; i < 25; i += 1) {
         try {
-          const probe = await fetch(`${base}?fintoke_probe=1`, { cache: 'no-store' });
+          const probe = await fetch(`${base}?fintoke_probe=1&v=${Date.now()}`, { cache: 'no-store' });
           if (probe.ok) {
-            const route =
-              currentRoute && currentRoute.startsWith('/') ? currentRoute : `/${currentRoute || ''}`;
-            frame.src = `${base}${route === '/' ? '' : route}`;
+            setPreviewNonce(Date.now());
             return;
           }
         } catch {
           // compiling
         }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 800));
       }
+      setPreviewNonce(Date.now());
     })();
-  }, [previewUrl, currentRoute]);
+  }, [previewUrl, projectId]);
 
 
   const stop = useCallback(async () => {
@@ -2184,6 +2191,31 @@ const persistProjectPreferences = useCallback(
     previousActiveState.current = hasActiveRequests;
   }, [hasActiveRequests, previewUrl, isStartingPreview, start]);
 
+  useEffect(() => {
+    if (!showPreview || !previewUrl || !projectId) return;
+    let lastStamp = '';
+    const tick = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/projects/${projectId}/preview/status`, {
+          cache: 'no-store',
+        });
+        const payload = await response.json().catch(() => null);
+        const stamp = payload?.data?.sourceStamp;
+        if (typeof stamp === 'string' && stamp) {
+          if (lastStamp && stamp !== lastStamp) {
+            setPreviewNonce(Date.now());
+          }
+          lastStamp = stamp;
+        }
+      } catch {
+        // preview process may still be starting
+      }
+    };
+    void tick();
+    const interval = window.setInterval(tick, isRunning ? 2000 : 4000);
+    return () => window.clearInterval(interval);
+  }, [showPreview, previewUrl, projectId, isRunning]);
+
   // Poll for file changes in code view
   useEffect(() => {
     if (!showPreview && selectedFile && !hasUnsavedChanges) {
@@ -2388,7 +2420,7 @@ const persistProjectPreferences = useCallback(
                     void start();
                     return;
                   }
-                  window.setTimeout(() => refreshPreview(), 800);
+                  window.setTimeout(() => refreshPreview(), 400);
                 }}
                 onSseFallbackActive={(active) => {
                   console.log('🔄 [SSE] Fallback status:', active);
@@ -2507,12 +2539,7 @@ const persistProjectPreferences = useCallback(
                       <div className="flex items-center gap-1.5">
                         <button 
                           className="h-9 w-9 flex items-center justify-center bg-gray-100 text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg transition-colors"
-                          onClick={() => {
-                            const iframe = document.querySelector('iframe');
-                            if (iframe) {
-                              iframe.src = iframe.src;
-                            }
-                          }}
+                          onClick={() => refreshPreview()}
                           title="Refresh preview"
                         >
                           <FaRedo size={14} />
@@ -2731,7 +2758,7 @@ const persistProjectPreferences = useCallback(
                       <iframe 
                         ref={iframeRef}
                         className="w-full h-full border-none bg-white "
-                        src={previewUrl}
+                        src={previewFrameSrc}
                         onError={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
@@ -2762,10 +2789,7 @@ const persistProjectPreferences = useCallback(
                         <button
                           className="flex items-center gap-2 mx-auto px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
                           onClick={() => {
-                            const iframe = document.querySelector('iframe');
-                            if (iframe) {
-                              iframe.src = iframe.src;
-                            }
+                            refreshPreview();
                             const overlay = document.getElementById('iframe-error-overlay');
                             if (overlay) overlay.style.display = 'none';
                           }}

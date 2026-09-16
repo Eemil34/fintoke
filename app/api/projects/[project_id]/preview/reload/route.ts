@@ -5,31 +5,25 @@ interface RouteContext {
   params: Promise<{ project_id: string }>;
 }
 
-export async function GET(
+export async function POST(
   _request: Request,
   { params }: RouteContext
 ) {
   try {
     const { project_id } = await params;
-    const preview = previewManager.getStatus(project_id);
+    await previewManager.nudgeWatchers(project_id);
     const sourceStamp = await previewManager.sourceStamp(project_id);
-
     return NextResponse.json({
       success: true,
-      data: {
-        ...preview,
-        sourceStamp,
-      },
+      data: { sourceStamp },
     });
   } catch (error) {
-    console.error('[API] Failed to fetch preview status:', error);
+    console.error('[API] Failed to refresh preview watchers:', error);
     return NextResponse.json(
       {
         success: false,
         error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to fetch preview status',
+          error instanceof Error ? error.message : 'Failed to refresh preview',
       },
       { status: 500 }
     );
