@@ -39,6 +39,7 @@ export interface Project {
   selectedModel?: string | null;
   fallbackEnabled?: boolean;
   websiteTemplateId?: string | null;
+  editingTemplateId?: string | null;
 }
 
 export interface ProjectSettings {

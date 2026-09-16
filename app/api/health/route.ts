@@ -6,7 +6,7 @@ import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 import { listEmails, listPeople } from '@/lib/services/workspace';
 
-const RELEASE = '2026-09-12-emails-json';
+const RELEASE = '2026-09-16-template-cursor-edit';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
@@ -103,6 +103,7 @@ export async function GET() {
           templates: fs.existsSync(path.join(dataDir, 'templates.json')),
           userTemplates: fs.existsSync(path.join(dataDir, 'templates-user.json')),
           serviceTokens: fs.existsSync(path.join(dataDir, 'service-tokens.json')),
+          automations: fs.existsSync(path.join(dataDir, 'automations.json')),
         },
       },
     },

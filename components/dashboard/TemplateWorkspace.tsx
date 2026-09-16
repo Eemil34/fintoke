@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import DashboardPageHeader from '@/components/dashboard/DashboardPageHeader';
+import EditWithCursorButton from '@/components/templates/EditWithCursorButton';
 import { fetchDashboardJson } from '@/lib/dashboard/client';
 import type { ManagedTemplate } from '@/lib/templates';
 import { TEMPLATE_CATEGORIES } from '@/lib/templates';
@@ -150,9 +151,14 @@ export default function TemplateWorkspace({ templateId }: { templateId: string }
         }
         actions={
           <div className="flex flex-wrap gap-2">
+            <EditWithCursorButton
+              templateId={template.id}
+              label="Edit with Cursor"
+              className="inline-flex items-center gap-1 rounded-xl bg-gray-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+            />
             <Link
                   href={`/studio?template=${encodeURIComponent(template.id)}`}
-              className="rounded-xl bg-gray-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-gray-800"
+              className="rounded-xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
               Use template
             </Link>

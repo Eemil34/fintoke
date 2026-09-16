@@ -384,20 +384,29 @@ export async function refreshSnapshotTemplate(
   return enqueue(async () => {
     const store = await readStore();
     const customIndex = store.custom.findIndex((item) => item.id === id);
-    if (customIndex < 0) {
-      throw new Error('Template not found');
+    await writeProjectSnapshot(id, projectPath);
+
+    if (customIndex >= 0) {
+      const current = store.custom[customIndex];
+      const merged = persistCustom({
+        ...current,
+        kind: 'snapshot',
+        sourceProjectId: projectId,
+      });
+      store.custom[customIndex] = merged;
+      await writeStore(store);
+      return toManaged(merged, 'custom', false, snapshotMeta(merged));
     }
 
-    await writeProjectSnapshot(id, projectPath);
-    const current = store.custom[customIndex];
-    const merged = persistCustom({
-      ...current,
-      kind: 'snapshot',
-      sourceProjectId: projectId,
-    });
-    store.custom[customIndex] = merged;
-    await writeStore(store);
-    return toManaged(merged, 'custom', false, snapshotMeta(merged));
+    const builtin = store.overrides[id] || WEBSITE_TEMPLATES.find((template) => template.id === id);
+    if (builtin) {
+      return toManaged(builtin, 'builtin', Boolean(store.overrides[id]), {
+        kind: 'snapshot',
+        sourceProjectId: projectId,
+      });
+    }
+
+    throw new Error('Template not found');
   });
 }
 

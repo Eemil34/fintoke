@@ -23,10 +23,29 @@ const IGNORE_NAMES = new Set([
   'coverage',
   '.DS_Store',
   'tsconfig.tsbuildinfo',
+  '.fintoke-user-snapshot',
 ]);
+
+const USER_SNAPSHOT_MARK = '.fintoke-user-snapshot';
 
 export function snapshotDir(templateId: string): string {
   return path.join(SNAPSHOTS_DIR, templateId);
+}
+
+async function isUserVolumeSnapshot(templateId: string): Promise<boolean> {
+  const dir = snapshotDir(templateId);
+  try {
+    await fs.access(path.join(dir, USER_SNAPSHOT_MARK));
+  } catch {
+    return false;
+  }
+  return directoryHasApp(dir);
+}
+
+export async function markUserVolumeSnapshot(templateId: string): Promise<void> {
+  const dir = snapshotDir(templateId);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, USER_SNAPSHOT_MARK), `${new Date().toISOString()}\n`);
 }
 
 export function seedSnapshotDir(templateId: string): string {
@@ -34,8 +53,9 @@ export function seedSnapshotDir(templateId: string): string {
 }
 
 export async function resolveSnapshotDir(templateId: string): Promise<string | null> {
-  // Git seed files always win over the Railway volume. An earlier deploy may have
-  // copied a generated lookalike into /app/data/templates/snapshots.
+  // Explicit Cursor/user edits on the volume win. Otherwise git seed files win over
+  // leftover lookalikes copied onto the Railway volume in an earlier deploy.
+  if (await isUserVolumeSnapshot(templateId)) return snapshotDir(templateId);
   if (await directoryHasApp(seedSnapshotDir(templateId))) return seedSnapshotDir(templateId);
   if (await directoryHasApp(snapshotDir(templateId))) return snapshotDir(templateId);
   return null;
@@ -157,6 +177,7 @@ export async function writeProjectSnapshot(templateId: string, projectPath: stri
   }
   await rewritePackageName(destination, templateId);
   await normalizeGeneratedProject(destination);
+  await markUserVolumeSnapshot(templateId);
   return count;
 }
 

@@ -222,6 +222,7 @@ export default function ChatPage() {
   } = useUserRequests({ projectId });
   
   const [projectName, setProjectName] = useState<string>('');
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [projectDescription, setProjectDescription] = useState<string>('');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const previewUrlRef = useRef<string | null>(null);
@@ -1498,6 +1499,7 @@ const persistProjectPreferences = useCallback(
       if (!r.ok) {
         setProjectMissing(true);
         setProjectName('Site not found');
+        setEditingTemplateId(null);
         setProjectDescription('');
         setHasInitialPrompt(false);
         setProjectStatus('failed');
@@ -1527,6 +1529,11 @@ const persistProjectPreferences = useCallback(
       });
 
       setProjectName(project.name || `Project ${projectId.slice(0, 8)}`);
+      setEditingTemplateId(
+        typeof project?.editingTemplateId === 'string' && project.editingTemplateId
+          ? project.editingTemplateId
+          : null,
+      );
 
       const projectCli = sanitizeCli(rawPreferredCli || preferredCli);
       if (rawPreferredCli) {
@@ -1572,6 +1579,7 @@ const persistProjectPreferences = useCallback(
     } catch (error) {
       console.warn('Failed to load project info:', error instanceof Error ? error.message : error);
       setProjectName(`Project ${projectId.slice(0, 8)}`);
+      setEditingTemplateId(null);
       setProjectDescription('');
       setHasInitialPrompt(false);
       localStorage.setItem(`project_${projectId}_hasInitialPrompt`, 'false');
@@ -2559,7 +2567,11 @@ const persistProjectPreferences = useCallback(
                     <ImageIcon size={14} />
                     {previewUploading ? 'Uploading…' : 'Images'}
                   </button>
-                  <SaveAsTemplateButton projectId={projectId} projectName={projectName} />
+                  <SaveAsTemplateButton
+                    projectId={projectId}
+                    projectName={projectName}
+                    updateTemplateId={editingTemplateId}
+                  />
                   {/* Settings Button */}
                   <button 
                     onClick={() => setShowGlobalSettings(true)}

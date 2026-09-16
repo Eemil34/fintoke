@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import DashboardPageHeader from '@/components/dashboard/DashboardPageHeader';
+import EditWithCursorButton from '@/components/templates/EditWithCursorButton';
 import { fetchDashboardJson } from '@/lib/dashboard/client';
 import { useTemplates } from '@/hooks/useTemplates';
 import {
@@ -162,6 +163,7 @@ export default function TemplatesBrowser() {
                 >
                   Open
                 </Link>
+                <EditWithCursorButton templateId={template.id} />
                 <Link
                   href={`/studio?template=${encodeURIComponent(template.id)}`}
                   className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50"

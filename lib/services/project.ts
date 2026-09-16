@@ -61,6 +61,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
       settings: serializeProjectSettings(undefined, {
         websiteTemplateId: input.websiteTemplateId,
         cloneUrl: input.cloneUrl,
+        editingTemplateId: input.editingTemplateId,
       }),
       lastActiveAt: new Date(),
       previewUrl: null,

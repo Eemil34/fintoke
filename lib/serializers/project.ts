@@ -1,6 +1,6 @@
 import type { Project as ProjectEntity } from '@/types/backend';
 import type { Project } from '@/types';
-import { getWebsiteTemplateId } from '@/lib/templates/settings';
+import { getEditingTemplateId, getWebsiteTemplateId } from '@/lib/templates/settings';
 
 export function serializeProject(project: ProjectEntity): Project {
   return {
@@ -18,6 +18,7 @@ export function serializeProject(project: ProjectEntity): Project {
     selectedModel: project.selectedModel ?? null,
     fallbackEnabled: project.fallbackEnabled,
     websiteTemplateId: getWebsiteTemplateId(project.settings),
+    editingTemplateId: getEditingTemplateId(project.settings),
   };
 }
 

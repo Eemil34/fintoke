@@ -9,22 +9,48 @@ export default function SaveAsTemplateButton({
   projectId,
   projectName,
   compact = false,
+  updateTemplateId,
 }: {
   projectId: string;
   projectName?: string;
   compact?: boolean;
+  updateTemplateId?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(projectName || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<ManagedTemplate | null>(null);
+  const [updated, setUpdated] = useState(false);
+
+  const buttonClass = compact
+    ? 'rounded-lg px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+    : 'h-9 px-3 rounded-lg bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200';
 
   const openModal = () => {
     setName(projectName || '');
     setError(null);
     setSaved(null);
     setOpen(true);
+  };
+
+  const saveToExisting = async () => {
+    if (!updateTemplateId) return;
+    setSaving(true);
+    setError(null);
+    setUpdated(false);
+    try {
+      await fetchDashboardJson<ManagedTemplate>(`/api/templates/${updateTemplateId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ projectId }),
+      });
+      setUpdated(true);
+      window.dispatchEvent(new Event('fintoke-templates-changed'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save template');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const save = async () => {
@@ -47,16 +73,33 @@ export default function SaveAsTemplateButton({
     }
   };
 
+  if (updateTemplateId) {
+    return (
+      <span className="inline-flex items-center gap-2">
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => void saveToExisting()}
+          className={
+            compact
+              ? buttonClass
+              : 'h-9 px-3 rounded-lg bg-gray-900 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50'
+          }
+          title="Write Cursor edits back onto this template"
+        >
+          {saving ? 'Saving…' : updated ? 'Saved to template' : 'Save to template'}
+        </button>
+        {error ? <span className="max-w-[12rem] truncate text-[11px] text-red-600">{error}</span> : null}
+      </span>
+    );
+  }
+
   return (
     <>
       <button
         type="button"
         onClick={openModal}
-        className={
-          compact
-            ? 'rounded-lg px-2 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-            : 'h-9 px-3 rounded-lg bg-gray-100 text-sm font-medium text-gray-700 hover:bg-gray-200'
-        }
+        className={buttonClass}
       >
         Save as template
       </button>

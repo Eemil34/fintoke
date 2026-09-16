@@ -4,6 +4,12 @@ import { parsePublicHttpUrl } from './cloneUrl';
 export interface ProjectTemplateSettings {
   websiteTemplateId?: string;
   cloneUrl?: string;
+  editingTemplateId?: string;
+}
+
+export function getEditingTemplateId(raw?: string | null): string | null {
+  const id = parseProjectSettings(raw).editingTemplateId;
+  return id ? id : null;
 }
 
 export function parseProjectSettings(raw?: string | null): ProjectTemplateSettings {

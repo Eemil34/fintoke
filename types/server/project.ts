@@ -30,6 +30,7 @@ export interface CreateProjectInput {
   description?: string;
   websiteTemplateId?: string;
   cloneUrl?: string;
+  editingTemplateId?: string;
 }
 
 /**
