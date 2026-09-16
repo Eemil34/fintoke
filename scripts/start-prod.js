@@ -66,6 +66,13 @@ const dataDir = volume || process.env.SETTINGS_DIR || path.join(root, 'data');
 const projects = path.join(dataDir, 'projects');
 fs.mkdirSync(projects, { recursive: true });
 
+try {
+  const { reclaimVolume } = require('./reclaim-volume');
+  reclaimVolume(dataDir, root);
+} catch (error) {
+  console.error('[start-prod] Volume cleanup failed:', error);
+}
+
 process.env.SETTINGS_DIR = dataDir;
 process.env.PROJECTS_DIR = projects;
 

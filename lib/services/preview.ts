@@ -13,14 +13,15 @@ import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir } from '@/lib/server/paths';
 import { resolveAndPersistProjectWorkspace, resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
+import { npmInstallEnv, reclaimVolumeSpace } from '@/lib/server/volumeCleanup';
 
 function previewChildEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  return {
+  return npmInstallEnv({
     ...env,
     NODE_ENV: 'development',
     npm_config_production: 'false',
     NPM_CONFIG_PRODUCTION: 'false',
-  };
+  });
 }
 
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
@@ -656,6 +657,14 @@ class PreviewManager {
 
     const hadNodeModules = await directoryExists(path.join(projectPath, 'node_modules'));
 
+    await reclaimVolumeSpace([
+      projectId,
+      ...[...this.processes.keys()].filter((id) => {
+        const status = this.processes.get(id)?.status;
+        return status === 'starting' || status === 'running';
+      }),
+    ]);
+
     const collectFromChunk = (chunk: Buffer | string) => {
       chunk
         .toString()
@@ -672,7 +681,7 @@ class PreviewManager {
           if (!hasNodeModules) {
             await runInstallWithPreferredManager(
               projectPath,
-              { ...process.env },
+              npmInstallEnv(process.env),
               collectFromChunk
             );
           }
@@ -1043,6 +1052,9 @@ class PreviewManager {
     }
 
     this.processes.delete(projectId);
+    void reclaimVolumeSpace([...this.processes.keys()]).catch((error) => {
+      console.warn('[PreviewManager] Could not free volume space after stop:', error);
+    });
     await updateProject(projectId, {
       previewUrl: null,
       previewPort: null,

@@ -10,6 +10,7 @@ import { normalizeModelId, getDefaultModelForCli } from '@/lib/constants/cliMode
 import { copyWebsiteTemplate } from '@/lib/templates/copyTemplate';
 import { serializeProjectSettings } from '@/lib/templates/settings';
 import { ensureWritableDir, projectsDir } from '@/lib/server/paths';
+import { isNoSpaceError, reclaimVolumeSpace } from '@/lib/server/volumeCleanup';
 
 /**
  * Retrieve all projects
@@ -44,8 +45,18 @@ export async function getProjectById(id: string): Promise<Project | null> {
  * Create new project
  */
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  const root = await ensureWritableDir(projectsDir());
-  const projectPath = await ensureWritableDir(path.join(root, input.project_id));
+  await reclaimVolumeSpace();
+  let root: string;
+  let projectPath: string;
+  try {
+    root = await ensureWritableDir(projectsDir());
+    projectPath = await ensureWritableDir(path.join(root, input.project_id));
+  } catch (error) {
+    if (!isNoSpaceError(error)) throw error;
+    await reclaimVolumeSpace();
+    root = await ensureWritableDir(projectsDir());
+    projectPath = await ensureWritableDir(path.join(root, input.project_id));
+  }
 
   const project = await prisma.project.create({
     data: {
@@ -86,10 +97,15 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
         );
       }
     } catch (error) {
-      console.error(
-        `[ProjectService] Template copy failed for ${input.project_id}; project was still created:`,
-        error,
-      );
+      if (isNoSpaceError(error)) {
+        await reclaimVolumeSpace([input.project_id]);
+        await copyWebsiteTemplate(projectPath, input.websiteTemplateId, input.project_id);
+      } else {
+        console.error(
+          `[ProjectService] Template copy failed for ${input.project_id}; project was still created:`,
+          error,
+        );
+      }
     }
   }
 

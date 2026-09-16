@@ -2,11 +2,12 @@ import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 import { projectsDir, volumeDataDir, volumeHeartbeat, writableDataDir } from '@/lib/server/paths';
+import { volumeDiskInfo } from '@/lib/server/volumeCleanup';
 import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 import { listEmails, listPeople } from '@/lib/services/workspace';
 
-const RELEASE = '2026-09-16-mkdir-projects';
+const RELEASE = '2026-09-16-volume-enospc';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
@@ -68,6 +69,8 @@ export async function GET() {
     console.error('[health] Could not read saved emails:', error);
   }
 
+  const disk = volumeDiskInfo(dataDir);
+
   return NextResponse.json(
     {
       ok: true,
@@ -86,6 +89,7 @@ export async function GET() {
         emailCount,
         peopleCount,
         volumeTemplates,
+        disk,
         databaseUrl: (process.env.DATABASE_URL || '').replace(/\/\/.*@/, '//***@'),
         secrets: {
           github,
