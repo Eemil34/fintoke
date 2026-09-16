@@ -6,6 +6,7 @@ import { getWebsiteTemplateId } from './settings';
 import { copySnapshotToProject, resolveSnapshotDir, snapshotHasApp } from './snapshot';
 import { scaffoldBasicNextApp } from '@/lib/utils/scaffold';
 import { normalizeGeneratedProject } from './isolateNext';
+import { mkdirpSync } from '@/lib/server/paths';
 
 const TEMPLATE_MARK = '.fintoke-from';
 
@@ -62,7 +63,7 @@ export async function copyWebsiteTemplate(
   templateId: string,
   projectId: string,
 ): Promise<boolean> {
-  await fs.mkdir(projectPath, { recursive: true });
+  mkdirpSync(projectPath);
 
   const fromSnapshot = await copySnapshotToProject(templateId, projectPath, projectId, {
     normalize: false,

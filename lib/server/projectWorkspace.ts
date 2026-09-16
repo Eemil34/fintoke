@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { projectsDir } from '@/lib/server/paths';
+import { ensureWritableDir, projectsDir } from '@/lib/server/paths';
 import { copyDirectory, directoryHasApp } from '@/lib/templates/snapshot';
 
 export function projectWorkspaceFallback(projectId: string): string {
@@ -23,13 +23,13 @@ export async function resolveProjectWorkspace(
 
   const raw = project.repoPath?.trim();
   if (!raw) {
-    await fs.mkdir(fallback, { recursive: true });
+    await ensureWritableDir(fallback);
     return fallback;
   }
 
   const resolved = path.isAbsolute(raw) ? raw : path.resolve(projectsDir(), raw);
   if (isInsideProjectsDir(resolved)) {
-    await fs.mkdir(resolved, { recursive: true });
+    await ensureWritableDir(resolved);
     return resolved;
   }
 
@@ -44,7 +44,7 @@ export async function resolveProjectWorkspace(
   console.warn(
     `[workspace] repoPath is not on this server (${resolved}); using ${fallback}`,
   );
-  await fs.mkdir(fallback, { recursive: true });
+  await ensureWritableDir(fallback);
   return fallback;
 }
 

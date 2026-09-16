@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { normalizeGeneratedProject } from './isolateNext';
-import { dataFile } from '@/lib/server/paths';
+import { dataFile, mkdirpSync } from '@/lib/server/paths';
 
 const SNAPSHOTS_DIR = dataFile('templates', 'snapshots');
 const SEED_SNAPSHOTS_DIR = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
@@ -125,7 +125,7 @@ export async function snapshotHasApp(templateId: string): Promise<boolean> {
 }
 
 export async function copyDirectory(source: string, destination: string): Promise<number> {
-  await fs.mkdir(destination, { recursive: true });
+  mkdirpSync(destination);
   let count = 0;
   let entries;
   try {
@@ -142,10 +142,11 @@ export async function copyDirectory(source: string, destination: string): Promis
     if (shouldIgnore(entry.name)) continue;
     const from = path.join(source, entry.name);
     const to = path.join(destination, entry.name);
+    if (entry.isSymbolicLink()) continue;
     if (entry.isDirectory()) {
       count += await copyDirectory(from, to);
     } else if (entry.isFile()) {
-      await fs.mkdir(path.dirname(to), { recursive: true });
+      mkdirpSync(path.dirname(to));
       await fs.copyFile(from, to);
       await fs.chmod(to, 0o644).catch(() => undefined);
       count += 1;
@@ -189,7 +190,7 @@ export async function copySnapshotToProject(
 ): Promise<boolean> {
   const source = await resolveSnapshotDir(templateId);
   if (!source) return false;
-  await fs.mkdir(projectPath, { recursive: true });
+  mkdirpSync(projectPath);
   await copyDirectory(source, projectPath);
   await rewritePackageName(projectPath, projectId);
   await fs.writeFile(path.join(projectPath, '.fintoke-from'), `${templateId}\n`);
