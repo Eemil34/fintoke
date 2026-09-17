@@ -5,8 +5,9 @@ import type { WorkspaceLead } from '@/types/leads';
 
 const SKIP_DIR = new Set(['node_modules', '.next', '.git', 'dist', 'build', '.turbo', 'public', 'assets']);
 const TEXT_FILES = new Set(['.ts', '.tsx', '.js', '.jsx', '.css']);
-const IMAGE_HINT = /unsplash|photo-|images\.unsplash|\/uploads\/|SiteImage|imageAlt|image:|fallback\.svg|src=\{|src="/i;
-const SKIP_STRING = /unsplash\(|photo-[a-z0-9-]+|https?:\/\/|_next\/|mailto:|className|from ['"]|\/images\/|\/uploads\//i;
+const IMAGE_HINT = /unsplash|photo-[a-z0-9-]+|images\.unsplash|\/uploads\/|fallback\.svg/i;
+const SKIP_STRING = /unsplash\(|https?:\/\/|_next\/|mailto:|className|from ['"]|\/images\/|\/uploads\//i;
+const PLACEHOLDER_BRAND = 'Coral Cove|Kaarna|Careevo|Northlane|Helixline|Lumenlist|Fold & Signal';
 
 type FastFillLead = Pick<
   WorkspaceLead,
@@ -166,21 +167,22 @@ function stripFence(text: string): string {
     .trim();
 }
 
+function isVisitorCopy(value: string): boolean {
+  if (IMAGE_HINT.test(value) || SKIP_STRING.test(value)) return false;
+  if (/^(flex|grid|hidden|block|inline|absolute|relative|sticky|items-|justify-|px-|py-|pt-|pb-|pl-|pr-|mt-|mb-|ml-|mr-|mx-|my-|w-|h-|min-|max-|text-|bg-|rounded|border|shadow|gap-|col-|row-|sm:|md:|lg:|xl:|2xl:)/.test(value)) {
+    return false;
+  }
+  if (value.length < 4) return false;
+  return /[A-Za-zÀ-ÿ]/.test(value);
+}
+
 function isCopyFile(file: string, source: string): boolean {
   const base = path.basename(file);
   if (['SiteImage.tsx', 'imageLibrary.ts', 'ImageGuard.tsx', 'instrumentation-client.ts'].includes(base)) {
     return false;
   }
   if (base === 'site.ts' || base === 'content.ts' || base === 'copy.ts') return true;
-  if (/export const site\s*=/.test(source)) return true;
-  if (
-    (base === 'page.tsx' || /HomeSections|PageBody|Hero|PageHero/.test(base)) &&
-    source.length < 90_000 &&
-    (source.match(/(['"`])(?:\\.|[^\\])*?\1/g) || []).length > 20
-  ) {
-    return true;
-  }
-  return false;
+  return /export const site\s*=/.test(source) && source.length < 28_000;
 }
 
 export function isCopyOnlyInstruction(instruction: string): boolean {
@@ -196,7 +198,7 @@ async function completeFillText(prompt: string): Promise<string> {
     throw new Error('Add an OpenAI API key on Automations (sk-…) or set OPENAI_API_KEY.');
   }
   if (openai) {
-    const models = ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1-mini'];
+    const models = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'];
     let lastError = 'ChatGPT request failed';
     for (const model of models) {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -384,6 +386,56 @@ function fallbackReplacements(lead: FastFillLead, strings: string[]): Record<str
   return next;
 }
 
+async function fillStringBatches(
+  strings: string[],
+  brief: string,
+): Promise<{ replacements: Record<string, string>; mapsQuery: string; accent: string; address: string }> {
+  const replacements: Record<string, string> = {};
+  let mapsQuery = '';
+  let accent = '';
+  let address = '';
+  const visitor = strings.filter(isVisitorCopy);
+  const chunkSize = 22;
+  for (let index = 0; index < visitor.length; index += chunkSize) {
+    const chunk = visitor.slice(index, index + chunkSize);
+    try {
+      const parsed = await completeFillJson(`Business to put on this template (keep photos exactly as they are):
+${brief}
+
+Rewrite EVERY string in this list. Keys must match exactly. Do not skip menu items, about paragraphs, or headlines.
+${JSON.stringify(chunk)}
+
+Return JSON:
+{
+  "replacements": { "exact current string": "new string for this business" },
+  "address": "street and city if known, else city and country",
+  "mapsQuery": "best Google Maps search query",
+  "primaryColor": "#RRGGBB or empty"
+}`);
+      const raw = parsed.replacements && typeof parsed.replacements === 'object' ? parsed.replacements : {};
+      for (const [from, to] of Object.entries(raw as Record<string, unknown>)) {
+        const next = asString(to);
+        if (from && next && from !== next) replacements[from] = next;
+      }
+      mapsQuery = asString(parsed.mapsQuery) || asString(parsed.address) || mapsQuery;
+      accent = asString(parsed.primaryColor) || accent;
+      address = asString(parsed.address) || address;
+    } catch (error) {
+      console.warn('[fastFill] String batch failed:', error);
+    }
+  }
+  return { replacements, mapsQuery, accent, address };
+}
+
+function sweepPlaceholders(source: string, business: string, city: string): string {
+  if (!business) return source;
+  let next = source.replace(new RegExp(PLACEHOLDER_BRAND, 'g'), business);
+  if (city) {
+    next = next.replace(/Park Avenue, 60146 NY, USA/g, city);
+  }
+  return next;
+}
+
 export async function fastFillProjectFromLead(options: {
   projectPath: string;
   lead: FastFillLead;
@@ -391,18 +443,6 @@ export async function fastFillProjectFromLead(options: {
   country?: string;
 }): Promise<{ replacements: number; mapsQuery: string }> {
   const files = await listTextFiles(options.projectPath);
-  const combined = (
-    await Promise.all(
-      files.map(async (file) => {
-        try {
-          return await fs.readFile(file, 'utf8');
-        } catch {
-          return '';
-        }
-      }),
-    )
-  ).join('\n');
-  const strings = collectCopyStrings(combined).slice(0, 160);
   const brief = JSON.stringify(
     {
       name: options.lead.business,
@@ -423,66 +463,52 @@ export async function fastFillProjectFromLead(options: {
     2,
   );
 
-  let replacements = fallbackReplacements(options.lead, strings);
-  let mapsQuery = [options.lead.business, options.lead.city, options.country].filter(Boolean).join(', ');
-  let accent = '';
-
-  try {
-    const parsed = await completeFillJson(`Business to put on this template (keep photos exactly as they are):
-${brief}
-
-Current visible template strings:
-${JSON.stringify(strings)}
-
-Return JSON:
-{
-  "replacements": { "exact current string": "new string for this business" },
-  "address": "street and city if known, else city and country",
-  "mapsQuery": "best Google Maps search query",
-  "primaryColor": "#RRGGBB or empty",
-  "phone": "",
-  "email": ""
-}
-
-Rules:
-- Include a replacement for every customer-facing string (hero, about, menu titles and descriptions, events, testimonials, CTAs, hours, address, footer).
-- Invent plausible menu items for this business. Do not leave Coral Cove, Park Avenue, or template dish names.
-- Do not invent a street address if you do not have one; use city and country.
-- Keep string keys EXACTLY as given.
-- Never output Unsplash IDs or image URLs.
-- primaryColor only if a small accent shift is useful; otherwise empty.`);
-    const raw = parsed.replacements && typeof parsed.replacements === 'object' ? parsed.replacements : {};
-    for (const [from, to] of Object.entries(raw as Record<string, unknown>)) {
-      const next = asString(to);
-      if (from && next) replacements[from] = next;
+  for (const file of files) {
+    if (!file.endsWith('site.ts') && !file.endsWith('content.ts') && !file.endsWith('copy.ts')) continue;
+    try {
+      const original = await fs.readFile(file, 'utf8');
+      if (!isCopyFile(file, original)) continue;
+      const rewritten = await rewriteCopyFile(original, brief);
+      if (rewritten && rewritten !== original) {
+        await fs.writeFile(file, rewritten);
+      }
+    } catch (error) {
+      console.warn('[fastFill] File rewrite failed, using string replacements:', file, error);
     }
-    mapsQuery = asString(parsed.mapsQuery) || asString(parsed.address) || mapsQuery;
-    accent = asString(parsed.primaryColor);
-    const address = asString(parsed.address);
-    if (address) {
-      for (const value of strings) {
-        if (/address|avenue|street|katu|tie|plaza|ny, usa/i.test(value) && value.length < 90) {
-          replacements[value] = address;
+  }
+
+  const afterRewrite = (
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          return await fs.readFile(file, 'utf8');
+        } catch {
+          return '';
         }
+      }),
+    )
+  ).join('\n');
+  const leftover = collectCopyStrings(afterRewrite).slice(0, 180);
+  const batched = await fillStringBatches(leftover, brief);
+  const replacements = {
+    ...fallbackReplacements(options.lead, leftover),
+    ...batched.replacements,
+  };
+  let mapsQuery = batched.mapsQuery || [options.lead.business, options.lead.city, options.country].filter(Boolean).join(', ');
+  const accent = batched.accent;
+  if (batched.address) {
+    for (const value of leftover) {
+      if (/address|avenue|street|katu|tie|plaza|ny, usa/i.test(value) && value.length < 90) {
+        replacements[value] = batched.address;
       }
     }
-  } catch (error) {
-    console.warn('[fastFill] Model fill failed, using name/contact fallback:', error);
   }
 
   const embed = mapsQuery ? mapsEmbed(mapsQuery) : '';
   let writes = 0;
   for (const file of files) {
     const original = await fs.readFile(file, 'utf8');
-    let next = original;
-    if (isCopyFile(file, original)) {
-      try {
-        const rewritten = await rewriteCopyFile(original, brief);
-        if (rewritten) next = rewritten;
-      } catch (error) {
-        console.warn('[fastFill] File rewrite failed, using string replacements:', file, error);
-      }
-    }
+    let next = sweepPlaceholders(original, options.lead.business, options.lead.city);
     next = applyReplacements(next, replacements);
     next = rewriteMaps(next, mapsQuery);
     if (path.basename(file) === 'site.ts') {
@@ -573,6 +599,8 @@ export async function rewriteExistingProjectCopy(options: {
     (options.prompt || '').trim() ||
     `Rewrite every visitor-facing string for ${project.name}. Keep photos, files, and layout.`;
   const projectPath = await resolveAndPersistProjectWorkspace(project, options.projectId);
+  const { previewManager } = await import('@/lib/services/preview');
+  const previewBoot = previewManager.start(options.projectId);
   const filled = await fastFillProjectFromLead({
     projectPath,
     lead: leadFromSiteBrief({
@@ -589,9 +617,11 @@ export async function rewriteExistingProjectCopy(options: {
     websitePrompt: prompt,
     country: options.country,
   });
-  const { previewManager } = await import('@/lib/services/preview');
-  void previewManager.start(options.projectId).catch((error) => {
+  await previewBoot.catch((error) => {
     console.warn(`[fastFill] Preview start failed for ${options.projectId}:`, error);
+  });
+  await previewManager.ensureReady(options.projectId).catch((error) => {
+    console.warn(`[fastFill] Preview not ready yet for ${options.projectId}:`, error);
   });
   return filled;
 }

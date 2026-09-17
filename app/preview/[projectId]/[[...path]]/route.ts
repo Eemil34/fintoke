@@ -26,32 +26,37 @@ function previewPage(title: string, message: string, logs: string[]) {
 <html lang="en" data-fintoke-shell="1">
 <head>
   <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="3" />
   <title>${escapeHtml(title)}</title>
   <style>
-    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; min-height: 100vh; background: #f8fafc; color: #0f172a; }
-    main { max-width: 720px; margin: 0 auto; padding: 32px 20px; }
-    pre { text-align: left; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 12px; overflow: auto; font-size: 12px; min-height: 80px; }
-    p { color: #475569; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; min-height: 100vh; background: #111827; color: #f8fafc; display: flex; align-items: center; justify-content: center; }
+    main { max-width: 640px; margin: 0 auto; padding: 32px 20px; text-align: center; }
+    .spin { width: 36px; height: 36px; border: 3px solid #334155; border-top-color: #DE7356; border-radius: 50%; margin: 0 auto 20px; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    pre { text-align: left; background: #0f172a; color: #cbd5e1; padding: 12px; border-radius: 12px; overflow: auto; font-size: 11px; min-height: 72px; }
+    p { color: #94a3b8; line-height: 1.5; }
   </style>
 </head>
 <body>
   <main>
+    <div class="spin" aria-hidden="true"></div>
     <h1>${escapeHtml(title)}</h1>
     <p>${escapeHtml(message)}</p>
+    <p>This page refreshes by itself. First open after email can take about a minute while the site installs.</p>
     <pre>${logBlock || 'Waiting for preview logs…'}</pre>
   </main>
   <script>
     (function () {
-      var path = location.pathname;
+      var path = location.pathname + location.search.replace(/[?&]fintoke_probe=1/, '');
       function tick() {
-        fetch(path + (path.indexOf('?') >= 0 ? '&' : '?') + 'fintoke_probe=1', { cache: 'no-store' })
+        fetch(location.pathname + (location.pathname.indexOf('?') >= 0 ? '&' : '?') + 'fintoke_probe=1', { cache: 'no-store' })
           .then(function (r) {
             if (r.ok) location.replace(path);
-            else setTimeout(tick, 1500);
+            else setTimeout(tick, 1200);
           })
-          .catch(function () { setTimeout(tick, 1500); });
+          .catch(function () { setTimeout(tick, 1200); });
       }
-      setTimeout(tick, 1200);
+      setTimeout(tick, 800);
     })();
   </script>
 </body>

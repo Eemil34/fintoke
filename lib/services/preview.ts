@@ -742,6 +742,22 @@ class PreviewManager {
     return run;
   }
 
+  public async ensureReady(projectId: string, timeoutMs = 150_000): Promise<PreviewInfo> {
+    const started = await this.start(projectId);
+    const port = this.getStatus(projectId).port || started.port;
+    if (!port) return this.getStatus(projectId);
+    await waitForPreviewReady(
+      previewInternalUrl(projectId, port),
+      (chunk) => {
+        const live = this.processes.get(projectId);
+        if (live) live.logs.push(typeof chunk === 'string' ? chunk : chunk.toString());
+      },
+      timeoutMs,
+      1500,
+    );
+    return this.getStatus(projectId);
+  }
+
   private async startPreview(projectId: string): Promise<PreviewInfo> {
     const project = await getProjectById(projectId);
     if (!project) {

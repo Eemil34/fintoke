@@ -88,6 +88,8 @@ export async function POST(request: NextRequest) {
     let filled = null;
     if (fast) {
       const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
+      const { previewManager } = await import('@/lib/services/preview');
+      const previewBoot = previewManager.start(projectId);
       filled = await fastFillProjectFromLead({
         projectPath,
         lead: leadFromSiteBrief({
@@ -106,9 +108,11 @@ export async function POST(request: NextRequest) {
         }),
         websitePrompt: prompt,
       });
-      const { previewManager } = await import('@/lib/services/preview');
-      void previewManager.start(projectId).catch((error) => {
+      await previewBoot.catch((error) => {
         console.warn(`[sites] Fast-track preview start failed for ${projectId}:`, error);
+      });
+      await previewManager.ensureReady(projectId).catch((error) => {
+        console.warn(`[sites] Fast-track preview not ready yet for ${projectId}:`, error);
       });
     } else if (start) {
       job = await startProjectInstruction({
