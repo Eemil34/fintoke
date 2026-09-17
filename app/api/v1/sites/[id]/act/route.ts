@@ -9,7 +9,7 @@ import {
 import { startProjectInstruction } from '@/lib/services/agentRun';
 import { getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { AgentApiError } from '@/lib/agent-api/keys';
-import { isCopyOnlyInstruction, rewriteExistingProjectCopy } from '@/lib/templates/fastFill';
+import { isCopyOnlyInstruction, rewriteExistingProjectCopy, wantsFastTrack } from '@/lib/templates/fastFill';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -29,7 +29,11 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
       throw new AgentApiError('instruction is required');
     }
 
-    if (isCopyOnlyInstruction(instruction) || body.copyOnly === true) {
+    if (
+      wantsFastTrack({ prompt: instruction, buildMode: body.buildMode, fast: body.fast }) ||
+      isCopyOnlyInstruction(instruction) ||
+      body.copyOnly === true
+    ) {
       const filled = await rewriteExistingProjectCopy({
         projectId: id,
         prompt: instruction,
@@ -44,6 +48,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
         data: {
           ...site,
           buildMode: 'fast',
+          job: { running: false, activeCount: 0 },
+          jobStarted: null,
           filled,
         },
       });

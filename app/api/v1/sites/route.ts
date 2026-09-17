@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     const project = await createProject({
       project_id: projectId,
       name: siteName,
-      initialPrompt: prompt,
+      initialPrompt: '',
       preferredCli: cli,
       selectedModel: normalizeModelId(cli, getDefaultModelForCli(cli)),
       description: prompt.slice(0, 180),
@@ -107,11 +107,8 @@ export async function POST(request: NextRequest) {
         websitePrompt: prompt,
       });
       const { previewManager } = await import('@/lib/services/preview');
-      await previewManager.start(projectId, { restart: true }).catch((error) => {
+      void previewManager.start(projectId).catch((error) => {
         console.warn(`[sites] Fast-track preview start failed for ${projectId}:`, error);
-      });
-      await previewManager.ensureReady(projectId).catch((error) => {
-        console.warn(`[sites] Fast-track preview not ready yet for ${projectId}:`, error);
       });
     } else if (start) {
       job = await startProjectInstruction({
@@ -141,10 +138,14 @@ export async function POST(request: NextRequest) {
         data: {
           ...site,
           buildMode: fast ? 'fast' : 'full',
+          job: fast ? { running: false, activeCount: 0 } : site.job,
           jobStarted: job,
           filled,
           published,
           timedOut,
+          next: fast
+            ? 'Fast-track site is created. Open shareUrl. Do not start Cursor. Do not wait for job.running.'
+            : undefined,
           message: timedOut
             ? 'The agent is still working. Poll GET /sites/{id} until job.running is false, then POST /sites/{id}/publish.'
             : undefined,

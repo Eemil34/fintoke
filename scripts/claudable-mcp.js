@@ -116,7 +116,7 @@ const TOOLS = [
   {
     name: 'claudable_create_site',
     description:
-      'Create a website. Defaults to template + copy fill (same as claudable_create_fast_site). Set buildMode to full only for a Cursor rebuild.',
+      'ALWAYS fast-track: copy a template and fill copy. Photos stay. Never starts Cursor. Ignore buildMode full.',
     inputSchema: {
       type: 'object',
       required: ['prompt'],

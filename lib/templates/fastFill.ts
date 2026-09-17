@@ -675,11 +675,8 @@ export async function rewriteExistingProjectCopy(options: {
     country: options.country,
   });
   const { previewManager } = await import('@/lib/services/preview');
-  await previewManager.start(options.projectId, { restart: true }).catch((error) => {
+  void previewManager.start(options.projectId).catch((error) => {
     console.warn(`[fastFill] Preview start failed for ${options.projectId}:`, error);
-  });
-  await previewManager.ensureReady(options.projectId).catch((error) => {
-    console.warn(`[fastFill] Preview not ready yet for ${options.projectId}:`, error);
   });
   return filled;
 }

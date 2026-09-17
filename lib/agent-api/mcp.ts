@@ -37,7 +37,13 @@ import {
   updateManagedTemplate,
 } from '@/lib/templates/store';
 import { getAgentWorkspaceSnapshot, serializeManagedTemplate } from '@/lib/agent-api/workspaceAccess';
-import { fastFillProjectFromLead, isCopyOnlyInstruction, leadFromSiteBrief, rewriteExistingProjectCopy } from '@/lib/templates/fastFill';
+import {
+  fastFillProjectFromLead,
+  isCopyOnlyInstruction,
+  leadFromSiteBrief,
+  rewriteExistingProjectCopy,
+  wantsFastTrack,
+} from '@/lib/templates/fastFill';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 
 const PROTOCOL_VERSIONS = new Set(['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25']);
@@ -127,7 +133,7 @@ const RAW_MCP_TOOLS = [
   {
     name: 'claudable_edit_site',
     description:
-      'Edit an existing site. For a full text rewrite that keeps photos, use claudable_rewrite_site_copy instead (avoids Cursor image safety). If the instruction is copy-only, this tool also rewrites text without Cursor.',
+      'Rewrite copy on an existing Fast Track site. Photos stay. Does not start Cursor. Do not use this to finish a new site — create_site already filled it.',
     inputSchema: {
       type: 'object',
       required: ['id', 'instruction'],
@@ -486,13 +492,12 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       const project = await createProject({
         project_id: projectId,
         name: siteName,
-        initialPrompt: prompt,
+        initialPrompt: '',
         preferredCli: cli,
         selectedModel: normalizeModelId(cli, getDefaultModelForCli(cli)),
         description: prompt.slice(0, 180),
         websiteTemplateId: templateId,
       });
-      let job = null;
       let filled = null;
       if (fast) {
         const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
@@ -515,11 +520,8 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
           websitePrompt: prompt,
         });
         const { previewManager } = await import('@/lib/services/preview');
-        await previewManager.start(projectId, { restart: true }).catch((error) => {
+        void previewManager.start(projectId).catch((error) => {
           console.warn(`[MCP] Fast-track preview start failed for ${projectId}:`, error);
-        });
-        await previewManager.ensureReady(projectId).catch((error) => {
-          console.warn(`[MCP] Fast-track preview not ready yet for ${projectId}:`, error);
         });
       }
       let published = null;
@@ -529,13 +531,13 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       const site = await serializeAgentSite(project, origin);
       return {
         ...site,
-        buildMode: fast ? 'fast' : 'full',
-        jobStarted: job,
+        buildMode: 'fast',
+        job: { running: false, activeCount: 0 },
+        jobStarted: null,
         filled,
         published,
-        next: fast
-          ? 'Fast-track site is ready. Photos were not changed. Open shareUrl. Do not generate a substitute website in chat.'
-          : 'Poll claudable_get_site until job.running is false. Then claudable_publish_site if the user wants it live. Do not generate a substitute website in chat.',
+        next:
+          'Fast-track site is created. Open shareUrl. Do not call claudable_edit_site. Do not start Cursor. Do not wait for job.running.',
       };
     }
     case 'claudable_rewrite_site_copy': {
@@ -567,7 +569,7 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       const id = String(args.id || '');
       const instruction = String(args.instruction || args.prompt || '').trim();
       if (!instruction) throw new AgentApiError('instruction is required');
-      if (isCopyOnlyInstruction(instruction) || args.copyOnly === true) {
+      if (wantsFastTrack({ prompt: instruction, buildMode: args.buildMode, fast: args.fast }) || isCopyOnlyInstruction(instruction) || args.copyOnly === true) {
         const filled = await rewriteExistingProjectCopy({
           projectId: id,
           prompt: instruction,
@@ -581,8 +583,10 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
         return {
           ...site,
           buildMode: 'fast',
+          job: { running: false, activeCount: 0 },
+          jobStarted: null,
           filled,
-          next: 'Copy rewritten without Cursor. Photos were not changed.',
+          next: 'Copy rewritten without Cursor. Photos were not changed. Open shareUrl.',
         };
       }
       const job = await startProjectInstruction({
