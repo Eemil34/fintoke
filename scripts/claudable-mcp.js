@@ -95,9 +95,28 @@ const TOOLS = [
     },
   },
   {
+    name: 'claudable_create_fast_site',
+    description:
+      'Default Fintoke site create: copy a template and fill text/map/colors. Photos stay. Do not search the web for Fast Track.',
+    inputSchema: {
+      type: 'object',
+      required: ['prompt'],
+      properties: {
+        prompt: { type: 'string' },
+        name: { type: 'string' },
+        templateId: { type: 'string' },
+        business: { type: 'string' },
+        city: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+        publish: { type: 'boolean', default: false },
+      },
+    },
+  },
+  {
     name: 'claudable_create_site',
     description:
-      'Create a website. For mass production set buildMode to "fast" (template + rewrite copy/map/colors, keep photos). Use "full" for a Cursor rebuild.',
+      'Create a website. Defaults to template + copy fill (same as claudable_create_fast_site). Set buildMode to full only for a Cursor rebuild.',
     inputSchema: {
       type: 'object',
       required: ['prompt'],
@@ -371,13 +390,14 @@ async function callTool(name, args = {}) {
       return api('GET', '/sites');
     case 'claudable_get_site':
       return api('GET', `/sites/${encodeURIComponent(args.id)}`);
+    case 'claudable_create_fast_site':
     case 'claudable_create_site': {
       const created = await api('POST', '/sites', {
         prompt: args.prompt,
         name: args.name,
         templateId: args.templateId,
-        buildMode: args.buildMode,
-        fast: args.fast,
+        buildMode: name === 'claudable_create_fast_site' ? 'fast' : args.buildMode,
+        fast: name === 'claudable_create_fast_site' ? true : args.fast,
         business: args.business,
         city: args.city,
         email: args.email,
@@ -386,7 +406,11 @@ async function callTool(name, args = {}) {
         publish: args.publish === true,
       });
       const id = created?.data?.id;
-      const fast = created?.data?.buildMode === 'fast' || args.buildMode === 'fast' || args.fast === true;
+      const fast =
+        name === 'claudable_create_fast_site' ||
+        created?.data?.buildMode === 'fast' ||
+        args.buildMode === 'fast' ||
+        args.fast === true;
       if (args.wait !== false && id && args.publish !== true && !fast) {
         return waitForIdle(id);
       }

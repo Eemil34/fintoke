@@ -353,9 +353,14 @@ Rules:
 export function wantsFastTrack(input: { buildMode?: unknown; fast?: unknown; prompt?: string }): boolean {
   if (input.buildMode === 'full' || input.fast === false) return false;
   if (input.buildMode === 'fast' || input.fast === true) return true;
-  return /fast[\s-]?track|mass production|do not (change|replace) (the )?images?|text[- ]only|rewrite (the )?copy|keep (the )?(photos|images)|no image changes/i.test(
-    input.prompt || '',
-  );
+  if (
+    /full (cursor )?rebuild|from[- ]scratch|use cursor|cursor agent|rebuild (the )?(layout|site)/i.test(
+      input.prompt || '',
+    )
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function field(value: unknown): string {

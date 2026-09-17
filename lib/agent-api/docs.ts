@@ -28,7 +28,7 @@ In ChatGPT (web):
 5. Name it Fintoke. Create it, then in a new chat open + → Developer mode and enable Fintoke
 6. Ask Fintoke to make or edit a site. Confirm write actions when ChatGPT asks.
 
-Do not generate HTML/React artifacts. Use Claudable tools. For fast-track sites ask Fintoke to use buildMode fast. Never print API keys.`;
+Do not generate HTML/React artifacts. Use claudable_create_fast_site for websites. Never print API keys.`;
 }
 
 export function claudeConnectorInstructions(origin: string, apiKey = '<PASTE_CLAUDABLE_API_KEY>'): string {
@@ -58,8 +58,7 @@ Add it in Claude.ai: Customize → Connectors → Add custom connector.
 Authentication: None
 Request header Authorization: Bearer ${apiKey}
 
-After the connector is enabled, use Claudable tools for the whole workspace (sites, templates, emails, users, clients, work table). Start with claudable_get_workspace if you need a map.
-For fast-track / mass production sites call claudable_create_site with buildMode "fast" so photos stay and only copy, map, and small colors change. Use full Cursor rebuilds only when asked.
+After the connector is enabled, use Claudable tools. Creating a website means claudable_create_fast_site (template copy + text fill). That is a Fintoke tool, not a public web product. Use buildMode full only for a Cursor rebuild.
 Do not generate HTML/React artifacts. Do not say you lack a Claudable integration once the connector is added.
 When the user asks to send an email, list templates then call claudable_send_email so it is actually delivered.
 Never print the API key.`;

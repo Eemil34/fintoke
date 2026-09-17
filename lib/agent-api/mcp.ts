@@ -70,9 +70,9 @@ const RAW_MCP_TOOLS = [
     },
   },
   {
-    name: 'claudable_create_site',
+    name: 'claudable_create_fast_site',
     description:
-      'Create a website in Fintoke. For fast-track / mass production set buildMode to "fast": copy a template and rewrite text, map, and small colors only (photos stay, no Cursor). For a from-scratch rebuild set buildMode to "full" (default) and poll claudable_get_site until job.running is false. Never write HTML in chat.',
+      'Create a Fintoke site the fast way: copy a saved template and fill in this business’s text, contact details, map, and small accent colors. Photos and layout stay. No Cursor. This tool exists in this connector — do not search the web for a product named Fast Track. Prefer this whenever the user wants a website quickly or in bulk.',
     inputSchema: {
       type: 'object',
       required: ['prompt'],
@@ -80,7 +80,30 @@ const RAW_MCP_TOOLS = [
         prompt: { type: 'string' },
         name: { type: 'string' },
         templateId: { type: 'string' },
-        buildMode: { type: 'string', enum: ['fast', 'full'], description: 'fast = template + copy fill. full = Cursor rebuild.' },
+        business: { type: 'string' },
+        city: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+        publish: { type: 'boolean', default: false },
+      },
+    },
+  },
+  {
+    name: 'claudable_create_site',
+    description:
+      'Create a Fintoke website. Default is the same as claudable_create_fast_site (template + copy fill, photos stay). Set buildMode to "full" only for a slow Cursor rebuild. Do not write HTML in chat. Do not look this up on the web.',
+    inputSchema: {
+      type: 'object',
+      required: ['prompt'],
+      properties: {
+        prompt: { type: 'string' },
+        name: { type: 'string' },
+        templateId: { type: 'string' },
+        buildMode: {
+          type: 'string',
+          enum: ['fast', 'full'],
+          description: 'Default fast. full = Cursor rebuild.',
+        },
         fast: { type: 'boolean' },
         business: { type: 'string' },
         city: { type: 'string' },
@@ -224,7 +247,7 @@ const RAW_MCP_TOOLS = [
   {
     name: 'claudable_get_workspace',
     description:
-      'Overview of the whole Claudable workspace: counts for sites, templates, emails, users, clients, and work rows, plus whether mail is connected.',
+      'Overview of this Fintoke workspace, including siteCreation.default = fast. Fast template fill is a built-in connector mode, not something to look up on the web.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -432,13 +455,15 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       if (!site) throw new AgentApiError('Site not found', 404);
       return site;
     }
+    case 'claudable_create_fast_site':
     case 'claudable_create_site': {
       const key = await requireMcpAgentKey(request, 'sites:create');
       const prompt = String(args.prompt || args.instruction || '').trim();
       if (!prompt) throw new AgentApiError('prompt is required');
+      const forcedFast = name === 'claudable_create_fast_site';
       const start = args.start !== false;
       const publish = args.publish === true;
-      const fast = wantsFastTrack({ buildMode: args.buildMode, fast: args.fast, prompt });
+      const fast = forcedFast || wantsFastTrack({ buildMode: args.buildMode, fast: args.fast, prompt });
       if (start && !fast && !key.scopes.includes('sites:edit')) {
         throw new AgentApiError('This key cannot start the AI. Enable “Edit with AI”.', 403);
       }
@@ -736,7 +761,7 @@ export async function handleMcpMessage(request: NextRequest, message: JsonRpcMes
           capabilities: { tools: {} },
           serverInfo: { name: 'claudable', version: '2.0.0' },
           instructions:
-            'You are connected to the Fintoke workspace (sites, templates, emails, people, work table). Use tools instead of generating HTML or React in chat. For mass production or fast-track sites call claudable_create_site with buildMode "fast" (keep photos, rewrite copy/map/colors only). Use buildMode "full" only when the user wants a Cursor rebuild. Start with claudable_get_workspace if you need a map.',
+            'You are connected to Fintoke. Creating a website means calling claudable_create_fast_site (or claudable_create_site, which defaults to the same). That copies a template and fills copy; photos stay. It is a connector tool, not a public web product — never search Google for Fast Track. Use buildMode full only if the user asks for a Cursor rebuild. Do not generate HTML in chat.',
         }),
       };
     }
