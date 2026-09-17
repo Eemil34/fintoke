@@ -65,8 +65,7 @@ export async function getAgentWorkspaceSnapshot() {
       default: 'fast',
       tools: ['claudable_create_fast_site', 'claudable_create_site'],
       fast:
-        'Default Fintoke website workflow. Copies a saved template and rewrites copy, contact details, map location, and small accent colors. Photos and layout stay. Not a public Google product — it is this connector. Do not search the web for it.',
-      full: 'Optional Cursor rebuild. Only use when the user asks to rebuild from scratch.',
+        'Always use this. Copies a saved template and rewrites copy. Photos stay. Never pass buildMode full. Never wait for job.running.',
     },
   };
 }

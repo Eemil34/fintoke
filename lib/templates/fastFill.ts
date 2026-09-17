@@ -592,15 +592,12 @@ async function writePackToFiles(files: string[], pack: CopyPack, city?: string, 
 }
 
 export function wantsFastTrack(input: { buildMode?: unknown; fast?: unknown; prompt?: string }): boolean {
-  if (input.buildMode === 'full' || input.fast === false) return false;
-  if (input.buildMode === 'fast' || input.fast === true) return true;
-  if (
-    /full (cursor )?rebuild|from[- ]scratch|use cursor|cursor agent|rebuild (the )?(layout|site)/i.test(
-      input.prompt || '',
-    )
-  ) {
-    return false;
-  }
+  const prompt = input.prompt || '';
+  const userAskedForCursor =
+    /full (cursor )?rebuild|from[- ]scratch|use cursor|cursor agent|rebuild (the )?(layout|site)|slow rebuild/i.test(
+      prompt,
+    );
+  if (userAskedForCursor && (input.buildMode === 'full' || input.fast === false)) return false;
   return true;
 }
 

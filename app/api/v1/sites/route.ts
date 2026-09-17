@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     const start = body.start !== false;
     const publish = body.publish === true;
-    const fast = wantsFastTrack({ buildMode: body.buildMode, fast: body.fast, prompt });
+    const fast = wantsFastTrack({ prompt });
     if (start && !fast && !key.scopes.includes('sites:edit')) {
       throw new AgentApiError('This key cannot start the AI. Enable “Edit with AI”.', 403);
     }

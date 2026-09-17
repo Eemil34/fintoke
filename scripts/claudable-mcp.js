@@ -413,24 +413,14 @@ async function callTool(name, args = {}) {
         prompt: args.prompt,
         name: args.name,
         templateId: args.templateId,
-        buildMode: name === 'claudable_create_fast_site' ? 'fast' : args.buildMode,
-        fast: name === 'claudable_create_fast_site' ? true : args.fast,
+        buildMode: 'fast',
+        fast: true,
         business: args.business,
         city: args.city,
         email: args.email,
         phone: args.phone,
-        start: args.start !== false,
         publish: args.publish === true,
       });
-      const id = created?.data?.id;
-      const fast =
-        name === 'claudable_create_fast_site' ||
-        created?.data?.buildMode === 'fast' ||
-        args.buildMode === 'fast' ||
-        args.fast === true;
-      if (args.wait !== false && id && args.publish !== true && !fast) {
-        return waitForIdle(id);
-      }
       return created;
     }
     case 'claudable_rewrite_site_copy':

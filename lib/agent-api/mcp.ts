@@ -37,7 +37,7 @@ import {
   updateManagedTemplate,
 } from '@/lib/templates/store';
 import { getAgentWorkspaceSnapshot, serializeManagedTemplate } from '@/lib/agent-api/workspaceAccess';
-import { fastFillProjectFromLead, isCopyOnlyInstruction, leadFromSiteBrief, rewriteExistingProjectCopy, wantsFastTrack } from '@/lib/templates/fastFill';
+import { fastFillProjectFromLead, isCopyOnlyInstruction, leadFromSiteBrief, rewriteExistingProjectCopy } from '@/lib/templates/fastFill';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 
 const PROTOCOL_VERSIONS = new Set(['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25']);
@@ -91,7 +91,7 @@ const RAW_MCP_TOOLS = [
   {
     name: 'claudable_create_site',
     description:
-      'Create a Fintoke website. Default is the same as claudable_create_fast_site (template + copy fill, photos stay). Set buildMode to "full" only for a slow Cursor rebuild. Do not write HTML in chat. Do not look this up on the web.',
+      'ALWAYS fast-track: copy a template and fill restaurant/business copy. Photos stay. Never starts Cursor. Ignore any idea of buildMode full. Do not poll a job. Return shareUrl when filled.',
     inputSchema: {
       type: 'object',
       required: ['prompt'],
@@ -99,17 +99,10 @@ const RAW_MCP_TOOLS = [
         prompt: { type: 'string' },
         name: { type: 'string' },
         templateId: { type: 'string' },
-        buildMode: {
-          type: 'string',
-          enum: ['fast', 'full'],
-          description: 'Default fast. full = Cursor rebuild.',
-        },
-        fast: { type: 'boolean' },
         business: { type: 'string' },
         city: { type: 'string' },
         email: { type: 'string' },
         phone: { type: 'string' },
-        start: { type: 'boolean', default: true },
         publish: { type: 'boolean', default: false },
       },
     },
@@ -478,13 +471,8 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       const key = await requireMcpAgentKey(request, 'sites:create');
       const prompt = String(args.prompt || args.instruction || '').trim();
       if (!prompt) throw new AgentApiError('prompt is required');
-      const forcedFast = name === 'claudable_create_fast_site';
-      const start = args.start !== false;
       const publish = args.publish === true;
-      const fast = forcedFast || wantsFastTrack({ buildMode: args.buildMode, fast: args.fast, prompt });
-      if (start && !fast && !key.scopes.includes('sites:edit')) {
-        throw new AgentApiError('This key cannot start the AI. Enable “Edit with AI”.', 403);
-      }
+      const fast = true;
       if (publish && !key.scopes.includes('sites:publish')) {
         throw new AgentApiError('This key cannot publish. Enable “Publish to Vercel”.', 403);
       }
@@ -532,13 +520,6 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
         });
         await previewManager.ensureReady(projectId).catch((error) => {
           console.warn(`[MCP] Fast-track preview not ready yet for ${projectId}:`, error);
-        });
-      } else if (start) {
-        job = await startProjectInstruction({
-          projectId,
-          instruction: prompt,
-          cliPreference: cli,
-          isInitialPrompt: true,
         });
       }
       let published = null;
@@ -824,7 +805,7 @@ export async function handleMcpMessage(request: NextRequest, message: JsonRpcMes
           capabilities: { tools: {} },
           serverInfo: { name: 'claudable', version: '2.0.0' },
           instructions:
-            'You are connected to Fintoke. Creating a website means calling claudable_create_fast_site (or claudable_create_site, which defaults to the same). That copies a template and fills copy; photos stay. It is a connector tool, not a public web product — never search Google for Fast Track. Use buildMode full only if the user asks for a Cursor rebuild. Do not generate HTML in chat.',
+            'You are connected to Fintoke. Creating a website ALWAYS means claudable_create_fast_site or claudable_create_site — both copy a template and fill text. Never pass buildMode full. Never start Cursor. Never poll job.running. Photos stay. Do not generate HTML in chat.',
         }),
       };
     }
