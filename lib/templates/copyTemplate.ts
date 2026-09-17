@@ -43,8 +43,14 @@ export async function restoreSnapshotIfMaterialized(
   if (!(await snapshotHasApp(templateId))) return false;
 
   const alreadyCopied = await readTemplateMark(projectPath);
-  // Never replace a copied or generated site. Cursor edits live here.
+  // Never replace a copied, filled, or generated site.
   if (alreadyCopied) return false;
+  try {
+    await fs.access(path.join(projectPath, '.fintoke-filled'));
+    return false;
+  } catch {
+    // not filled
+  }
   if (await projectHasApp(projectPath)) return false;
 
   const materialized = await fs

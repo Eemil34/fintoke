@@ -211,8 +211,6 @@ async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnTy
       websiteTemplateId: template?.id,
     });
     const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
-    const { previewManager } = await import('@/lib/services/preview');
-    const previewBoot = previewManager.start(projectId);
     const filled = await fastFillProjectFromLead({
       projectPath,
       lead,
@@ -231,7 +229,8 @@ async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnTy
         .filter(Boolean)
         .join('\n'),
     });
-    await previewBoot.catch((error) => {
+    const { previewManager } = await import('@/lib/services/preview');
+    await previewManager.start(projectId).catch((error) => {
       console.warn(`[automations] Fast-track preview start failed for ${projectId}:`, error);
     });
     await previewManager.ensureReady(projectId).catch((error) => {

@@ -179,7 +179,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     method,
     headers,
     redirect: 'manual',
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(20000),
   };
   if (method !== 'GET' && method !== 'HEAD') {
     init.body = await request.arrayBuffer();

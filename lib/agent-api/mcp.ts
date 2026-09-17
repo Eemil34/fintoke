@@ -508,8 +508,6 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       let filled = null;
       if (fast) {
         const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
-        const { previewManager } = await import('@/lib/services/preview');
-        const previewBoot = previewManager.start(projectId);
         filled = await fastFillProjectFromLead({
           projectPath,
           lead: leadFromSiteBrief({
@@ -528,7 +526,8 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
           }),
           websitePrompt: prompt,
         });
-        await previewBoot.catch((error) => {
+        const { previewManager } = await import('@/lib/services/preview');
+        await previewManager.start(projectId, { restart: true }).catch((error) => {
           console.warn(`[MCP] Fast-track preview start failed for ${projectId}:`, error);
         });
         await previewManager.ensureReady(projectId).catch((error) => {

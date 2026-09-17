@@ -74,7 +74,7 @@ const FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 
 `;
 
 const RELIABLE_PHOTO_URL =
-  'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1600&q=80';
+  'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=900&q=60';
 
 const FALLBACK_DATA_URI = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(FALLBACK_SVG)}`;
 
@@ -224,7 +224,7 @@ export function SiteImage({
       className={fill ? \`absolute inset-0 h-full w-full object-cover \${className}\` : className}
       loading={priority ? 'eager' : 'lazy'}
       decoding="async"
-      referrerPolicy="no-referrer"
+      referrerPolicy="origin"
       onError={() => setIndex((current) => Math.min(current + 1, sources.length - 1))}
     />
   );
@@ -287,12 +287,12 @@ function injectImageGuard(source: string, importLine: string): string {
   if (!next.includes('name="referrer"') && /<html[\s\S]*?>/.test(next) && !/<head[\s>]/.test(next)) {
     next = next.replace(
       /<html([^>]*)>/,
-      '<html$1>\n      <head>\n        <meta name="referrer" content="no-referrer" />\n      </head>',
+      '<html$1>\n      <head>\n        <meta name="referrer" content="origin" />\n      </head>',
     );
   } else if (next.includes('<head>') && !next.includes('name="referrer"')) {
     next = next.replace(
       '<head>',
-      '<head>\n        <meta name="referrer" content="no-referrer" />',
+      '<head>\n        <meta name="referrer" content="origin" />',
     );
   }
 

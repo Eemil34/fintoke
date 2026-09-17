@@ -513,7 +513,7 @@ export type ImageCategoryId = ${IMAGE_CATEGORY_IDS.map((id) => `'${id}'`).join('
 export const IMAGE_LIBRARY = ${JSON.stringify(payload, null, 2)} as const;
 
 export function unsplash(id: string, width = 1400) {
-  return \`https://images.unsplash.com/\${id}?w=\${width}&q=80&auto=format&fit=crop\`;
+  return \`https://images.unsplash.com/\${id}?w=\${Math.min(width, 1000)}&q=70&auto=format&fit=crop\`;
 }
 
 export function photosIn(id: ImageCategoryId) {

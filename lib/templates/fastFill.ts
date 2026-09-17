@@ -544,11 +544,25 @@ export async function fastFillProjectFromLead(options: {
   country?: string;
 }): Promise<{ replacements: number; mapsQuery: string }> {
   const files = await listTextFiles(options.projectPath);
-  const pack = await fetchCopyPack(options.lead, options.country, options.websitePrompt);
+  const local = localCopyPack(options.lead, options.country);
+  let pack = local;
+  let writes = await writePackToFiles(files, pack, options.lead.city, options.country);
+  try {
+    pack = await fetchCopyPack(options.lead, options.country, options.websitePrompt);
+    writes = await writePackToFiles(files, pack, options.lead.city, options.country);
+  } catch (error) {
+    console.warn('[fastFill] GPT copy pack skipped, local copy already written:', error);
+  }
+  await fs.writeFile(path.join(options.projectPath, '.fintoke-filled'), `${pack.name}\n`).catch(() => undefined);
+  await fs.rm(path.join(options.projectPath, '.next'), { recursive: true, force: true }).catch(() => undefined);
   const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
+  return { replacements: writes, mapsQuery };
+}
+
+async function writePackToFiles(files: string[], pack: CopyPack, city?: string, country?: string): Promise<number> {
+  const mapsQuery = [pack.name, pack.address || city, country].filter(Boolean).join(', ');
   const embed = mapsQuery ? mapsEmbed(mapsQuery) : '';
   let writes = 0;
-
   for (const file of files) {
     const original = await fs.readFile(file, 'utf8');
     let next = original;
@@ -560,6 +574,8 @@ export async function fastFillProjectFromLead(options: {
     }
     next = next.split('Coral Cove').join(pack.name);
     next = next.split('Park Avenue, 60146 NY, USA').join(pack.address);
+    next = next.split('content="no-referrer"').join('content="origin"');
+    next = next.replace(/unsplash\((['"][^'"]+['"]),\s*\d+\)/g, 'unsplash($1, 900)');
     next = rewriteMaps(next, mapsQuery);
     if (path.basename(file) === 'site.ts') {
       next = injectMapsUrl(next, embed);
@@ -572,8 +588,7 @@ export async function fastFillProjectFromLead(options: {
       writes += 1;
     }
   }
-
-  return { replacements: writes, mapsQuery };
+  return writes;
 }
 
 export function wantsFastTrack(input: { buildMode?: unknown; fast?: unknown; prompt?: string }): boolean {
@@ -646,8 +661,6 @@ export async function rewriteExistingProjectCopy(options: {
     (options.prompt || '').trim() ||
     `Rewrite every visitor-facing string for ${project.name}. Keep photos, files, and layout.`;
   const projectPath = await resolveAndPersistProjectWorkspace(project, options.projectId);
-  const { previewManager } = await import('@/lib/services/preview');
-  const previewBoot = previewManager.start(options.projectId);
   const filled = await fastFillProjectFromLead({
     projectPath,
     lead: leadFromSiteBrief({
@@ -664,7 +677,8 @@ export async function rewriteExistingProjectCopy(options: {
     websitePrompt: prompt,
     country: options.country,
   });
-  await previewBoot.catch((error) => {
+  const { previewManager } = await import('@/lib/services/preview');
+  await previewManager.start(options.projectId, { restart: true }).catch((error) => {
     console.warn(`[fastFill] Preview start failed for ${options.projectId}:`, error);
   });
   await previewManager.ensureReady(options.projectId).catch((error) => {
