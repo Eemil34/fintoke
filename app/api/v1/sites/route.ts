@@ -16,6 +16,8 @@ import {
   requireAgentKey,
 } from '@/lib/agent-api/http';
 import { AgentApiError } from '@/lib/agent-api/keys';
+import { fastFillProjectFromLead, leadFromSiteBrief, wantsFastTrack } from '@/lib/templates/fastFill';
+import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 
 export function OPTIONS() {
   return agentOptions();
@@ -50,7 +52,8 @@ export async function POST(request: NextRequest) {
 
     const start = body.start !== false;
     const publish = body.publish === true;
-    if (start && !key.scopes.includes('sites:edit')) {
+    const fast = wantsFastTrack({ buildMode: body.buildMode, fast: body.fast, prompt });
+    if (start && !fast && !key.scopes.includes('sites:edit')) {
       throw new AgentApiError('This key cannot start the AI. Enable “Edit with AI”.', 403);
     }
     if (publish && !key.scopes.includes('sites:publish')) {
@@ -66,12 +69,13 @@ export async function POST(request: NextRequest) {
           ? body.websiteTemplateId
           : '';
     const suggested = suggestWebsiteTemplate(prompt, templates);
-    const templateId = requestedTemplate || suggested?.id || undefined;
+    const templateId = requestedTemplate || suggested?.id || templates[0]?.id || undefined;
 
     const projectId = generateProjectId();
+    const siteName = siteNameFromPrompt(prompt, typeof body.name === 'string' ? body.name : undefined);
     const project = await createProject({
       project_id: projectId,
-      name: siteNameFromPrompt(prompt, typeof body.name === 'string' ? body.name : undefined),
+      name: siteName,
       initialPrompt: prompt,
       preferredCli: cli,
       selectedModel: normalizeModelId(cli, getDefaultModelForCli(cli)),
@@ -81,7 +85,32 @@ export async function POST(request: NextRequest) {
 
     const origin = agentOrigin(request);
     let job: { requestId: string; userMessageId: string } | null = null;
-    if (start) {
+    let filled = null;
+    if (fast) {
+      const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
+      filled = await fastFillProjectFromLead({
+        projectPath,
+        lead: leadFromSiteBrief({
+          prompt,
+          name: siteName,
+          business: body.business,
+          contactName: body.contactName,
+          city: body.city,
+          email: body.email,
+          phone: body.phone,
+          website: body.website,
+          whatTheyDo: body.whatTheyDo,
+          audience: body.audience,
+          style: body.style,
+          details: body.details,
+        }),
+        websitePrompt: prompt,
+      });
+      const { previewManager } = await import('@/lib/services/preview');
+      void previewManager.start(projectId).catch((error) => {
+        console.warn(`[sites] Fast-track preview start failed for ${projectId}:`, error);
+      });
+    } else if (start) {
       job = await startProjectInstruction({
         projectId,
         instruction: prompt,
@@ -93,7 +122,7 @@ export async function POST(request: NextRequest) {
     let published = null;
     let timedOut = false;
     if (publish) {
-      if (start) {
+      if (start && !fast) {
         const idle = await waitForSiteIdle(projectId);
         if (!idle) timedOut = true;
       }
@@ -108,7 +137,9 @@ export async function POST(request: NextRequest) {
         success: true,
         data: {
           ...site,
+          buildMode: fast ? 'fast' : 'full',
           jobStarted: job,
+          filled,
           published,
           timedOut,
           message: timedOut

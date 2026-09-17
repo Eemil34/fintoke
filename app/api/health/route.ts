@@ -7,7 +7,7 @@ import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 import { listEmails, listPeople } from '@/lib/services/workspace';
 
-const RELEASE = '2026-09-17-fast-track-sites';
+const RELEASE = '2026-09-17-fast-track-mcp';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');

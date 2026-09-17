@@ -349,3 +349,46 @@ Rules:
 
   return { replacements: writes, mapsQuery };
 }
+
+export function wantsFastTrack(input: { buildMode?: unknown; fast?: unknown; prompt?: string }): boolean {
+  if (input.buildMode === 'full' || input.fast === false) return false;
+  if (input.buildMode === 'fast' || input.fast === true) return true;
+  return /fast[\s-]?track|mass production|do not (change|replace) (the )?images?|text[- ]only|rewrite (the )?copy|keep (the )?(photos|images)|no image changes/i.test(
+    input.prompt || '',
+  );
+}
+
+function field(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export function leadFromSiteBrief(input: {
+  prompt: string;
+  name?: string;
+  business?: unknown;
+  contactName?: unknown;
+  city?: unknown;
+  email?: unknown;
+  phone?: unknown;
+  website?: unknown;
+  whatTheyDo?: unknown;
+  audience?: unknown;
+  style?: unknown;
+  details?: unknown;
+  notes?: unknown;
+}): FastFillLead {
+  const business = field(input.business) || field(input.name) || input.prompt.split('\n')[0]?.trim() || 'Business';
+  return {
+    business: business.slice(0, 80),
+    contactName: field(input.contactName),
+    whatTheyDo: field(input.whatTheyDo) || input.prompt.slice(0, 800),
+    email: field(input.email),
+    phone: field(input.phone),
+    city: field(input.city),
+    website: field(input.website),
+    notes: field(input.notes) || input.prompt.slice(0, 500),
+    details: field(input.details),
+    audience: field(input.audience),
+    style: field(input.style),
+  };
+}

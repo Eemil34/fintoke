@@ -97,7 +97,7 @@ const TOOLS = [
   {
     name: 'claudable_create_site',
     description:
-      'Create a website in Claudable from a prompt. Use this instead of writing HTML/React yourself. Optionally wait until the builder finishes and/or publish to Vercel.',
+      'Create a website. For mass production set buildMode to "fast" (template + rewrite copy/map/colors, keep photos). Use "full" for a Cursor rebuild.',
     inputSchema: {
       type: 'object',
       required: ['prompt'],
@@ -105,6 +105,12 @@ const TOOLS = [
         prompt: { type: 'string' },
         name: { type: 'string' },
         templateId: { type: 'string' },
+        buildMode: { type: 'string', enum: ['fast', 'full'] },
+        fast: { type: 'boolean' },
+        business: { type: 'string' },
+        city: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
         start: { type: 'boolean', default: true },
         publish: { type: 'boolean', default: false },
         wait: { type: 'boolean', default: true },
@@ -370,11 +376,18 @@ async function callTool(name, args = {}) {
         prompt: args.prompt,
         name: args.name,
         templateId: args.templateId,
+        buildMode: args.buildMode,
+        fast: args.fast,
+        business: args.business,
+        city: args.city,
+        email: args.email,
+        phone: args.phone,
         start: args.start !== false,
         publish: args.publish === true,
       });
       const id = created?.data?.id;
-      if (args.wait !== false && id && args.publish !== true) {
+      const fast = created?.data?.buildMode === 'fast' || args.buildMode === 'fast' || args.fast === true;
+      if (args.wait !== false && id && args.publish !== true && !fast) {
         return waitForIdle(id);
       }
       return created;

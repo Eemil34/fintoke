@@ -37,6 +37,8 @@ import {
   updateManagedTemplate,
 } from '@/lib/templates/store';
 import { getAgentWorkspaceSnapshot, serializeManagedTemplate } from '@/lib/agent-api/workspaceAccess';
+import { fastFillProjectFromLead, leadFromSiteBrief, wantsFastTrack } from '@/lib/templates/fastFill';
+import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 
 const PROTOCOL_VERSIONS = new Set(['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25']);
 
@@ -70,7 +72,7 @@ const RAW_MCP_TOOLS = [
   {
     name: 'claudable_create_site',
     description:
-      'Create a website in Claudable from a prompt. Use this instead of writing HTML/React in chat. Then call claudable_get_site until job.running is false. Use claudable_publish_site if the user wants it live on Vercel.',
+      'Create a website in Fintoke. For fast-track / mass production set buildMode to "fast": copy a template and rewrite text, map, and small colors only (photos stay, no Cursor). For a from-scratch rebuild set buildMode to "full" (default) and poll claudable_get_site until job.running is false. Never write HTML in chat.',
     inputSchema: {
       type: 'object',
       required: ['prompt'],
@@ -78,6 +80,12 @@ const RAW_MCP_TOOLS = [
         prompt: { type: 'string' },
         name: { type: 'string' },
         templateId: { type: 'string' },
+        buildMode: { type: 'string', enum: ['fast', 'full'], description: 'fast = template + copy fill. full = Cursor rebuild.' },
+        fast: { type: 'boolean' },
+        business: { type: 'string' },
+        city: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
         start: { type: 'boolean', default: true },
         publish: { type: 'boolean', default: false },
       },
@@ -430,7 +438,8 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       if (!prompt) throw new AgentApiError('prompt is required');
       const start = args.start !== false;
       const publish = args.publish === true;
-      if (start && !key.scopes.includes('sites:edit')) {
+      const fast = wantsFastTrack({ buildMode: args.buildMode, fast: args.fast, prompt });
+      if (start && !fast && !key.scopes.includes('sites:edit')) {
         throw new AgentApiError('This key cannot start the AI. Enable “Edit with AI”.', 403);
       }
       if (publish && !key.scopes.includes('sites:publish')) {
@@ -440,11 +449,12 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       const templates = await listManagedTemplates();
       const requestedTemplate = typeof args.templateId === 'string' ? args.templateId : '';
       const suggested = suggestWebsiteTemplate(prompt, templates);
-      const templateId = requestedTemplate || suggested?.id || undefined;
+      const templateId = requestedTemplate || suggested?.id || templates[0]?.id || undefined;
       const projectId = generateProjectId();
+      const siteName = siteNameFromPrompt(prompt, typeof args.name === 'string' ? args.name : undefined);
       const project = await createProject({
         project_id: projectId,
-        name: siteNameFromPrompt(prompt, typeof args.name === 'string' ? args.name : undefined),
+        name: siteName,
         initialPrompt: prompt,
         preferredCli: cli,
         selectedModel: normalizeModelId(cli, getDefaultModelForCli(cli)),
@@ -452,7 +462,32 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
         websiteTemplateId: templateId,
       });
       let job = null;
-      if (start) {
+      let filled = null;
+      if (fast) {
+        const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
+        filled = await fastFillProjectFromLead({
+          projectPath,
+          lead: leadFromSiteBrief({
+            prompt,
+            name: siteName,
+            business: args.business,
+            contactName: args.contactName,
+            city: args.city,
+            email: args.email,
+            phone: args.phone,
+            website: args.website,
+            whatTheyDo: args.whatTheyDo,
+            audience: args.audience,
+            style: args.style,
+            details: args.details,
+          }),
+          websitePrompt: prompt,
+        });
+        const { previewManager } = await import('@/lib/services/preview');
+        void previewManager.start(projectId).catch((error) => {
+          console.warn(`[MCP] Fast-track preview start failed for ${projectId}:`, error);
+        });
+      } else if (start) {
         job = await startProjectInstruction({
           projectId,
           instruction: prompt,
@@ -467,10 +502,13 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       const site = await serializeAgentSite(project, origin);
       return {
         ...site,
+        buildMode: fast ? 'fast' : 'full',
         jobStarted: job,
+        filled,
         published,
-        next:
-          'Poll claudable_get_site until job.running is false. Then claudable_publish_site if the user wants it live. Do not generate a substitute website in chat.',
+        next: fast
+          ? 'Fast-track site is ready. Photos were not changed. Open shareUrl. Do not generate a substitute website in chat.'
+          : 'Poll claudable_get_site until job.running is false. Then claudable_publish_site if the user wants it live. Do not generate a substitute website in chat.',
       };
     }
     case 'claudable_edit_site': {
@@ -698,7 +736,7 @@ export async function handleMcpMessage(request: NextRequest, message: JsonRpcMes
           capabilities: { tools: {} },
           serverInfo: { name: 'claudable', version: '2.0.0' },
           instructions:
-            'You are connected to the Fintoke / Claudable workspace (sites, templates, emails, people, work table). Use these tools instead of generating HTML or React in chat. Start with claudable_get_workspace if you need a map. ChatGPT and Claude should call the tools directly.',
+            'You are connected to the Fintoke workspace (sites, templates, emails, people, work table). Use tools instead of generating HTML or React in chat. For mass production or fast-track sites call claudable_create_site with buildMode "fast" (keep photos, rewrite copy/map/colors only). Use buildMode "full" only when the user wants a Cursor rebuild. Start with claudable_get_workspace if you need a map.',
         }),
       };
     }
