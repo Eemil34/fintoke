@@ -12,6 +12,8 @@ import { startProjectInstruction } from '@/lib/services/agentRun';
 import { generateProjectId } from '@/lib/utils';
 import { suggestWebsiteTemplate } from '@/lib/templates/match';
 import { listManagedTemplates } from '@/lib/templates/store';
+import { fastFillProjectFromLead } from '@/lib/templates/fastFill';
+import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { getAgentWorkspaceSnapshot } from '@/lib/agent-api/workspaceAccess';
 import { appOrigin } from '@/lib/agent-api/http';
@@ -47,6 +49,10 @@ function nowIso(): string {
 
 function clean(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function asBuildMode(value: unknown): 'fast' | 'full' {
+  return value === 'full' ? 'full' : 'fast';
 }
 
 function asKind(value: unknown): AutomationKind {
@@ -85,11 +91,12 @@ function normalize(raw: Partial<WorkspaceAutomation> & { id?: string }): Workspa
     messagePrompt: clean(raw.messagePrompt),
     emailSubject: clean(raw.emailSubject),
     emailTemplateId: clean(raw.emailTemplateId) || 'tpl-site-ready',
+    buildMode: asBuildMode(raw.buildMode),
     count: asCount(raw.count, 8, 40),
     city: clean(raw.city),
     country: clean(raw.country),
     businessKind: clean(raw.businessKind) || 'local businesses',
-    sitesPerRun: asCount(raw.sitesPerRun, 1, 3),
+    sitesPerRun: asCount(raw.sitesPerRun, 2, 8),
     emailsPerRun: asCount(raw.emailsPerRun, 3, 10),
     repeatTotal,
     intervalMinutes,
@@ -187,11 +194,49 @@ async function ensureClient(lead: {
 
 async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnType<typeof listLeads>>[number]) {
   const origin = appOrigin();
-  const snapshot = await getAgentWorkspaceSnapshot();
   const templates = await listManagedTemplates();
   const brief = [job.websitePrompt, lead.whatTheyDo, lead.business, job.businessKind, lead.city].filter(Boolean).join('\n');
-  const template = suggestWebsiteTemplate(brief, templates);
+  const template = suggestWebsiteTemplate(brief, templates) || templates[0] || null;
   const projectId = generateProjectId();
+  const fast = job.buildMode !== 'full';
+
+  if (fast) {
+    const project = await createProject({
+      project_id: projectId,
+      name: lead.business.slice(0, 50) || 'Outreach site',
+      initialPrompt: '',
+      preferredCli: 'cursor',
+      selectedModel: getDefaultModelForCli('cursor'),
+      description: lead.whatTheyDo.slice(0, 180) || 'Fast-track template with rewritten copy',
+      websiteTemplateId: template?.id,
+    });
+    const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
+    const filled = await fastFillProjectFromLead({
+      projectPath,
+      lead,
+      websitePrompt: job.websitePrompt,
+      country: job.country,
+    });
+    const personId = await ensureClient(lead);
+    await updateLead(lead.id, {
+      projectId,
+      personId,
+      vercelUrl: sharePreviewUrl(projectId),
+      notes: [
+        lead.notes,
+        `Fast-track site ${projectId} from template ${template?.id || 'default'} (${filled.replacements} files, map ${filled.mapsQuery || 'city'}).`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    });
+    const { previewManager } = await import('@/lib/services/preview');
+    void previewManager.start(projectId).catch((error) => {
+      console.warn(`[automations] Fast-track preview start failed for ${projectId}:`, error);
+    });
+    return { projectId, shareUrl: sharePreviewUrl(projectId), origin };
+  }
+
+  const snapshot = await getAgentWorkspaceSnapshot();
   const instruction = `You are the Cursor agent inside Fintoke. Build a real Next.js marketing site for this business. Do not write a chat-only mock.
 
 Business:
@@ -301,7 +346,7 @@ async function runOutreach(job: WorkspaceAutomation): Promise<string> {
     await startSiteForLead(job, lead);
     sites += 1;
   }
-  if (sites) parts.push(`Started ${sites} Cursor site builds.`);
+  if (sites) parts.push(`Started ${sites} ${job.buildMode === 'full' ? 'Cursor site builds' : 'fast-track template sites'}.`);
 
   const latest = await listLeads();
   const mail = await getPublicMailSettings();

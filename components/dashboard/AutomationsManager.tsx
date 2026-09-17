@@ -27,11 +27,12 @@ const EMPTY_FORM = {
   websitePrompt: '',
   messagePrompt: '',
   emailSubject: '',
+  buildMode: 'fast' as 'fast' | 'full',
   count: 8,
   city: '',
   country: '',
   businessKind: 'local businesses',
-  sitesPerRun: 1,
+  sitesPerRun: 2,
   emailsPerRun: 3,
   repeatTotal: 8,
   intervalMinutes: 30,
@@ -147,7 +148,7 @@ export default function AutomationsManager() {
     <div className="p-6">
       <DashboardPageHeader
         title="Automations"
-        description="Research a field, hand the brief to the Cursor agent to build a site, then email the live preview. Uses the same workspace data as the Claude/ChatGPT connector."
+        description="Research a field, copy a template, fill the text with ChatGPT, then email the live preview. Full Cursor rebuilds are optional when you need a from-scratch site."
       />
 
       {error ? <p className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p> : null}
@@ -257,7 +258,24 @@ export default function AutomationsManager() {
         {defaultsReady.kind === 'outreach' ? (
           <>
             <label className="block text-sm text-gray-700">
-              Website instructions for Cursor
+              Site build
+              <select
+                value={defaultsReady.buildMode}
+                onChange={(event) =>
+                  setForm({ ...defaultsReady, buildMode: event.target.value as 'fast' | 'full' })
+                }
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
+              >
+                <option value="fast">Fast track — keep template, rewrite text, map, small colors</option>
+                <option value="full">Full Cursor rebuild — slower, new layout from the agent</option>
+              </select>
+            </label>
+            <p className="text-xs text-gray-500">
+              Fast track does not change photos. ChatGPT or Claude only rewrites copy, contact details, map
+              location, and optional accent color on the matched template.
+            </p>
+            <label className="block text-sm text-gray-700">
+              Website instructions {defaultsReady.buildMode === 'fast' ? 'for copy' : 'for Cursor'}
               <textarea
                 value={defaultsReady.websitePrompt}
                 onChange={(event) => setForm({ ...defaultsReady, websitePrompt: event.target.value })}
@@ -289,7 +307,7 @@ export default function AutomationsManager() {
                 <input
                   type="number"
                   min={1}
-                  max={3}
+                  max={8}
                   value={defaultsReady.sitesPerRun}
                   onChange={(event) => setForm({ ...defaultsReady, sitesPerRun: Number(event.target.value) })}
                   className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm"
@@ -364,7 +382,9 @@ export default function AutomationsManager() {
           {saving ? 'Saving…' : 'Schedule pipeline'}
         </button>
         {!hasKey && defaultsReady.kind !== 'enrich_empty' ? (
-          <p className="text-xs text-amber-800">Save an OpenAI API key first so research can run.</p>
+          <p className="text-xs text-amber-800">
+            Save an OpenAI API key first so research and fast-track copy filling can run.
+          </p>
         ) : null}
       </div>
 
@@ -377,7 +397,7 @@ export default function AutomationsManager() {
                 <p className="text-sm font-semibold text-gray-900">{job.name}</p>
                 <p className="mt-1 text-xs text-gray-500">
                   {job.kind === 'outreach'
-                    ? `${job.prompt || 'Existing work-table rows'} → Cursor sites → offers`
+                    ? `${job.prompt || 'Existing work-table rows'} → ${job.buildMode === 'full' ? 'Cursor rebuilds' : 'fast-track templates'} → offers`
                     : job.kind === 'generate_work'
                       ? job.prompt
                       : 'Fill empty work-table rows'}{' '}

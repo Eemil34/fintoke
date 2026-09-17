@@ -16,6 +16,7 @@ export interface WorkspaceAutomation {
   messagePrompt: string;
   emailSubject: string;
   emailTemplateId: string;
+  buildMode: 'fast' | 'full';
   count: number;
   city: string;
   country: string;
