@@ -6,13 +6,36 @@ import type { WorkspaceLead } from '@/types/leads';
 const SKIP_DIR = new Set(['node_modules', '.next', '.git', 'dist', 'build', '.turbo', 'public', 'assets']);
 const TEXT_FILES = new Set(['.ts', '.tsx', '.js', '.jsx', '.css']);
 const IMAGE_HINT = /unsplash|photo-[a-z0-9-]+|images\.unsplash|\/uploads\/|fallback\.svg/i;
-const SKIP_STRING = /unsplash\(|https?:\/\/|_next\/|mailto:|className|from ['"]|\/images\/|\/uploads\//i;
-const PLACEHOLDER_BRAND = 'Coral Cove|Kaarna|Careevo|Northlane|Helixline|Lumenlist|Fold & Signal';
+const KEEP_LABEL =
+  /^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog)$/i;
 
 type FastFillLead = Pick<
   WorkspaceLead,
   'business' | 'contactName' | 'whatTheyDo' | 'email' | 'phone' | 'city' | 'website' | 'notes' | 'details' | 'audience' | 'style'
 >;
+
+type CopyItem = { title: string; body: string };
+type CopyPack = {
+  name: string;
+  tagline: string;
+  description: string;
+  eyebrow: string;
+  heroTitle: string;
+  heroSubtitle: string;
+  address: string;
+  phone: string;
+  email: string;
+  aboutColumns: string[];
+  menu: CopyItem[];
+  features: CopyItem[];
+  events: CopyItem[];
+  testimonials: { quote: string; name: string; role: string }[];
+  team: { name: string; role: string; bio: string }[];
+  ctaTitle: string;
+  ctaSubtitle: string;
+  ctaButton: string;
+  footer: string;
+};
 
 function extractJsonObject(text: string): Record<string, unknown> | null {
   const start = text.indexOf('{');
@@ -57,42 +80,10 @@ async function listTextFiles(root: string): Promise<string[]> {
   return files;
 }
 
-function collectCopyStrings(source: string): string[] {
-  const found: string[] = [];
-  const re = /(["'`])((?:\\.|(?!\1)[^\\])*?)\1/g;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(source))) {
-    const value = match[2].replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"');
-    if (value.length < 3 || value.length > 420) continue;
-    if (SKIP_STRING.test(value)) continue;
-    if (IMAGE_HINT.test(value)) continue;
-    if (!/[a-zA-ZÀ-ÿ]/.test(value)) continue;
-    if (/^[.#]?[\w-]+$/.test(value) && value.length < 24) continue;
-    found.push(value);
-  }
-  return [...new Set(found)];
-}
-
-function applyReplacements(source: string, replacements: Record<string, string>): string {
-  const pairs = Object.entries(replacements)
-    .map(([from, to]) => [from, to] as const)
-    .filter(([from, to]) => from && to && from !== to && !SKIP_STRING.test(from) && !IMAGE_HINT.test(from))
-    .sort((a, b) => b[0].length - a[0].length);
-  let next = source;
-  for (const [from, to] of pairs) {
-    if (to.includes(from) && from.length > 12) continue;
-    next = next.split(from).join(to);
-  }
-  return next;
-}
-
 function rewriteMaps(source: string, query: string): string {
   if (!query) return source;
   const embed = mapsEmbed(query);
-  return source.replace(
-    /https?:\/\/(?:www\.)?google\.[^"' \s]+\/maps[^"' \s]*/gi,
-    embed,
-  );
+  return source.replace(/https?:\/\/(?:www\.)?google\.[^"' \s]+\/maps[^"' \s]*/gi, embed);
 }
 
 function injectMapsUrl(siteSource: string, embed: string): string {
@@ -101,10 +92,7 @@ function injectMapsUrl(siteSource: string, embed: string): string {
     return siteSource.replace(/mapsUrl\s*:\s*(['"`])[\s\S]*?\1/, `mapsUrl: '${embed.replace(/'/g, "\\'")}'`);
   }
   if (!/contact\s*:\s*\{/.test(siteSource)) return siteSource;
-  return siteSource.replace(
-    /(contact\s*:\s*\{)/,
-    `$1\n    mapsUrl: '${embed.replace(/'/g, "\\'")}',`,
-  );
+  return siteSource.replace(/(contact\s*:\s*\{)/, `$1\n    mapsUrl: '${embed.replace(/'/g, "\\'")}',`);
 }
 
 function injectMapIframe(source: string): string {
@@ -139,150 +127,150 @@ function applyAccentColor(source: string, color: string): string {
   return next;
 }
 
-function freezeMedia(source: string): { frozen: string; slots: string[] } {
-  const slots: string[] = [];
-  const frozen = source.replace(
-    /unsplash\(\s*['"][^'"]+['"][^)]*\)|https?:\/\/(?:images\.)?unsplash\.com[^"'`)\s]*|\/(?:images|uploads)\/[^\s"'`)]+|photo-[a-z0-9-]+/gi,
-    (match) => {
-      const index = slots.length;
-      slots.push(match);
-      return `__FTIMG_${index}__`;
-    },
-  );
-  return { frozen, slots };
-}
-
-function thawMedia(source: string, slots: string[]): string {
-  let next = source;
-  for (let index = 0; index < slots.length; index += 1) {
-    next = next.split(`__FTIMG_${index}__`).join(slots[index]);
-  }
-  return next;
-}
-
-function stripFence(text: string): string {
-  return text
-    .replace(/^```(?:tsx?|javascript|typescript|jsx)?\s*/i, '')
-    .replace(/```\s*$/i, '')
-    .trim();
-}
-
-function isVisitorCopy(value: string): boolean {
-  if (IMAGE_HINT.test(value) || SKIP_STRING.test(value)) return false;
-  if (/^(flex|grid|hidden|block|inline|absolute|relative|sticky|items-|justify-|px-|py-|pt-|pb-|pl-|pr-|mt-|mb-|ml-|mr-|mx-|my-|w-|h-|min-|max-|text-|bg-|rounded|border|shadow|gap-|col-|row-|sm:|md:|lg:|xl:|2xl:)/.test(value)) {
-    return false;
-  }
-  if (value.length < 4) return false;
-  return /[A-Za-zÀ-ÿ]/.test(value);
-}
-
-function isCopyFile(file: string, source: string): boolean {
-  const base = path.basename(file);
-  if (['SiteImage.tsx', 'imageLibrary.ts', 'ImageGuard.tsx', 'instrumentation-client.ts'].includes(base)) {
-    return false;
-  }
-  if (base === 'site.ts' || base === 'content.ts' || base === 'copy.ts') return true;
-  return /export const site\s*=/.test(source) && source.length < 28_000;
-}
-
 export function isCopyOnlyInstruction(instruction: string): boolean {
   return /rewrite (all )?(the )?(text|copy|strings)|visible copy|full text|do not (change|replace|touch) (the )?(photos|images|files)|keep (the )?(photos|images)|copy only|text only/i.test(
     instruction,
   );
 }
 
-async function completeFillText(prompt: string): Promise<string> {
-  const openai = await getOpenaiApiKey();
-  const anthropic = process.env.ANTHROPIC_API_KEY?.trim() || process.env.CLAUDE_API_KEY?.trim() || '';
-  if (!openai && !anthropic) {
-    throw new Error('Add an OpenAI API key on Automations (sk-…) or set OPENAI_API_KEY.');
-  }
-  if (openai) {
-    const models = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'];
-    let lastError = 'ChatGPT request failed';
-    for (const model of models) {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openai}`,
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0.55,
-          max_tokens: 12000,
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You rewrite website template source for one real business. Return the full source file only. Keep TypeScript/React valid. Leave every __FTIMG_n__ token unchanged. Never add or remove photos, Unsplash IDs, or layout sections. Rewrite ALL visitor-facing copy: name, hero, about, menu items, events, testimonials, CTAs, hours, address, footer.',
-            },
-            { role: 'user', content: prompt },
-          ],
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as {
-        choices?: { message?: { content?: string } }[];
-        error?: { message?: string };
-      } | null;
-      if (!response.ok) {
-        lastError = payload?.error?.message || `ChatGPT request failed (${response.status})`;
-        if (/model|not found|unsupported|does not exist/i.test(lastError)) continue;
-        throw new Error(lastError);
-      }
-      const text = stripFence(payload?.choices?.[0]?.message?.content || '');
-      if (text.length > 80) return text;
-      lastError = 'ChatGPT returned empty source.';
-    }
-    throw new Error(lastError);
-  }
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': anthropic,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 12000,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  const payload = (await response.json().catch(() => null)) as {
-    content?: { type: string; text?: string }[];
-    error?: { message?: string };
-  } | null;
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || `Anthropic request failed (${response.status})`);
-  }
-  const text = stripFence(payload?.content?.find((item) => item.type === 'text')?.text || '');
-  if (!text) throw new Error('Claude did not return source.');
-  return text;
+function escapeQuoted(value: string, quote: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(new RegExp(quote, 'g'), `\\${quote}`)
+    .replace(/\n/g, '\\n');
 }
 
-async function rewriteCopyFile(original: string, brief: string): Promise<string | null> {
-  const { frozen, slots } = freezeMedia(original);
-  if (frozen.length > 28_000) return null;
-  const rewritten = await completeFillText(`Rewrite this template source for the business below.
-Keep imports, component structure, className values, and every __FTIMG_n__ token exactly.
-Change every customer-visible string so it is about this business (menu, about, hero, events, contact). Do not leave the old restaurant/cafe/clinic placeholder names.
+function decodeQuoted(value: string): string {
+  return value.replace(/\\n/g, '\n').replace(/\\'/g, "'").replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+}
 
-Business:
-${brief}
+function isTechnicalString(value: string): boolean {
+  if (IMAGE_HINT.test(value)) return true;
+  if (/^@?\/|^\.\.?\/|https?:\/\//.test(value)) return true;
+  if (/^[a-z0-9-]+$/.test(value) && !/\s/.test(value)) return true;
+  if (/^(flex|grid|hidden|block|px-|py-|text-|bg-|rounded|sm:|md:|lg:)/.test(value)) return true;
+  return false;
+}
 
-Source:
-${frozen}`);
-  if (rewritten.length < original.length * 0.45) return null;
-  const missing = slots.some((_, index) => !rewritten.includes(`__FTIMG_${index}__`));
-  if (missing) {
-    const originalShots = (original.match(/unsplash\(/g) || []).length;
-    const nextShots = (rewritten.match(/unsplash\(/g) || []).length;
-    if (originalShots && nextShots === originalShots) return rewritten;
-    return null;
+function dishList(what: string, name: string): CopyItem[] {
+  const kind = what.toLowerCase();
+  if (/pizza/.test(kind)) {
+    return [
+      { title: `${name} margherita`, body: 'San Marzano tomato, mozzarella, basil, olive oil.' },
+      { title: 'Funghi', body: 'Roasted mushrooms, garlic, thyme, fior di latte.' },
+      { title: 'Diavola', body: 'Spicy salami, chili honey, mozzarella.' },
+      { title: 'Burrata salad', body: 'Ripe tomato, basil oil, grilled bread.' },
+      { title: 'Cacio e pepe', body: 'Pecorino, black pepper, fresh pasta.' },
+      { title: 'Tiramisu', body: 'Espresso, mascarpone, cocoa.' },
+      { title: 'Olives & oil', body: 'Warm focaccia, house olives.' },
+      { title: 'Aperitivo spritz', body: 'Bitter citrus, prosecco, orange.' },
+    ];
   }
-  return thawMedia(rewritten, slots);
+  if (/sushi|ramen|noodle|asian|izakaya/.test(kind)) {
+    return [
+      { title: 'Chef nigiri set', body: 'Dayboat fish, warm rice, wasabi.' },
+      { title: 'Spicy tuna roll', body: 'Sesame, scallion, chili mayo.' },
+      { title: 'Miso ramen', body: 'Rich broth, chashu, egg, nori.' },
+      { title: 'Cucumber sunomono', body: 'Rice vinegar, sesame, chili.' },
+      { title: 'Chicken karaage', body: 'Crisp thigh, lemon, Kewpie.' },
+      { title: 'Matcha panna cotta', body: 'White chocolate, berry.' },
+      { title: 'Edamame', body: 'Sea salt, chili oil.' },
+      { title: 'House highball', body: 'Whisky, soda, yuzu peel.' },
+    ];
+  }
+  if (/cafe|coffee|bakery/.test(kind)) {
+    return [
+      { title: 'House espresso', body: 'Single origin, chocolate and citrus.' },
+      { title: 'Flat white', body: 'Velvety milk, double shot.' },
+      { title: 'Cardamom bun', body: 'Butter, sugar, warm spice.' },
+      { title: 'Sourdough toast', body: 'Whipped butter, seasonal jam.' },
+      { title: 'Seasonal salad', body: 'Greens, seeds, house vinaigrette.' },
+      { title: 'Soup of the day', body: 'Ask the counter for today’s pot.' },
+      { title: 'Berry oat bowl', body: 'Yogurt, honey, toasted grains.' },
+      { title: 'Iced filter', body: 'Slow brew, served over ice.' },
+    ];
+  }
+  return [
+    { title: `${name} starter`, body: 'Seasonal produce, house dressing, warm bread.' },
+    { title: 'Chef’s catch', body: 'Market fish, lemon, herbs, olive oil.' },
+    { title: 'Slow roast', body: 'Sunday-style meat, pan juices, greens.' },
+    { title: 'Garden plate', body: 'Grilled vegetables, grains, tahini.' },
+    { title: 'House pasta', body: 'Fresh noodles, butter, hard cheese.' },
+    { title: 'Citrus tart', body: 'Short pastry, cream, sea salt.' },
+    { title: 'Olives & pickles', body: 'Something sharp to start.' },
+    { title: 'House wine', body: 'A glass that matches the kitchen.' },
+  ];
+}
+
+function localCopyPack(lead: FastFillLead, country?: string): CopyPack {
+  const name = lead.business.trim() || 'Kitchen';
+  const city = [lead.city, country].filter(Boolean).join(', ') || 'town';
+  const what = (lead.whatTheyDo || 'a neighborhood restaurant').trim();
+  const menu = dishList(what, name);
+  const address = city;
+  const email = lead.email.trim() || `hello@${name.toLowerCase().replace(/[^a-z0-9]+/g, '') || 'kitchen'}.fi`;
+  const phone = lead.phone.trim() || '';
+  return {
+    name,
+    tagline: `${what} in ${city}`.slice(0, 90),
+    description: `${name} is ${what} in ${city}. ${lead.notes || lead.details || 'Come in for a table, a glass, and food that tastes like this place.'}`.slice(
+      0,
+      360,
+    ),
+    eyebrow: `${what} · ${city}`.slice(0, 80),
+    heroTitle: name,
+    heroSubtitle: `${name} cooks ${what} for ${city} — simple plates, a calm room, and a table you can stay at.`.slice(
+      0,
+      220,
+    ),
+    address,
+    phone,
+    email,
+    aboutColumns: [
+      `${name} is a ${what} in ${city}. The kitchen cooks for this neighborhood: honest food, a short menu, and a room that feels looked after.`,
+      lead.audience
+        ? `We cook for ${lead.audience}. ${lead.style || 'The room is unfussy and the service is warm.'}`
+        : `Walk in, book a table, or linger after dinner. ${name} is built for regulars as much as first visits.`,
+    ],
+    menu,
+    features: [
+      { title: 'The kitchen', body: `${name} cooks ${what} with produce we actually want to eat.` },
+      { title: 'The room', body: `A straightforward dining room in ${city} — good light, decent chairs, no theatre.` },
+      { title: 'Drinks', body: 'A short list that matches the food: wine, beer, and a couple of house pours.' },
+      { title: 'Groups', body: 'Say hello by email if you are booking a longer table or a private evening.' },
+    ],
+    events: [
+      { title: 'Weeknight table', body: `Drop in at ${name} for the short evening menu.` },
+      { title: 'Saturday lunch', body: 'A slower midday service when the kitchen has time.' },
+      { title: 'Private dining', body: 'Email us for a closed table or a chef’s menu.' },
+    ],
+    testimonials: [
+      { quote: `${name} tastes like ${city} — I booked again before we left.`, name: 'A regular', role: 'Guest' },
+      { quote: 'Clear cooking, no fuss. This is the table I send people to.', name: 'Local note', role: 'Neighbor' },
+    ],
+    team: [
+      { name: lead.contactName || 'Head chef', role: 'Kitchen', bio: `Runs the ${name} kitchen around ${what}.` },
+      { name: 'Front of house', role: 'Service', bio: `Looks after the room in ${city}.` },
+    ],
+    ctaTitle: `Book ${name}`,
+    ctaSubtitle: `Reserve a table in ${city} or write to us and we will find a time.`,
+    ctaButton: 'Reservation',
+    footer: `${name} · ${city}`,
+  };
+}
+
+function asItems(value: unknown): CopyItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const row = item as Record<string, unknown>;
+      const title = asString(row.title);
+      const body = asString(row.body);
+      if (!title) return null;
+      return { title, body };
+    })
+    .filter((item): item is CopyItem => Boolean(item));
 }
 
 async function completeFillJson(prompt: string): Promise<Record<string, unknown>> {
@@ -303,14 +291,14 @@ async function completeFillJson(prompt: string): Promise<Record<string, unknown>
         },
         body: JSON.stringify({
           model,
-          temperature: 0.5,
-          max_tokens: 8000,
+          temperature: 0.7,
+          max_tokens: 4000,
           response_format: { type: 'json_object' },
           messages: [
             {
               role: 'system',
               content:
-                'You localize a website template for one real business. Reply with a JSON object only. Never change image URLs, Unsplash IDs, or layout. Rewrite almost every visitor-facing string: hero, about, menu dishes, events, testimonials, CTAs, hours, address. Do not leave placeholder restaurant names like Coral Cove.',
+                'Write a complete restaurant/cafe website copy pack for one real business. JSON only. Invent a full menu, about text, events, and testimonials. Never mention Coral Cove, Park Avenue, Unsplash, or image URLs.',
             },
             { role: 'user', content: prompt },
           ],
@@ -341,7 +329,7 @@ async function completeFillJson(prompt: string): Promise<Record<string, unknown>
     },
     body: JSON.stringify({
       model: 'claude-3-5-haiku-20241022',
-      max_tokens: 8000,
+      max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -357,83 +345,196 @@ async function completeFillJson(prompt: string): Promise<Record<string, unknown>
   return parsed;
 }
 
-function fallbackReplacements(lead: FastFillLead, strings: string[]): Record<string, string> {
-  const next: Record<string, string> = {};
-  const name = lead.business.trim();
-  if (!name) return next;
-  const city = [lead.city].filter(Boolean).join(', ');
-  for (const value of strings) {
-    if (value.length > 48) continue;
-    if (/coral cove|kaarna|careevo|example\.com|park avenue/i.test(value)) {
-      next[value] = name;
-    }
+async function fetchCopyPack(lead: FastFillLead, country?: string, extra?: string): Promise<CopyPack> {
+  const local = localCopyPack(lead, country);
+  try {
+    const parsed = await completeFillJson(`Write website copy for this business. Fill every field. Photos stay on the template; this is text only.
+
+${JSON.stringify(
+      {
+        name: lead.business,
+        contactName: lead.contactName,
+        whatTheyDo: lead.whatTheyDo,
+        email: lead.email,
+        phone: lead.phone,
+        city: lead.city,
+        country: country || '',
+        notes: lead.notes,
+        details: lead.details,
+        audience: lead.audience,
+        style: lead.style,
+        extra: extra || '',
+      },
+      null,
+      2,
+    )}
+
+Return JSON with keys:
+name, tagline, description, eyebrow, heroTitle, heroSubtitle, address, phone, email,
+aboutColumns (2 strings),
+menu (8 objects {title, body}),
+features (4 objects {title, body}),
+events (3 objects {title, body}),
+testimonials (2 objects {quote, name, role}),
+team (2 objects {name, role, bio}),
+ctaTitle, ctaSubtitle, ctaButton, footer.`);
+    const menu = asItems(parsed.menu);
+    const features = asItems(parsed.features);
+    const events = asItems(parsed.events);
+    const aboutColumns = Array.isArray(parsed.aboutColumns)
+      ? parsed.aboutColumns.map((item) => asString(item)).filter(Boolean)
+      : [];
+    return {
+      ...local,
+      name: asString(parsed.name) || local.name,
+      tagline: asString(parsed.tagline) || local.tagline,
+      description: asString(parsed.description) || local.description,
+      eyebrow: asString(parsed.eyebrow) || local.eyebrow,
+      heroTitle: asString(parsed.heroTitle) || local.heroTitle,
+      heroSubtitle: asString(parsed.heroSubtitle) || local.heroSubtitle,
+      address: asString(parsed.address) || local.address,
+      phone: asString(parsed.phone) || local.phone,
+      email: asString(parsed.email) || local.email,
+      aboutColumns: aboutColumns.length ? aboutColumns : local.aboutColumns,
+      menu: menu.length ? menu : local.menu,
+      features: features.length ? features : local.features,
+      events: events.length ? events : local.events,
+      ctaTitle: asString(parsed.ctaTitle) || local.ctaTitle,
+      ctaSubtitle: asString(parsed.ctaSubtitle) || local.ctaSubtitle,
+      ctaButton: asString(parsed.ctaButton) || local.ctaButton,
+      footer: asString(parsed.footer) || local.footer,
+    };
+  } catch (error) {
+    console.warn('[fastFill] Copy pack failed, using local restaurant copy:', error);
+    return local;
   }
-  if (lead.phone) {
-    for (const value of strings) {
-      if (/\+?\d[\d\s().-]{7,}/.test(value)) next[value] = lead.phone;
-    }
-  }
-  if (lead.email) {
-    for (const value of strings) {
-      if (/@/.test(value) && /hello@|info@|contact@/.test(value)) next[value] = lead.email;
-    }
-  }
-  if (city) {
-    for (const value of strings) {
-      if (/park avenue|ny, usa|helsinki|tampere/i.test(value) && value.length < 80) next[value] = city;
-    }
-  }
-  return next;
 }
 
-async function fillStringBatches(
-  strings: string[],
-  brief: string,
-): Promise<{ replacements: Record<string, string>; mapsQuery: string; accent: string; address: string }> {
-  const replacements: Record<string, string> = {};
-  let mapsQuery = '';
-  let accent = '';
-  let address = '';
-  const visitor = strings.filter(isVisitorCopy);
-  const chunkSize = 22;
-  for (let index = 0; index < visitor.length; index += chunkSize) {
-    const chunk = visitor.slice(index, index + chunkSize);
-    try {
-      const parsed = await completeFillJson(`Business to put on this template (keep photos exactly as they are):
-${brief}
+function applyCopyPack(source: string, pack: CopyPack): string {
+  const counters = {
+    name: 0,
+    title: 0,
+    body: 0,
+    subtitle: 0,
+    alt: 0,
+    quote: 0,
+    role: 0,
+    bio: 0,
+    people: 0,
+    menu: 0,
+    feature: 0,
+  };
+  const titles = [
+    pack.heroTitle,
+    pack.aboutColumns[0]?.slice(0, 48) || 'Our kitchen',
+    ...pack.menu.map((item) => item.title),
+    ...pack.features.map((item) => item.title),
+    ...pack.events.map((item) => item.title),
+    pack.ctaTitle,
+    'Our story',
+    'Book a table',
+  ];
+  const bodies = [
+    pack.heroSubtitle,
+    pack.description,
+    ...pack.aboutColumns,
+    ...pack.menu.map((item) => item.body),
+    ...pack.features.map((item) => item.body),
+    ...pack.events.map((item) => item.body),
+    pack.ctaSubtitle,
+  ];
+  const people = [...pack.testimonials.map((item) => item.name), ...pack.team.map((item) => item.name)];
+  const roles = [...pack.testimonials.map((item) => item.role), ...pack.team.map((item) => item.role)];
+  const bios = pack.team.map((item) => item.bio);
+  const quotes = pack.testimonials.map((item) => item.quote);
+  const alts = pack.menu.map((item) => item.title);
 
-Rewrite EVERY string in this list. Keys must match exactly. Do not skip menu items, about paragraphs, or headlines.
-${JSON.stringify(chunk)}
+  const copyProp =
+    /\b(name|tagline|description|address|phone|email|eyebrow|title|titleAccent|subtitle|cta|ctaSecondary|imageAlt|alt|body|quote|role|bio|hours|button|label|footer|text|desc|note)\s*:\s*(['"`])((?:\\.|[^\\])*?)\2/g;
 
-Return JSON:
-{
-  "replacements": { "exact current string": "new string for this business" },
-  "address": "street and city if known, else city and country",
-  "mapsQuery": "best Google Maps search query",
-  "primaryColor": "#RRGGBB or empty"
-}`);
-      const raw = parsed.replacements && typeof parsed.replacements === 'object' ? parsed.replacements : {};
-      for (const [from, to] of Object.entries(raw as Record<string, unknown>)) {
-        const next = asString(to);
-        if (from && next && from !== next) replacements[from] = next;
-      }
-      mapsQuery = asString(parsed.mapsQuery) || asString(parsed.address) || mapsQuery;
-      accent = asString(parsed.primaryColor) || accent;
-      address = asString(parsed.address) || address;
-    } catch (error) {
-      console.warn('[fastFill] String batch failed:', error);
+  return source.replace(copyProp, (full, key: string, quote: string, raw: string) => {
+    const value = decodeQuoted(raw);
+    if (isTechnicalString(value)) return full;
+    if (KEEP_LABEL.test(value) && value.length < 22) return full;
+    let next = value;
+    switch (key) {
+      case 'email':
+        next = pack.email || value;
+        break;
+      case 'phone':
+        next = pack.phone || value;
+        break;
+      case 'address':
+        next = pack.address || value;
+        break;
+      case 'tagline':
+      case 'eyebrow':
+        next = pack.eyebrow;
+        break;
+      case 'description':
+        next = pack.description;
+        break;
+      case 'footer':
+        next = pack.footer;
+        break;
+      case 'button':
+      case 'cta':
+      case 'ctaSecondary':
+        next = pack.ctaButton;
+        break;
+      case 'name':
+        next = counters.name === 0 ? pack.name : people[counters.people++ % Math.max(people.length, 1)] || pack.name;
+        counters.name += 1;
+        break;
+      case 'title':
+      case 'titleAccent':
+        next = titles[counters.title++ % titles.length] || pack.name;
+        break;
+      case 'subtitle':
+      case 'body':
+      case 'desc':
+      case 'text':
+      case 'note':
+        next = bodies[counters.body++ % bodies.length] || pack.description;
+        break;
+      case 'quote':
+        next = quotes[counters.quote++ % Math.max(quotes.length, 1)] || pack.heroSubtitle;
+        break;
+      case 'role':
+        next = roles[counters.role++ % Math.max(roles.length, 1)] || 'Team';
+        break;
+      case 'bio':
+        next = bios[counters.bio++ % Math.max(bios.length, 1)] || pack.description;
+        break;
+      case 'imageAlt':
+      case 'alt':
+        next = alts[counters.alt++ % Math.max(alts.length, 1)] || pack.name;
+        break;
+      case 'hours':
+        next = 'Tue–Sat 12–22';
+        break;
+      default:
+        break;
     }
-  }
-  return { replacements, mapsQuery, accent, address };
+    if (!next || next === value) return full;
+    return `${key}: ${quote}${escapeQuoted(next, quote)}${quote}`;
+  });
 }
 
-function sweepPlaceholders(source: string, business: string, city: string): string {
-  if (!business) return source;
-  let next = source.replace(new RegExp(PLACEHOLDER_BRAND, 'g'), business);
-  if (city) {
-    next = next.replace(/Park Avenue, 60146 NY, USA/g, city);
-  }
-  return next;
+function rewriteLeftoverQuotes(source: string, pack: CopyPack, business: string): string {
+  let index = 0;
+  const pool = [...pack.aboutColumns, pack.description, pack.heroSubtitle, ...pack.menu.map((item) => item.body)];
+  return source.replace(/(["'`])((?:\\.|[^\\])*?)\1/g, (full, quote: string, raw: string) => {
+    const value = decodeQuoted(raw);
+    if (isTechnicalString(value) || KEEP_LABEL.test(value)) return full;
+    if (value.includes(business) && value.length < 80) return full;
+    if (value.length < 20) return full;
+    if (!/[A-Za-zÀ-ÿ]/.test(value)) return full;
+    if (/className|href|slug|kind|layout|mode/.test(full)) return full;
+    const next = pool[index++ % pool.length] || pack.description;
+    if (!next || next === value) return full;
+    return `${quote}${escapeQuoted(next, quote)}${quote}`;
+  });
 }
 
 export async function fastFillProjectFromLead(options: {
@@ -443,82 +544,28 @@ export async function fastFillProjectFromLead(options: {
   country?: string;
 }): Promise<{ replacements: number; mapsQuery: string }> {
   const files = await listTextFiles(options.projectPath);
-  const brief = JSON.stringify(
-    {
-      name: options.lead.business,
-      contactName: options.lead.contactName,
-      whatTheyDo: options.lead.whatTheyDo,
-      email: options.lead.email,
-      phone: options.lead.phone,
-      city: options.lead.city,
-      country: options.country || '',
-      website: options.lead.website,
-      audience: options.lead.audience,
-      style: options.lead.style,
-      notes: options.lead.notes,
-      details: options.lead.details,
-      extraInstructions: options.websitePrompt || '',
-    },
-    null,
-    2,
-  );
-
-  for (const file of files) {
-    if (!file.endsWith('site.ts') && !file.endsWith('content.ts') && !file.endsWith('copy.ts')) continue;
-    try {
-      const original = await fs.readFile(file, 'utf8');
-      if (!isCopyFile(file, original)) continue;
-      const rewritten = await rewriteCopyFile(original, brief);
-      if (rewritten && rewritten !== original) {
-        await fs.writeFile(file, rewritten);
-      }
-    } catch (error) {
-      console.warn('[fastFill] File rewrite failed, using string replacements:', file, error);
-    }
-  }
-
-  const afterRewrite = (
-    await Promise.all(
-      files.map(async (file) => {
-        try {
-          return await fs.readFile(file, 'utf8');
-        } catch {
-          return '';
-        }
-      }),
-    )
-  ).join('\n');
-  const leftover = collectCopyStrings(afterRewrite).slice(0, 180);
-  const batched = await fillStringBatches(leftover, brief);
-  const replacements = {
-    ...fallbackReplacements(options.lead, leftover),
-    ...batched.replacements,
-  };
-  let mapsQuery = batched.mapsQuery || [options.lead.business, options.lead.city, options.country].filter(Boolean).join(', ');
-  const accent = batched.accent;
-  if (batched.address) {
-    for (const value of leftover) {
-      if (/address|avenue|street|katu|tie|plaza|ny, usa/i.test(value) && value.length < 90) {
-        replacements[value] = batched.address;
-      }
-    }
-  }
-
+  const pack = await fetchCopyPack(options.lead, options.country, options.websitePrompt);
+  const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
   const embed = mapsQuery ? mapsEmbed(mapsQuery) : '';
   let writes = 0;
+
   for (const file of files) {
     const original = await fs.readFile(file, 'utf8');
-    let next = sweepPlaceholders(original, options.lead.business, options.lead.city);
-    next = applyReplacements(next, replacements);
+    let next = original;
+    if (/\.(ts|tsx|js|jsx)$/.test(file) && path.basename(file) !== 'SiteImage.tsx') {
+      next = applyCopyPack(next, pack);
+      if (path.basename(file) === 'site.ts' || /export const site\s*=/.test(original)) {
+        next = rewriteLeftoverQuotes(next, pack, pack.name);
+      }
+    }
+    next = next.split('Coral Cove').join(pack.name);
+    next = next.split('Park Avenue, 60146 NY, USA').join(pack.address);
     next = rewriteMaps(next, mapsQuery);
     if (path.basename(file) === 'site.ts') {
       next = injectMapsUrl(next, embed);
     }
     if (/\.(tsx|jsx)$/.test(file)) {
       next = injectMapIframe(next);
-    }
-    if (/\.(css|tsx|ts|js)$/.test(file)) {
-      next = applyAccentColor(next, accent);
     }
     if (next !== original) {
       await fs.writeFile(file, next);
