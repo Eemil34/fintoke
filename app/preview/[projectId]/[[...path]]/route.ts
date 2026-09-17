@@ -26,7 +26,6 @@ function previewPage(title: string, message: string, logs: string[]) {
 <html lang="en" data-fintoke-shell="1">
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="3" />
   <title>${escapeHtml(title)}</title>
   <style>
     body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; min-height: 100vh; background: #111827; color: #f8fafc; display: flex; align-items: center; justify-content: center; }
@@ -42,8 +41,7 @@ function previewPage(title: string, message: string, logs: string[]) {
     <div class="spin" aria-hidden="true"></div>
     <h1>${escapeHtml(title)}</h1>
     <p>${escapeHtml(message)}</p>
-    <p>This page refreshes by itself. First open after email can take about a minute while the site installs.</p>
-    <pre>${logBlock || 'Waiting for preview logs…'}</pre>
+    <pre>${logBlock || 'Waiting for the site…'}</pre>
   </main>
   <script>
     (function () {
@@ -52,11 +50,11 @@ function previewPage(title: string, message: string, logs: string[]) {
         fetch(location.pathname + (location.pathname.indexOf('?') >= 0 ? '&' : '?') + 'fintoke_probe=1', { cache: 'no-store' })
           .then(function (r) {
             if (r.ok) location.replace(path);
-            else setTimeout(tick, 1200);
+            else setTimeout(tick, 1500);
           })
-          .catch(function () { setTimeout(tick, 1200); });
+          .catch(function () { setTimeout(tick, 1500); });
       }
-      setTimeout(tick, 800);
+      setTimeout(tick, 400);
     })();
   </script>
 </body>
@@ -155,8 +153,8 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       });
     }
     return previewPage(
-      'Starting preview',
-      preview.status === 'error' ? 'Restarting the site process…' : 'Preparing the site process…',
+      'Opening the site',
+      preview.status === 'error' ? 'Restarting the preview…' : 'Starting the restaurant preview…',
       preview.logs || logs(),
     );
   }
@@ -186,10 +184,35 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     (init as RequestInit & { duplex: string }).duplex = 'half';
   }
 
-  let upstream: Response;
-  try {
-    upstream = await fetch(target, init);
-  } catch {
+  const documentRequest = !isAssetRequest(segments);
+  const deadline = Date.now() + (documentRequest && !isProbe ? 48_000 : 8_000);
+  let upstream: Response | null = null;
+  while (Date.now() < deadline) {
+    try {
+      const nextInit: RequestInit = { ...init, signal: AbortSignal.timeout(12000) };
+      upstream = await fetch(target, nextInit);
+      const contentType = upstream.headers.get('content-type') || '';
+      const htmlReady = upstream.ok && contentType.includes('text/html');
+      if (!documentRequest || htmlReady || (upstream.status < 500 && upstream.status !== 404 && contentType.includes('text/html'))) {
+        break;
+      }
+      if (isProbe && htmlReady) break;
+      if (isProbe && !htmlReady) {
+        await upstream.body?.cancel().catch(() => undefined);
+        upstream = null;
+      } else if (documentRequest && !htmlReady) {
+        await upstream.body?.cancel().catch(() => undefined);
+        upstream = null;
+      } else {
+        break;
+      }
+    } catch {
+      upstream = null;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+  }
+
+  if (!upstream) {
     if (isProbe || isAssetRequest(segments)) {
       return new Response('wait', {
         status: 503,
@@ -197,8 +220,8 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       });
     }
     return previewPage(
-      'Starting preview',
-      'Next.js is compiling. This frame will open the site when it is ready.',
+      'Opening the site',
+      'The preview is still starting. This page will open the restaurant when it is ready.',
       logs(),
     );
   }
@@ -213,24 +236,15 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   const contentType = upstream.headers.get('content-type') || '';
   const out = copyHeaders(upstream, prefix, preview.port);
-  const documentRequest = !isAssetRequest(segments);
   const looksLikePlainError =
     !contentType.includes('text/html') &&
     (upstream.status >= 500 || /internal server error/i.test(contentType));
 
   if (documentRequest && (!upstream.ok || looksLikePlainError) && !contentType.includes('text/html')) {
-    const detail = (await upstream.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 400);
-    if (isProbe) {
-      return new Response('wait', {
-        status: 503,
-        headers: { 'retry-after': '2', 'cache-control': 'no-store' },
-      });
-    }
+    await upstream.text().catch(() => '');
     return previewPage(
-      upstream.status >= 500 ? 'Site is compiling' : 'Preview not ready',
-      detail && !/^internal server error$/i.test(detail)
-        ? detail
-        : 'The site process returned an error. This frame will open the page when Next.js finishes compiling.',
+      'Opening the site',
+      'The preview is compiling. This page will open as soon as the restaurant is ready.',
       logs(),
     );
   }

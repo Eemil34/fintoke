@@ -112,6 +112,14 @@ export function reclaimVolumeSpaceSync(keepProjectIds: string[] = []): {
     removed.push(tmpCache);
   }
 
+  const diskNow = volumeDiskInfo(dataDir);
+  if (diskNow && diskNow.freeBytes < 400_000_000) {
+    const previewDeps = path.join(dataDir, 'preview-deps');
+    if (fs.existsSync(previewDeps) && rmDir(previewDeps)) {
+      removed.push(previewDeps);
+    }
+  }
+
   return { removed, disk: volumeDiskInfo(dataDir) };
 }
 

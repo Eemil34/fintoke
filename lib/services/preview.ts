@@ -2,7 +2,9 @@
  * PreviewManager - Handles per-project development servers (live preview)
  */
 
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, type ChildProcess, execFile } from 'child_process';
+import { promisify } from 'util';
+import { createHash } from 'crypto';
 import path from 'path';
 import fs from 'fs/promises';
 import { findAvailablePort } from '@/lib/utils/ports';
@@ -10,7 +12,7 @@ import { getProjectById, updateProject, updateProjectStatus } from './project';
 import { ensureProjectApp, restoreSnapshotIfMaterialized } from '@/lib/templates/copyTemplate';
 import { clearNextCache, ensureGeneratedDevScript, ensureIsolatedNextConfig, ensureRevealVisible, writePreviewNextConfig } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
-import { projectsDir } from '@/lib/server/paths';
+import { projectsDir, writableDataDir } from '@/lib/server/paths';
 import { resolveAndPersistProjectWorkspace, resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
 import { npmInstallEnv, reclaimVolumeSpace } from '@/lib/server/volumeCleanup';
@@ -32,6 +34,7 @@ const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const pnpmCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 const yarnCommand = process.platform === 'win32' ? 'yarn.cmd' : 'yarn';
 const bunCommand = process.platform === 'win32' ? 'bun.exe' : 'bun';
+const execFileAsync = promisify(execFile);
 
 type PackageManagerId = 'npm' | 'pnpm' | 'yarn' | 'bun';
 
@@ -513,25 +516,16 @@ async function waitForPreviewReady(
   while (Date.now() - start < timeoutMs) {
     attempts += 1;
     try {
-      const response = await fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(4000) });
-      if (response.ok) {
+      const getResponse = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(12000) });
+      const contentType = getResponse.headers.get('content-type') || '';
+      await getResponse.body?.cancel().catch(() => undefined);
+      if (getResponse.ok && contentType.includes('text/html')) {
         log(
           Buffer.from(
-            `[PreviewManager] Preview server responded after ${attempts} attempt(s).`
+            `[PreviewManager] Preview HTML ready after ${attempts} attempt(s).`
           )
         );
         return true;
-      }
-      if (response.status === 405 || response.status === 501) {
-        const getResponse = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(4000) });
-        if (getResponse.ok) {
-          log(
-            Buffer.from(
-              `[PreviewManager] Preview server responded to GET after ${attempts} attempt(s).`
-            )
-          );
-          return true;
-        }
       }
     } catch (error) {
       if (attempts === 1) {
@@ -554,6 +548,75 @@ async function waitForPreviewReady(
     )
   );
   return false;
+}
+
+async function lockfileHash(projectPath: string): Promise<string | null> {
+  for (const name of ['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lockb']) {
+    try {
+      const raw = await fs.readFile(path.join(projectPath, name));
+      return createHash('sha256').update(raw).digest('hex').slice(0, 20);
+    } catch {
+      // try next lockfile
+    }
+  }
+  return null;
+}
+
+function sharedNodeModulesPath(hash: string): string {
+  return path.join(writableDataDir(), 'preview-deps', hash, 'node_modules');
+}
+
+async function cloneDirectory(from: string, to: string): Promise<void> {
+  await fs.mkdir(path.dirname(to), { recursive: true });
+  try {
+    await execFileAsync('cp', ['-al', from, to]);
+  } catch {
+    await fs.cp(from, to, { recursive: true });
+  }
+}
+
+async function reuseSharedNodeModules(
+  projectPath: string,
+  log: (chunk: Buffer | string) => void,
+): Promise<boolean> {
+  const local = path.join(projectPath, 'node_modules');
+  if (await directoryExists(local)) return true;
+  const hash = await lockfileHash(projectPath);
+  if (!hash) return false;
+  const shared = sharedNodeModulesPath(hash);
+  if (!(await directoryExists(shared))) return false;
+  try {
+    await cloneDirectory(shared, local);
+    log(Buffer.from(`[PreviewManager] Reused cached dependencies (${hash}).`));
+    return true;
+  } catch (error) {
+    log(
+      Buffer.from(
+        `[PreviewManager] Could not reuse cached dependencies: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    );
+    await fs.rm(local, { recursive: true, force: true }).catch(() => undefined);
+    return false;
+  }
+}
+
+async function saveSharedNodeModules(projectPath: string, log: (chunk: Buffer | string) => void): Promise<void> {
+  const local = path.join(projectPath, 'node_modules');
+  if (!(await directoryExists(local))) return;
+  const hash = await lockfileHash(projectPath);
+  if (!hash) return;
+  const shared = sharedNodeModulesPath(hash);
+  if (await directoryExists(shared)) return;
+  try {
+    await cloneDirectory(local, shared);
+    log(Buffer.from(`[PreviewManager] Cached dependencies for later sites (${hash}).`));
+  } catch (error) {
+    log(
+      Buffer.from(
+        `[PreviewManager] Could not cache dependencies: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    );
+  }
 }
 
 async function appendCommandLogs(
@@ -880,22 +943,23 @@ class PreviewManager {
     flushPendingLogs();
 
     const ensureWithLock = async () => {
-      // If node_modules exists, skip
-      if (await directoryExists(path.join(projectPath, 'node_modules'))) {
+      if (await reuseSharedNodeModules(projectPath, log)) {
         return;
       }
       const existing = this.installing.get(projectId);
       if (existing) {
         log(Buffer.from('[PreviewManager] Dependency installation already in progress; waiting...'));
         await existing;
+        await reuseSharedNodeModules(projectPath, log);
         return;
       }
       const installPromise = (async () => {
         try {
-          // Double-check just before install
-          if (!(await directoryExists(path.join(projectPath, 'node_modules')))) {
-            await runInstallWithPreferredManager(projectPath, env, log);
+          if (await reuseSharedNodeModules(projectPath, log)) {
+            return;
           }
+          await runInstallWithPreferredManager(projectPath, env, log);
+          await saveSharedNodeModules(projectPath, log);
         } finally {
           this.installing.delete(projectId);
         }

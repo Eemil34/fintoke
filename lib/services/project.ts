@@ -10,7 +10,7 @@ import { normalizeModelId, getDefaultModelForCli } from '@/lib/constants/cliMode
 import { copyWebsiteTemplate } from '@/lib/templates/copyTemplate';
 import { serializeProjectSettings } from '@/lib/templates/settings';
 import { ensureWritableDir, projectsDir } from '@/lib/server/paths';
-import { isNoSpaceError, reclaimVolumeSpace } from '@/lib/server/volumeCleanup';
+import { isNoSpaceError, reclaimVolumeSpace, volumeDiskInfo } from '@/lib/server/volumeCleanup';
 
 /**
  * Retrieve all projects
@@ -45,7 +45,10 @@ export async function getProjectById(id: string): Promise<Project | null> {
  * Create new project
  */
 export async function createProject(input: CreateProjectInput): Promise<Project> {
-  await reclaimVolumeSpace();
+  const disk = volumeDiskInfo();
+  if (!disk || disk.freeBytes < 1_200_000_000) {
+    await reclaimVolumeSpace([input.project_id]);
+  }
   let root: string;
   let projectPath: string;
   try {
@@ -53,7 +56,7 @@ export async function createProject(input: CreateProjectInput): Promise<Project>
     projectPath = await ensureWritableDir(path.join(root, input.project_id));
   } catch (error) {
     if (!isNoSpaceError(error)) throw error;
-    await reclaimVolumeSpace();
+    await reclaimVolumeSpace([input.project_id]);
     root = await ensureWritableDir(projectsDir());
     projectPath = await ensureWritableDir(path.join(root, input.project_id));
   }

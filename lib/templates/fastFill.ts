@@ -483,7 +483,13 @@ function applyCopyPack(source: string, pack: CopyPack): string {
         next = pack.ctaButton;
         break;
       case 'name':
-        next = counters.name === 0 ? pack.name : people[counters.people++ % Math.max(people.length, 1)] || pack.name;
+        if (counters.name === 0) {
+          next = pack.name;
+        } else if (counters.menu < pack.menu.length) {
+          next = pack.menu[counters.menu++].title;
+        } else {
+          next = people[counters.people++ % Math.max(people.length, 1)] || pack.name;
+        }
         counters.name += 1;
         break;
       case 'title':
@@ -521,6 +527,46 @@ function applyCopyPack(source: string, pack: CopyPack): string {
   });
 }
 
+function rewriteTemplateBrands(source: string, pack: CopyPack): string {
+  const brands = [
+    'Hearth & Vale',
+    'Hearth &amp; Vale',
+    'Coral Cove',
+    'Veloura Dining & Lounge',
+    'Veloura Dining &amp; Lounge',
+    'Veloura Steak',
+    'Veloura',
+    'Säde',
+    'Park Avenue, 60146 NY, USA',
+  ];
+  let next = source;
+  for (const brand of brands) {
+    if (!brand || brand === pack.name) continue;
+    next = next.split(brand).join(pack.name);
+  }
+  return next;
+}
+
+function rewriteJsxCopy(source: string, pack: CopyPack): string {
+  const pool = [
+    pack.heroTitle,
+    pack.heroSubtitle,
+    pack.description,
+    ...pack.aboutColumns,
+    pack.ctaTitle,
+    pack.ctaSubtitle,
+  ].filter(Boolean);
+  let index = 0;
+  return source.replace(/>([^<>{}\n][^<>{}]{11,})</g, (full, text: string) => {
+    const value = text.replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim();
+    if (KEEP_LABEL.test(value)) return full;
+    if (value.includes('{') || /https?:|className|svg|path /i.test(value)) return full;
+    if (!/[A-Za-zÀ-ÿ]/.test(value)) return full;
+    const next = pool[index++ % pool.length];
+    if (!next || next === value) return full;
+    return `>${next.replace(/&/g, '&amp;')}<`;
+  });
+}
 function rewriteLeftoverQuotes(source: string, pack: CopyPack, business: string): string {
   let index = 0;
   const pool = [...pack.aboutColumns, pack.description, pack.heroSubtitle, ...pack.menu.map((item) => item.body)];
@@ -554,7 +600,6 @@ export async function fastFillProjectFromLead(options: {
     console.warn('[fastFill] GPT copy pack skipped, local copy already written:', error);
   }
   await fs.writeFile(path.join(options.projectPath, '.fintoke-filled'), `${pack.name}\n`).catch(() => undefined);
-  await fs.rm(path.join(options.projectPath, '.next'), { recursive: true, force: true }).catch(() => undefined);
   const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
   return { replacements: writes, mapsQuery };
 }
@@ -568,10 +613,18 @@ async function writePackToFiles(files: string[], pack: CopyPack, city?: string, 
     let next = original;
     if (/\.(ts|tsx|js|jsx)$/.test(file) && path.basename(file) !== 'SiteImage.tsx') {
       next = applyCopyPack(next, pack);
-      if (path.basename(file) === 'site.ts' || /export const site\s*=/.test(original)) {
+      next = rewriteTemplateBrands(next, pack);
+      if (
+        !/imageLibrary|ImageGuard|tailwind\.config|next-env/.test(file) &&
+        (path.basename(file) === 'site.ts' || /export const site\s*=/.test(original) || /\.(tsx|jsx)$/.test(file))
+      ) {
         next = rewriteLeftoverQuotes(next, pack, pack.name);
       }
+      if (/\.(tsx|jsx)$/.test(file)) {
+        next = rewriteJsxCopy(next, pack);
+      }
     }
+    next = rewriteTemplateBrands(next, pack);
     next = next.split('Coral Cove').join(pack.name);
     next = next.split('Park Avenue, 60146 NY, USA').join(pack.address);
     next = next.split('content="no-referrer"').join('content="origin"');
@@ -675,7 +728,7 @@ export async function rewriteExistingProjectCopy(options: {
     country: options.country,
   });
   const { previewManager } = await import('@/lib/services/preview');
-  void previewManager.start(options.projectId).catch((error) => {
+  void previewManager.start(options.projectId, { restart: true }).catch((error) => {
     console.warn(`[fastFill] Preview start failed for ${options.projectId}:`, error);
   });
   return filled;
