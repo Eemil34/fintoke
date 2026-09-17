@@ -9,6 +9,7 @@ import {
 import { startProjectInstruction } from '@/lib/services/agentRun';
 import { getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { AgentApiError } from '@/lib/agent-api/keys';
+import { isCopyOnlyInstruction, rewriteExistingProjectCopy } from '@/lib/templates/fastFill';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -26,6 +27,26 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
     const instruction = String(body.instruction || body.prompt || '').trim();
     if (!instruction) {
       throw new AgentApiError('instruction is required');
+    }
+
+    if (isCopyOnlyInstruction(instruction) || body.copyOnly === true) {
+      const filled = await rewriteExistingProjectCopy({
+        projectId: id,
+        prompt: instruction,
+        business: body.business,
+        city: body.city,
+        email: body.email,
+        phone: body.phone,
+      });
+      const site = await getSerializedAgentSite(id, agentOrigin(request));
+      return agentJson({
+        success: true,
+        data: {
+          ...site,
+          buildMode: 'fast',
+          filled,
+        },
+      });
     }
 
     const job = await startProjectInstruction({

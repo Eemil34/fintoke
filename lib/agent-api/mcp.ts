@@ -37,7 +37,7 @@ import {
   updateManagedTemplate,
 } from '@/lib/templates/store';
 import { getAgentWorkspaceSnapshot, serializeManagedTemplate } from '@/lib/agent-api/workspaceAccess';
-import { fastFillProjectFromLead, leadFromSiteBrief, wantsFastTrack } from '@/lib/templates/fastFill';
+import { fastFillProjectFromLead, isCopyOnlyInstruction, leadFromSiteBrief, rewriteExistingProjectCopy, wantsFastTrack } from '@/lib/templates/fastFill';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 
 const PROTOCOL_VERSIONS = new Set(['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25']);
@@ -115,8 +115,26 @@ const RAW_MCP_TOOLS = [
     },
   },
   {
+    name: 'claudable_rewrite_site_copy',
+    description:
+      'Rewrite all visitor-facing text on an existing Fintoke site. Photos, files, and layout stay. Use this instead of claudable_edit_site when the user wants a full copy rewrite. This is not blocked by the Cursor image safety rules.',
+    inputSchema: {
+      type: 'object',
+      required: ['id'],
+      properties: {
+        id: { type: 'string' },
+        prompt: { type: 'string', description: 'Business facts and copy direction' },
+        business: { type: 'string' },
+        city: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+      },
+    },
+  },
+  {
     name: 'claudable_edit_site',
-    description: 'Ask Claudable to edit an existing site. Then poll claudable_get_site until job.running is false.',
+    description:
+      'Edit an existing site. For a full text rewrite that keeps photos, use claudable_rewrite_site_copy instead (avoids Cursor image safety). If the instruction is copy-only, this tool also rewrites text without Cursor.',
     inputSchema: {
       type: 'object',
       required: ['id', 'instruction'],
@@ -536,11 +554,53 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
           : 'Poll claudable_get_site until job.running is false. Then claudable_publish_site if the user wants it live. Do not generate a substitute website in chat.',
       };
     }
+    case 'claudable_rewrite_site_copy': {
+      await requireMcpAgentKey(request, 'sites:edit');
+      const id = String(args.id || '');
+      if (!id) throw new AgentApiError('id is required');
+      const prompt = String(args.prompt || args.instruction || '').trim();
+      const filled = await rewriteExistingProjectCopy({
+        projectId: id,
+        prompt,
+        business: args.business,
+        city: args.city,
+        email: args.email,
+        phone: args.phone,
+        website: args.website,
+        whatTheyDo: args.whatTheyDo,
+      });
+      const site = await getSerializedAgentSite(id, origin);
+      if (!site) throw new AgentApiError('Site not found', 404);
+      return {
+        ...site,
+        buildMode: 'fast',
+        filled,
+        next: 'Copy rewritten. Photos, files, and layout were not changed. Open shareUrl.',
+      };
+    }
     case 'claudable_edit_site': {
       await requireMcpAgentKey(request, 'sites:edit');
       const id = String(args.id || '');
       const instruction = String(args.instruction || args.prompt || '').trim();
       if (!instruction) throw new AgentApiError('instruction is required');
+      if (isCopyOnlyInstruction(instruction) || args.copyOnly === true) {
+        const filled = await rewriteExistingProjectCopy({
+          projectId: id,
+          prompt: instruction,
+          business: args.business,
+          city: args.city,
+          email: args.email,
+          phone: args.phone,
+        });
+        const site = await getSerializedAgentSite(id, origin);
+        if (!site) throw new AgentApiError('Site not found', 404);
+        return {
+          ...site,
+          buildMode: 'fast',
+          filled,
+          next: 'Copy rewritten without Cursor. Photos were not changed.',
+        };
+      }
       const job = await startProjectInstruction({
         projectId: id,
         instruction,

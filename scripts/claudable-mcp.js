@@ -137,6 +137,23 @@ const TOOLS = [
     },
   },
   {
+    name: 'claudable_rewrite_site_copy',
+    description:
+      'Rewrite all visitor-facing text on an existing site. Photos, files, and layout stay. Use this instead of claudable_edit_site for a full copy rewrite.',
+    inputSchema: {
+      type: 'object',
+      required: ['id'],
+      properties: {
+        id: { type: 'string' },
+        prompt: { type: 'string' },
+        business: { type: 'string' },
+        city: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+      },
+    },
+  },
+  {
     name: 'claudable_edit_site',
     description: 'Ask Claudable to edit an existing site.',
     inputSchema: {
@@ -416,6 +433,15 @@ async function callTool(name, args = {}) {
       }
       return created;
     }
+    case 'claudable_rewrite_site_copy':
+      return api('POST', `/sites/${encodeURIComponent(args.id)}/act`, {
+        instruction: args.prompt || args.instruction || 'Rewrite all visitor-facing copy. Keep photos, files, and layout.',
+        copyOnly: true,
+        business: args.business,
+        city: args.city,
+        email: args.email,
+        phone: args.phone,
+      });
     case 'claudable_edit_site': {
       const edited = await api('POST', `/sites/${encodeURIComponent(args.id)}/act`, {
         instruction: args.instruction,
