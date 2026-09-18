@@ -1,8 +1,12 @@
 import { NextRequest } from 'next/server';
+import fs from 'fs/promises';
+import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { applyCopyToHtml, extractTemplateTheme, readFastCopy, readFastPreviewHtml, renderFastPreviewHtml } from '@/lib/templates/fastPreview';
+import { applyCopyToHtml, readFastCopy } from '@/lib/templates/fastPreview';
+import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
+import { getWebsiteTemplateId } from '@/lib/templates/settings';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -145,32 +149,26 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   const project = await getProjectById(projectId);
   let copyPack = null as Awaited<ReturnType<typeof readFastCopy>>;
-  let projectPath = '';
+  let templateId = '';
   if (project) {
-    projectPath = await resolveProjectWorkspace(project, projectId);
+    const projectPath = await resolveProjectWorkspace(project, projectId);
     copyPack = await readFastCopy(projectPath);
+    templateId =
+      copyPack?.templateId ||
+      (await fs.readFile(path.join(projectPath, '.fintoke-from'), 'utf8').catch(() => '')).trim() ||
+      getWebsiteTemplateId((project as { settings?: string | null }).settings) ||
+      '';
   }
 
-  if (copyPack) {
-    if (isProbe) {
-      return new Response('ready', { status: 200, headers: { 'cache-control': 'no-store' } });
+  const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
+  const previewKey = resolvedTemplate ? `tpl:${resolvedTemplate}` : projectId;
+  if (resolvedTemplate) {
+    if (previewManager.getStatus(previewKey).status === 'error' || !previewManager.getStatus(previewKey).port) {
+      void previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
+        console.error('[Preview proxy] Failed to start template:', error);
+      });
     }
-    const { renderSnapshotPreviewHtml } = await import('@/lib/templates/snapshotHtml');
-    const snapshot = projectPath ? await renderSnapshotPreviewHtml(projectPath, copyPack) : null;
-    const saved = projectPath ? await readFastPreviewHtml(projectPath) : null;
-    const theme = projectPath ? await extractTemplateTheme(projectPath) : undefined;
-    const body = snapshot
-      ? applyCopyToHtml(snapshot, copyPack)
-      : saved && !saved.includes('--bg:')
-        ? saved
-        : renderFastPreviewHtml(copyPack, theme);
-    const headers = previewSecurityHeaders(new Headers());
-    headers.set('content-type', 'text/html; charset=utf-8');
-    return new Response(body, { status: 200, headers });
-  }
-
-  const previewKey = projectId;
-  if (previewManager.getStatus(projectId).status === 'error' || !previewManager.getStatus(projectId).port) {
+  } else if (previewManager.getStatus(projectId).status === 'error' || !previewManager.getStatus(projectId).port) {
     void previewManager.start(projectId).catch((error) => {
       console.error('[Preview proxy] Failed to start:', error);
     });
@@ -284,7 +282,8 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   if (contentType.includes('text/html')) {
-    const body = rewriteHtml(await upstream.text(), prefix, preview.port);
+    let body = rewriteHtml(await upstream.text(), prefix, preview.port);
+    if (copyPack) body = applyCopyToHtml(body, copyPack);
     out.delete('content-length');
     return new Response(body, { status: upstream.status, headers: out });
   }

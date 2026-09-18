@@ -157,6 +157,9 @@ async function listSnapshotIdsIn(root: string): Promise<string[]> {
 export async function resolveSnapshotTemplateId(templateId: string): Promise<string> {
   const requested = templateId.trim();
   if (!requested) return requested;
+  if (/^restaurant-?4(?:-2)?$/i.test(requested) || /restaurant\s*(template\s*)?4\b/i.test(requested)) {
+    if (await snapshotHasApp('restaurant-4-2')) return 'restaurant-4-2';
+  }
   if (await snapshotHasApp(requested)) return requested;
   const ids = [...new Set([...(await listVolumeSnapshotIds()), ...(await listSeedSnapshotIds())])];
   const needle = requested.toLowerCase().replace(/[^a-z0-9]+/g, '');
