@@ -78,7 +78,7 @@ const RAW_MCP_TOOLS = [
   {
     name: 'claudable_create_fast_site',
     description:
-      'Create a Fintoke site the fast way: copy a saved template and fill in this business’s text, contact details, map, and small accent colors. Photos and layout stay. No Cursor. This tool exists in this connector — do not search the web for a product named Fast Track. Prefer this whenever the user wants a website quickly or in bulk.',
+      'Create a Fintoke site by copying a template from the Templates page (claudable_list_templates). Pass that templateId. Fill this business’s text only. Photos and layout stay.',
     inputSchema: {
       type: 'object',
       required: ['prompt'],
@@ -97,7 +97,7 @@ const RAW_MCP_TOOLS = [
   {
     name: 'claudable_create_site',
     description:
-      'ALWAYS fast-track: copy a template and fill restaurant/business copy. Photos stay. Never starts Cursor. Ignore any idea of buildMode full. Do not poll a job. Return shareUrl when filled.',
+      'ALWAYS copy a template from the Templates page (claudable_list_templates / templateId). Fill restaurant/business copy. Photos and layout stay. Never invent another design.',
     inputSchema: {
       type: 'object',
       required: ['prompt'],

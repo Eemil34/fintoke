@@ -578,6 +578,23 @@ function rewriteLeftoverQuotes(source: string, pack: CopyPack, business: string)
   });
 }
 
+function grabQuoted(source: string, key: string): string {
+  return source.match(new RegExp(`\\b${key}:\\s*['"\`]([^'"\`]{2,160})['"\`]`))?.[1] || '';
+}
+
+async function captureTemplateSource(projectPath: string): Promise<FastCopyFile['source']> {
+  const site = await fs.readFile(path.join(projectPath, 'lib', 'site.ts'), 'utf8').catch(() => '');
+  const page = site ? '' : await fs.readFile(path.join(projectPath, 'app', 'page.tsx'), 'utf8').catch(() => '');
+  const raw = site || page;
+  return {
+    name: grabQuoted(raw, 'name'),
+    tagline: grabQuoted(raw, 'tagline'),
+    heroTitle: grabQuoted(raw, 'title'),
+    heroSubtitle: grabQuoted(raw, 'subtitle'),
+    description: grabQuoted(raw, 'description'),
+  };
+}
+
 export async function fastFillProjectFromLead(options: {
   projectPath: string;
   lead: FastFillLead;
@@ -585,6 +602,8 @@ export async function fastFillProjectFromLead(options: {
   country?: string;
 }): Promise<{ replacements: number; mapsQuery: string }> {
   const images = await collectTemplateImages(options.projectPath);
+  const source = await captureTemplateSource(options.projectPath);
+  const templateId = (await fs.readFile(path.join(options.projectPath, '.fintoke-from'), 'utf8').catch(() => '')).trim();
   const local = localCopyPack(options.lead, options.country);
   const toFile = (pack: CopyPack): FastCopyFile => {
     const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
@@ -593,6 +612,8 @@ export async function fastFillProjectFromLead(options: {
       images,
       mapsQuery,
       mapsUrl: mapsQuery ? mapsEmbed(mapsQuery) : '',
+      templateId,
+      source,
     };
   };
   await writeFastCopy(options.projectPath, toFile(local));

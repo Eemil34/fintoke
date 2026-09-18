@@ -65,7 +65,7 @@ export async function getAgentWorkspaceSnapshot() {
       default: 'fast',
       tools: ['claudable_create_fast_site', 'claudable_create_site'],
       fast:
-        'Always use this. Copies a saved template and fill text. Pass templateId from websiteTemplates (for restaurant 4 use that saved snapshot id). Photos and layout stay.',
+        'Always copy a template from websiteTemplates (the Templates page). Pass templateId exactly. Fill text only. Photos and layout stay.',
       websiteTemplates: websiteTemplates.map((template) => ({
         id: template.id,
         name: template.name,

@@ -1,12 +1,14 @@
 import { NextRequest } from 'next/server';
+import fs from 'fs/promises';
+import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { renderProjectFastPreview } from '@/lib/templates/fastPreview';
+import { applyCopyToHtml, readFastCopy } from '@/lib/templates/fastPreview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 interface RouteContext {
   params: Promise<{ projectId: string; path?: string[] }>;
@@ -144,29 +146,31 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   const isProbe = request.nextUrl.searchParams.get('fintoke_probe') === '1';
 
   const project = await getProjectById(projectId);
+  let copyPack = null as Awaited<ReturnType<typeof readFastCopy>>;
+  let templateId = '';
   if (project) {
     const projectPath = await resolveProjectWorkspace(project, projectId);
-    const html = await renderProjectFastPreview(projectPath);
-    if (html) {
-      return new Response(html, {
-        status: 200,
-        headers: {
-          'content-type': 'text/html; charset=utf-8',
-          'cache-control': 'no-store',
-          'x-robots-tag': 'noindex, nofollow',
-          'referrer-policy': 'origin',
-        },
-      });
-    }
+    copyPack = await readFastCopy(projectPath);
+    templateId =
+      copyPack?.templateId ||
+      (await fs.readFile(path.join(projectPath, '.fintoke-from'), 'utf8').catch(() => '')).trim();
   }
 
-  const logs = () => previewManager.getLogs(projectId);
-  const preview = previewManager.getStatus(projectId);
-
-  if (preview.status === 'error' || !preview.port) {
+  const previewKey = templateId ? `tpl:${templateId}` : projectId;
+  if (templateId) {
+    await previewManager.startSharedTemplate(templateId).catch((error) => {
+      console.error('[Preview proxy] Shared template failed:', error);
+    });
+  } else if (previewManager.getStatus(projectId).status === 'error' || !previewManager.getStatus(projectId).port) {
     void previewManager.start(projectId).catch((error) => {
       console.error('[Preview proxy] Failed to start:', error);
     });
+  }
+
+  const logs = () => previewManager.getLogs(previewKey);
+  const preview = previewManager.getStatus(previewKey);
+
+  if (preview.status === 'error' || !preview.port) {
     if (isProbe || isAssetRequest(segments)) {
       return new Response('wait', {
         status: 503,
@@ -271,7 +275,8 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   if (contentType.includes('text/html')) {
-    const body = rewriteHtml(await upstream.text(), prefix, preview.port);
+    let body = rewriteHtml(await upstream.text(), prefix, preview.port);
+    if (copyPack) body = applyCopyToHtml(body, copyPack);
     out.delete('content-length');
     return new Response(body, { status: upstream.status, headers: out });
   }

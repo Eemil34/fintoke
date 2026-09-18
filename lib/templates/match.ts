@@ -44,34 +44,31 @@ export function pickWebsiteTemplate(
   input: { prompt?: string; templateId?: string; name?: string },
   templates: PickableTemplate[] = WEBSITE_TEMPLATES,
 ): PickableTemplate | null {
-  if (!templates.length) return null;
+  const pageTemplates = templates.filter((template) => template.hasSnapshot !== false);
+  const pool = templates.some((template) => template.hasSnapshot)
+    ? templates.filter((template) => template.hasSnapshot)
+    : pageTemplates;
+  if (!pool.length) return null;
   const requested = (input.templateId || '').trim();
   const haystack = `${requested} ${input.name || ''} ${input.prompt || ''}`.toLowerCase();
   const needle = compact(requested || '');
 
   if (requested) {
-    const exact = templates.find(
+    const exact = pool.find(
       (template) => template.id === requested || template.name.toLowerCase() === requested.toLowerCase(),
     );
     if (exact) return exact;
   }
 
   let best: { template: PickableTemplate; score: number } | null = null;
-  for (const template of templates) {
+  for (const template of pool) {
     const score = scoreTemplate(template, haystack, needle);
     if (!best || score > best.score) best = { template, score };
   }
 
   if (best && best.score >= 8) return best.template;
-
-  const snapshots = templates.filter((template) => template.hasSnapshot);
-  if (/restaurant|bistro|cafe|dining|food/.test(haystack)) {
-    const food = snapshots.find((template) =>
-      /restaurant|food|cafe|hospitality/.test(`${template.id} ${template.name} ${template.category}`),
-    );
-    if (food) return food;
-  }
-  return snapshots[0] || best?.template || null;
+  const userFirst = pool.find((template) => template.origin === 'user') || pool[0];
+  return userFirst || null;
 }
 
 export function suggestWebsiteTemplate(

@@ -10,6 +10,7 @@ import fs from 'fs/promises';
 import { findAvailablePort } from '@/lib/utils/ports';
 import { getProjectById, updateProject, updateProjectStatus } from './project';
 import { ensureProjectApp, restoreSnapshotIfMaterialized } from '@/lib/templates/copyTemplate';
+import { copySnapshotToProject, resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { clearNextCache, ensureGeneratedDevScript, ensureIsolatedNextConfig, ensureRevealVisible, writePreviewNextConfig } from '@/lib/templates/isolateNext';
 import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir, writableDataDir } from '@/lib/server/paths';
@@ -805,6 +806,73 @@ class PreviewManager {
     return run;
   }
 
+  public async startSharedTemplate(templateId: string): Promise<PreviewInfo> {
+    const key = `tpl:${templateId}`;
+    const live = this.processes.get(key);
+    if (live?.process && live.status !== 'error' && live.status !== 'stopped' && live.port) {
+      return this.toInfo(live);
+    }
+    const inflight = this.starting.get(key);
+    if (inflight) return inflight;
+    const run = this.startSharedTemplatePreview(templateId, key).finally(() => {
+      if (this.starting.get(key) === run) this.starting.delete(key);
+    });
+    this.starting.set(key, run);
+    return run;
+  }
+
+  private async startSharedTemplatePreview(templateId: string, key: string): Promise<PreviewInfo> {
+    const resolvedId = await resolveSnapshotTemplateId(templateId);
+    const projectPath = path.join(writableDataDir(), 'preview-runtime', resolvedId.replace(/[^a-zA-Z0-9-_]/g, '-'));
+    await fs.mkdir(projectPath, { recursive: true });
+    try {
+      await fs.access(path.join(projectPath, 'package.json'));
+    } catch {
+      const copied = await copySnapshotToProject(resolvedId, projectPath, key);
+      if (!copied) throw new Error(`Saved template "${templateId}" was not found on the Templates page.`);
+    }
+
+    const live = this.processes.get(key);
+    if (live?.process && live.status !== 'error' && live.status !== 'stopped' && live.port) {
+      return this.toInfo(live);
+    }
+    if (live && !live.process) this.processes.delete(key);
+
+    const previewBounds = resolvePreviewBounds();
+    const preferredPort = await findAvailablePort(previewBounds.start, previewBounds.end);
+    const env: NodeJS.ProcessEnv = previewChildEnv({
+      ...process.env,
+      PORT: String(preferredPort),
+      WEB_PORT: String(preferredPort),
+      NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${preferredPort}`,
+      NEXT_BASE_PATH: '',
+    });
+    const pendingLogs: string[] = [`[PreviewManager] Shared template ${resolvedId} on ${preferredPort}`];
+    const previewProcess: PreviewProcess = {
+      process: null,
+      port: preferredPort,
+      url: `http://127.0.0.1:${preferredPort}`,
+      status: 'starting',
+      logs: [...pendingLogs],
+      startedAt: new Date(),
+    };
+    this.processes.set(key, previewProcess);
+    await this.bootPreviewProcess({
+      projectId: key,
+      projectPath,
+      previewProcess,
+      env,
+      previewBounds,
+      pendingLogs,
+    }).catch((error) => {
+      previewProcess.status = 'error';
+      previewProcess.logs.push(
+        `[PreviewManager] Shared template boot failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+    return this.toInfo(previewProcess);
+  }
+
   public async ensureReady(projectId: string, timeoutMs = 150_000): Promise<PreviewInfo> {
     const started = await this.start(projectId);
     const port = this.getStatus(projectId).port || started.port;
@@ -1029,13 +1097,14 @@ class PreviewManager {
     }
 
     const effectivePort = previewProcess.port;
-    const resolvedUrl = previewPublicUrl(projectId, effectivePort);
-    const iframeUrl = previewIframeUrl(projectId, effectivePort);
+    const shared = projectId.startsWith('tpl:');
+    const resolvedUrl = shared ? `http://127.0.0.1:${effectivePort}` : previewPublicUrl(projectId, effectivePort);
+    const iframeUrl = shared ? `http://127.0.0.1:${effectivePort}` : previewIframeUrl(projectId, effectivePort);
     env.NEXT_PUBLIC_APP_URL = resolvedUrl;
     env.NEXT_BASE_PATH = '';
     previewProcess.url = iframeUrl;
 
-    await writePreviewNextConfig(projectPath, previewBasePath(projectId));
+    await writePreviewNextConfig(projectPath, shared ? '' : previewBasePath(projectId));
 
     const child = spawn(
       npmCommand,
@@ -1087,11 +1156,13 @@ class PreviewManager {
       previewProcess.status = 'running';
     }
 
-    await updateProject(projectId, {
-      previewUrl: previewProcess.url,
-      previewPort: previewProcess.port,
-      status: 'running',
-    });
+    if (!projectId.startsWith('tpl:')) {
+      await updateProject(projectId, {
+        previewUrl: previewProcess.url,
+        previewPort: previewProcess.port,
+        status: 'running',
+      });
+    }
   }
 
   public async stop(projectId: string): Promise<PreviewInfo> {

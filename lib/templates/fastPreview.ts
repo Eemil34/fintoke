@@ -28,6 +28,14 @@ export type FastCopyFile = {
   images: string[];
   mapsQuery: string;
   mapsUrl: string;
+  templateId?: string;
+  source?: {
+    name?: string;
+    tagline?: string;
+    heroTitle?: string;
+    heroSubtitle?: string;
+    description?: string;
+  };
 };
 
 function escapeHtml(value: string) {
@@ -110,11 +118,24 @@ export async function extractTemplateTheme(projectPath: string): Promise<{
   };
 }
 
-export async function renderProjectFastPreview(projectPath: string): Promise<string | null> {
-  const pack = await readFastCopy(projectPath);
-  if (!pack) return null;
-  const theme = await extractTemplateTheme(projectPath);
-  return renderFastPreviewHtml(pack, theme);
+export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
+  const replacements: Array<[string, string]> = [];
+  const source = pack.source || {};
+  const pairs: Array<[string | undefined, string | undefined]> = [
+    [source.name, pack.name],
+    [source.tagline, pack.tagline],
+    [source.heroTitle, pack.heroTitle],
+    [source.heroSubtitle, pack.heroSubtitle],
+    [source.description, pack.description],
+  ];
+  for (const [from, to] of pairs) {
+    if (from && to && from !== to && from.length >= 3) replacements.push([from, to]);
+  }
+  let next = html;
+  for (const [from, to] of replacements) {
+    next = next.split(from).join(to);
+  }
+  return next;
 }
 
 export function renderFastPreviewHtml(
