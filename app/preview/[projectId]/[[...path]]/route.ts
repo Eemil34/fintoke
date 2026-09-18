@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { extractTemplateTheme, readFastCopy, readFastPreviewHtml, renderFastPreviewHtml } from '@/lib/templates/fastPreview';
+import { applyCopyToHtml, extractTemplateTheme, readFastCopy, readFastPreviewHtml, renderFastPreviewHtml } from '@/lib/templates/fastPreview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -155,9 +155,15 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     if (isProbe) {
       return new Response('ready', { status: 200, headers: { 'cache-control': 'no-store' } });
     }
+    const { renderSnapshotPreviewHtml } = await import('@/lib/templates/snapshotHtml');
+    const snapshot = projectPath ? await renderSnapshotPreviewHtml(projectPath, copyPack) : null;
     const saved = projectPath ? await readFastPreviewHtml(projectPath) : null;
     const theme = projectPath ? await extractTemplateTheme(projectPath) : undefined;
-    const body = saved || renderFastPreviewHtml(copyPack, theme);
+    const body = snapshot
+      ? applyCopyToHtml(snapshot, copyPack)
+      : saved && !saved.includes('--bg:')
+        ? saved
+        : renderFastPreviewHtml(copyPack, theme);
     const headers = previewSecurityHeaders(new Headers());
     headers.set('content-type', 'text/html; charset=utf-8');
     return new Response(body, { status: 200, headers });

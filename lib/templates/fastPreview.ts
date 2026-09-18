@@ -237,8 +237,10 @@ function fontHref(sans: string, serif: string): string {
 }
 
 export async function writeFastPreviewHtml(projectPath: string, pack: FastCopyFile): Promise<void> {
-  const theme = await extractTemplateTheme(projectPath);
-  await fs.writeFile(path.join(projectPath, FAST_HTML_FILE), `${renderFastPreviewHtml(pack, theme)}\n`);
+  const { renderSnapshotPreviewHtml } = await import('./snapshotHtml');
+  const snapshot = await renderSnapshotPreviewHtml(projectPath, pack);
+  const html = snapshot ? applyCopyToHtml(snapshot, pack) : renderFastPreviewHtml(pack, await extractTemplateTheme(projectPath));
+  await fs.writeFile(path.join(projectPath, FAST_HTML_FILE), `${html}\n`);
 }
 
 export async function readFastPreviewHtml(projectPath: string): Promise<string | null> {
