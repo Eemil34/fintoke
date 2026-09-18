@@ -622,8 +622,10 @@ export async function fastFillProjectFromLead(options: {
   } catch (error) {
     console.warn('[fastFill] GPT copy pack skipped, instant local copy already written:', error);
   }
+  const files = await listTextFiles(options.projectPath);
+  const writes = await writePackToFiles(files, pack, options.lead.city, options.country, source);
   const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
-  return { replacements: 1, mapsQuery };
+  return { replacements: writes, mapsQuery };
 }
 
 async function writePackToFiles(
@@ -641,14 +643,14 @@ async function writePackToFiles(
     if (!/\.(ts|tsx|js|jsx)$/.test(file)) continue;
     if (/imageLibrary|ImageGuard|tailwind\.config|next-env|SiteImage/.test(file)) continue;
     const original = await fs.readFile(file, 'utf8');
-    let next = applyCopyPack(original, pack);
-    next = rewriteTemplateBrands(next, pack);
-    next = applySwaps(next, swaps);
+    let next = original;
     if (path.basename(file) === 'site.ts') {
-      next = rewriteLeftoverQuotes(next, pack, pack.name);
+      next = applyCopyPack(original, pack);
       next = rewriteMaps(next, mapsQuery);
       next = injectMapsUrl(next, embed);
     }
+    next = rewriteTemplateBrands(next, pack);
+    next = applySwaps(next, swaps);
     if (next !== original) {
       await fs.writeFile(file, next);
       writes += 1;

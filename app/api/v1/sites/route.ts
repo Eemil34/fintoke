@@ -6,7 +6,7 @@ import { listManagedTemplates } from '@/lib/templates/store';
 import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
 import { previewManager } from '@/lib/services/preview';
-import { publishSite } from '@/lib/services/publishSite';
+import { publishFastTrackLive, publishSite } from '@/lib/services/publishSite';
 import { waitForSiteIdle } from '@/lib/agent-api/wait';
 import { serializeAgentSite } from '@/lib/agent-api/serialize';
 import {
@@ -120,8 +120,13 @@ export async function POST(request: NextRequest) {
 
     let published = null;
     let timedOut = false;
-    if (publish) {
-      if (start && !fast) {
+    let liveUrl: string | null = null;
+    if (fast) {
+      const live = await publishFastTrackLive(projectId);
+      published = live.published;
+      liveUrl = live.url;
+    } else if (publish) {
+      if (start) {
         const idle = await waitForSiteIdle(projectId);
         if (!idle) timedOut = true;
       }
@@ -131,11 +136,14 @@ export async function POST(request: NextRequest) {
     }
 
     const site = await serializeAgentSite(project, origin);
+    const shareUrl = liveUrl || site.shareUrl;
     return agentJson(
       {
         success: true,
         data: {
           ...site,
+          shareUrl,
+          preview: { ...site.preview, url: shareUrl },
           buildMode: fast ? 'fast' : 'full',
           job: fast ? { running: false, activeCount: 0 } : site.job,
           jobStarted: job,
@@ -143,7 +151,9 @@ export async function POST(request: NextRequest) {
           published,
           timedOut,
           next: fast
-            ? 'Fast-track site is created. Open shareUrl. Do not start Cursor. Do not wait for job.running.'
+            ? liveUrl
+              ? 'The site is live. Send shareUrl to the client.'
+              : 'Site files are ready. Vercel is not live yet — do not send a compiling preview link.'
             : undefined,
           message: timedOut
             ? 'The agent is still working. Poll GET /sites/{id} until job.running is false, then POST /sites/{id}/publish.'

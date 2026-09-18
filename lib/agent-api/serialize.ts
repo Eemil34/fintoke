@@ -28,7 +28,15 @@ export async function serializeAgentSite(project: ProjectEntity, origin: string)
   const githubData = (github?.serviceData ?? {}) as Record<string, string>;
   const vercelData = (vercel?.serviceData ?? {}) as Record<string, string>;
 
-  const shareUrl = sharePreviewUrl(project.id);
+  const live =
+    String(deployment?.status || vercelData.last_deployment_status || '').toUpperCase() === 'READY'
+      ? deployment?.deployment_url || vercelData.last_deployment_url
+      : null;
+  const shareUrl = live
+    ? live.startsWith('http')
+      ? live
+      : `https://${live}`
+    : sharePreviewUrl(project.id);
 
   return {
     ...serializeProject(project),

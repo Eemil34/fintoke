@@ -709,3 +709,27 @@ export async function getCurrentDeploymentStatus(projectId: string) {
     throw error;
   }
 }
+
+export async function waitForVercelReady(projectId: string, timeoutMs = 130_000): Promise<string | null> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const status = await getCurrentDeploymentStatus(projectId).catch(() => null);
+    const state = String(status?.status || '').toUpperCase();
+    const url = status?.deployment_url || status?.last_deployment_url || null;
+    if (state === 'READY' && url) {
+      const live = url.startsWith('http') ? url : `https://${url}`;
+      const ok = await fetch(live, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(10000) })
+        .then((response) => response.ok)
+        .catch(() => false);
+      if (ok) return live;
+    }
+    if (state === 'ERROR' || state === 'CANCELED') return null;
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+  const last = await getCurrentDeploymentStatus(projectId).catch(() => null);
+  const url = last?.deployment_url || last?.last_deployment_url;
+  if (String(last?.status || '').toUpperCase() === 'READY' && url) {
+    return url.startsWith('http') ? url : `https://${url}`;
+  }
+  return null;
+}

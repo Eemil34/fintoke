@@ -81,3 +81,20 @@ export async function publishSite(projectId: string) {
     },
   };
 }
+
+export async function publishFastTrackLive(projectId: string): Promise<{
+  url: string | null;
+  published: Awaited<ReturnType<typeof publishSite>> | null;
+  error?: string;
+}> {
+  try {
+    const published = await publishSite(projectId);
+    const { waitForVercelReady } = await import('@/lib/services/vercel');
+    const url = await waitForVercelReady(projectId, 130_000);
+    return { url: url || published.deployment.url, published };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn('[publish] Fast Track live deploy skipped:', message);
+    return { url: null, published: null, error: message };
+  }
+}

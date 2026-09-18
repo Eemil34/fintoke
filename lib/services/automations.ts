@@ -13,6 +13,7 @@ import { generateProjectId } from '@/lib/utils';
 import { pickWebsiteTemplate } from '@/lib/templates/match';
 import { listManagedTemplates } from '@/lib/templates/store';
 import { fastFillProjectFromLead } from '@/lib/templates/fastFill';
+import { publishFastTrackLive } from '@/lib/services/publishSite';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { getAgentWorkspaceSnapshot } from '@/lib/agent-api/workspaceAccess';
@@ -217,19 +218,22 @@ async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnTy
       websitePrompt: job.websitePrompt,
       country: job.country,
     });
+    const live = await publishFastTrackLive(projectId);
+    const shareUrl = live.url || sharePreviewUrl(projectId);
     const personId = await ensureClient(lead);
     await updateLead(lead.id, {
       projectId,
       personId,
-      vercelUrl: sharePreviewUrl(projectId),
+      vercelUrl: shareUrl,
       notes: [
         lead.notes,
         `Fast-track site ${projectId} from template ${template?.id || 'default'} (${filled.replacements} files, map ${filled.mapsQuery || 'city'}).`,
+        live.url ? `Live: ${live.url}` : live.error || '',
       ]
         .filter(Boolean)
         .join('\n'),
     });
-    return { projectId, shareUrl: sharePreviewUrl(projectId), origin };
+    return { projectId, shareUrl, origin };
   }
 
   const snapshot = await getAgentWorkspaceSnapshot();

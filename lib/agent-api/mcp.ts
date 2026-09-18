@@ -6,7 +6,7 @@ import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliMode
 import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
 import { previewManager } from '@/lib/services/preview';
-import { publishSite } from '@/lib/services/publishSite';
+import { publishFastTrackLive, publishSite } from '@/lib/services/publishSite';
 import { serializeAgentSite, getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { agentOrigin, extractAgentToken, requireMcpAgentKey } from '@/lib/agent-api/http';
 import { AgentApiError } from '@/lib/agent-api/keys';
@@ -523,21 +523,24 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
           });
         }
       }
-      let published = null;
-      if (publish) {
-        published = await publishSite(projectId);
-      }
+      const live = await publishFastTrackLive(projectId);
+      const published = live.published;
       const site = await serializeAgentSite(project, origin);
+      const shareUrl = live.url || site.shareUrl;
       return {
         ...site,
+        shareUrl,
+        preview: { ...site.preview, url: shareUrl },
         buildMode: 'fast',
         templateId: templateId || site.templateId,
         job: { running: false, activeCount: 0 },
         jobStarted: null,
         filled,
         published,
-        next:
-          'Fast-track site is created. Open shareUrl. Do not call claudable_edit_site. Do not start Cursor. Do not wait for job.running.',
+        liveError: live.error || null,
+        next: live.url
+          ? 'The site is live. Send shareUrl to the client. Do not send a preview URL. Do not wait for job.running.'
+          : 'Fast-track site is created but Vercel is not live yet. Open shareUrl only if it is a vercel.app link. Otherwise wait and poll GET /sites/{id}.',
       };
     }
     case 'claudable_rewrite_site_copy': {
