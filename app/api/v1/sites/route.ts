@@ -3,7 +3,7 @@ import { createProject, getAllProjects } from '@/lib/services/project';
 import { generateProjectId } from '@/lib/utils';
 import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliModels';
 import { listManagedTemplates } from '@/lib/templates/store';
-import { suggestWebsiteTemplate } from '@/lib/templates/match';
+import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
 import { publishSite } from '@/lib/services/publishSite';
 import { waitForSiteIdle } from '@/lib/agent-api/wait';
@@ -35,12 +35,6 @@ export async function GET(request: NextRequest) {
   }
 }
 
-function siteNameFromPrompt(prompt: string, name?: string): string {
-  if (name?.trim()) return name.trim().slice(0, 50);
-  const line = prompt.split('\n')[0]?.trim() || 'New site';
-  return line.length > 50 ? `${line.slice(0, 47)}...` : line;
-}
-
 export async function POST(request: NextRequest) {
   try {
     const key = await requireAgentKey(request, 'sites:create');
@@ -68,11 +62,14 @@ export async function POST(request: NextRequest) {
         : typeof body.websiteTemplateId === 'string'
           ? body.websiteTemplateId
           : '';
-    const suggested = suggestWebsiteTemplate(prompt, templates);
-    const templateId = requestedTemplate || suggested?.id || templates[0]?.id || undefined;
+    const picked = pickWebsiteTemplate(
+      { prompt, templateId: requestedTemplate, name: typeof body.name === 'string' ? body.name : undefined },
+      templates,
+    );
+    const templateId = picked?.id;
 
     const projectId = generateProjectId();
-    const siteName = siteNameFromPrompt(prompt, typeof body.name === 'string' ? body.name : undefined);
+    const siteName = siteNameFromBrief(prompt, typeof body.name === 'string' ? body.name : undefined, templates);
     const project = await createProject({
       project_id: projectId,
       name: siteName,
@@ -105,6 +102,10 @@ export async function POST(request: NextRequest) {
           details: body.details,
         }),
         websitePrompt: prompt,
+      });
+      const { previewManager } = await import('@/lib/services/preview');
+      void previewManager.start(projectId).catch((error) => {
+        console.warn(`[sites] Fast-track preview start failed for ${projectId}:`, error);
       });
     } else if (start) {
       job = await startProjectInstruction({

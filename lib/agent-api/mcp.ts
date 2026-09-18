@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { createProject, getAllProjects } from '@/lib/services/project';
 import { generateProjectId } from '@/lib/utils';
 import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliModels';
-import { suggestWebsiteTemplate } from '@/lib/templates/match';
+import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
 import { publishSite } from '@/lib/services/publishSite';
 import { serializeAgentSite, getSerializedAgentSite } from '@/lib/agent-api/serialize';
@@ -433,12 +433,6 @@ export const MCP_TOOLS = RAW_MCP_TOOLS.map((tool) => {
   };
 });
 
-function siteNameFromPrompt(prompt: string, name?: string): string {
-  if (name?.trim()) return name.trim().slice(0, 50);
-  const line = prompt.split('\n')[0]?.trim() || 'New site';
-  return line.length > 50 ? `${line.slice(0, 47)}...` : line;
-}
-
 function rpcResult(id: string | number | null | undefined, result: unknown) {
   return { jsonrpc: '2.0', id: id ?? null, result };
 }
@@ -485,10 +479,13 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       const cli = String(args.cli || 'claude').toLowerCase();
       const templates = await listManagedTemplates();
       const requestedTemplate = typeof args.templateId === 'string' ? args.templateId : '';
-      const suggested = suggestWebsiteTemplate(prompt, templates);
-      const templateId = requestedTemplate || suggested?.id || templates[0]?.id || undefined;
+      const picked = pickWebsiteTemplate(
+        { prompt, templateId: requestedTemplate, name: typeof args.name === 'string' ? args.name : undefined },
+        templates,
+      );
+      const templateId = picked?.id;
       const projectId = generateProjectId();
-      const siteName = siteNameFromPrompt(prompt, typeof args.name === 'string' ? args.name : undefined);
+      const siteName = siteNameFromBrief(prompt, typeof args.name === 'string' ? args.name : undefined, templates);
       const project = await createProject({
         project_id: projectId,
         name: siteName,
@@ -518,6 +515,10 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
             details: args.details,
           }),
           websitePrompt: prompt,
+        });
+        const { previewManager } = await import('@/lib/services/preview');
+        void previewManager.start(projectId).catch((error) => {
+          console.warn(`[MCP] Fast-track preview start failed for ${projectId}:`, error);
         });
       }
       let published = null;

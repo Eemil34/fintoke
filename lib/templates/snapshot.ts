@@ -130,20 +130,42 @@ export async function directoryHasRenderableSite(dir: string): Promise<boolean> 
 }
 
 export async function listVolumeSnapshotIds(): Promise<string[]> {
+  return listSnapshotIdsIn(SNAPSHOTS_DIR);
+}
+
+export async function listSeedSnapshotIds(): Promise<string[]> {
+  return listSnapshotIdsIn(SEED_SNAPSHOTS_DIR);
+}
+
+async function listSnapshotIdsIn(root: string): Promise<string[]> {
   let entries;
   try {
-    entries = await fs.readdir(SNAPSHOTS_DIR, { withFileTypes: true });
+    entries = await fs.readdir(root, { withFileTypes: true });
   } catch {
     return [];
   }
   const ids: string[] = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
-    if (await directoryHasRenderableSite(path.join(SNAPSHOTS_DIR, entry.name))) {
+    if (await directoryHasRenderableSite(path.join(root, entry.name))) {
       ids.push(entry.name);
     }
   }
   return ids;
+}
+
+export async function resolveSnapshotTemplateId(templateId: string): Promise<string> {
+  const requested = templateId.trim();
+  if (!requested) return requested;
+  if (await snapshotHasApp(requested)) return requested;
+  const ids = [...new Set([...(await listVolumeSnapshotIds()), ...(await listSeedSnapshotIds())])];
+  const needle = requested.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (needle.length < 3) return requested;
+  const ranked = ids
+    .map((id) => ({ id, key: id.toLowerCase().replace(/[^a-z0-9]+/g, '') }))
+    .filter((row) => row.key === needle || row.key.startsWith(needle) || (needle.length >= 6 && needle.startsWith(row.key)))
+    .sort((a, b) => b.key.length - a.key.length);
+  return ranked[0]?.id || requested;
 }
 
 export async function snapshotHasApp(templateId: string): Promise<boolean> {

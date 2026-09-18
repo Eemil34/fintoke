@@ -10,7 +10,7 @@ import { createPerson, findPersonByRecipient } from '@/lib/services/workspace';
 import { createProject } from '@/lib/services/project';
 import { startProjectInstruction } from '@/lib/services/agentRun';
 import { generateProjectId } from '@/lib/utils';
-import { suggestWebsiteTemplate } from '@/lib/templates/match';
+import { pickWebsiteTemplate } from '@/lib/templates/match';
 import { listManagedTemplates } from '@/lib/templates/store';
 import { fastFillProjectFromLead } from '@/lib/templates/fastFill';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
@@ -196,7 +196,7 @@ async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnTy
   const origin = appOrigin();
   const templates = await listManagedTemplates();
   const brief = [job.websitePrompt, lead.whatTheyDo, lead.business, job.businessKind, lead.city].filter(Boolean).join('\n');
-  const template = suggestWebsiteTemplate(brief, templates) || templates[0] || null;
+  const template = pickWebsiteTemplate({ prompt: brief, name: lead.business }, templates);
   const projectId = generateProjectId();
   const fast = job.buildMode !== 'full';
 

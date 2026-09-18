@@ -3,7 +3,7 @@ import path from 'path';
 import { getManagedTemplate } from './store';
 import { materializeWebsiteTemplate } from './materialize';
 import { getWebsiteTemplateId } from './settings';
-import { copySnapshotToProject, resolveSnapshotDir, snapshotHasApp } from './snapshot';
+import { copySnapshotToProject, resolveSnapshotDir, resolveSnapshotTemplateId, snapshotHasApp } from './snapshot';
 import { scaffoldBasicNextApp } from '@/lib/utils/scaffold';
 import { normalizeGeneratedProject } from './isolateNext';
 import { mkdirpSync } from '@/lib/server/paths';
@@ -77,17 +77,25 @@ export async function copyWebsiteTemplate(
   projectId: string,
 ): Promise<boolean> {
   mkdirpSync(projectPath);
+  const resolvedId = await resolveSnapshotTemplateId(templateId);
 
-  const fromSnapshot = await copySnapshotToProject(templateId, projectPath, projectId, {
+  const fromSnapshot = await copySnapshotToProject(resolvedId, projectPath, projectId, {
     normalize: false,
   });
   if (fromSnapshot) return true;
 
-  const template = await getManagedTemplate(templateId);
+  const template = await getManagedTemplate(resolvedId) || await getManagedTemplate(templateId);
   if (!template) return false;
 
+  if (template.kind === 'snapshot' || template.hasSnapshot) {
+    console.warn(
+      `[templates] Snapshot files missing for "${templateId}"; will not substitute another restaurant.`,
+    );
+    return false;
+  }
+
   for (const fallbackId of SNAPSHOT_FALLBACKS[template.category] || []) {
-    if (fallbackId === templateId) continue;
+    if (fallbackId === templateId || fallbackId === resolvedId) continue;
     const copied = await copySnapshotToProject(fallbackId, projectPath, projectId, {
       normalize: false,
     });
@@ -97,13 +105,6 @@ export async function copyWebsiteTemplate(
       );
       return true;
     }
-  }
-
-  if (template.kind === 'snapshot') {
-    console.warn(
-      `[templates] Snapshot files missing for "${templateId}"; will not generate a lookalike catalog page.`,
-    );
-    return false;
   }
 
   await materializeWebsiteTemplate(projectPath, template, projectId);

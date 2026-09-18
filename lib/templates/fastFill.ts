@@ -604,11 +604,9 @@ export async function fastFillProjectFromLead(options: {
     console.warn('[fastFill] GPT copy pack skipped, instant local copy already written:', error);
   }
   const files = await listTextFiles(options.projectPath);
-  void writePackToFiles(files, pack, options.lead.city, options.country).catch((error) => {
-    console.warn('[fastFill] Background template rewrite skipped:', error);
-  });
+  const writes = await writePackToFiles(files, pack, options.lead.city, options.country);
   const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
-  return { replacements: 1, mapsQuery };
+  return { replacements: writes, mapsQuery };
 }
 
 async function writePackToFiles(files: string[], pack: CopyPack, city?: string, country?: string): Promise<number> {
@@ -733,6 +731,10 @@ export async function rewriteExistingProjectCopy(options: {
     }),
     websitePrompt: prompt,
     country: options.country,
+  });
+  const { previewManager } = await import('@/lib/services/preview');
+  void previewManager.start(options.projectId).catch((error) => {
+    console.warn(`[fastFill] Preview start failed for ${options.projectId}:`, error);
   });
   return filled;
 }

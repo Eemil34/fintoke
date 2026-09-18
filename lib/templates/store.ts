@@ -248,7 +248,8 @@ function skeletonFromSave(input: {
     name: input.name,
     niche: host || 'Saved site',
     description,
-    keywords: ['custom', 'saved', host].filter(Boolean),
+    keywords: ['custom', 'saved', host, ...input.id.split(/[-_]/), /restaurant|food|cafe/.test(input.id) ? 'restaurant' : '']
+      .filter(Boolean),
     brand: {
       name: input.name,
       tagline: host || 'Saved site',
