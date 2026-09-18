@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { collectTemplateImages, writeFastCopy, type FastCopyFile } from './fastPreview';
 import { getOpenaiApiKey } from '@/lib/services/leads';
 import type { WorkspaceLead } from '@/types/leads';
 
@@ -280,44 +281,38 @@ async function completeFillJson(prompt: string): Promise<Record<string, unknown>
     throw new Error('Add an OpenAI API key on Automations (sk-…) or set OPENAI_API_KEY.');
   }
   if (openai) {
-    const models = ['gpt-4o-mini', 'gpt-4o', 'gpt-4.1-mini'];
-    let lastError = 'ChatGPT request failed';
-    for (const model of models) {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openai}`,
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0.7,
-          max_tokens: 4000,
-          response_format: { type: 'json_object' },
-          messages: [
-            {
-              role: 'system',
-              content:
-                'Write a complete restaurant/cafe website copy pack for one real business. JSON only. Invent a full menu, about text, events, and testimonials. Never mention Coral Cove, Park Avenue, Unsplash, or image URLs.',
-            },
-            { role: 'user', content: prompt },
-          ],
-        }),
-      });
-      const payload = (await response.json().catch(() => null)) as {
-        choices?: { message?: { content?: string } }[];
-        error?: { message?: string };
-      } | null;
-      if (!response.ok) {
-        lastError = payload?.error?.message || `ChatGPT request failed (${response.status})`;
-        if (/model|not found|unsupported|does not exist/i.test(lastError)) continue;
-        throw new Error(lastError);
-      }
-      const parsed = extractJsonObject(payload?.choices?.[0]?.message?.content || '');
-      if (parsed) return parsed;
-      lastError = 'ChatGPT returned empty JSON.';
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${openai}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        temperature: 0.7,
+        max_tokens: 2500,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Write a complete restaurant/cafe website copy pack for one real business. JSON only. Invent a full menu, about text, events, and testimonials. Never mention Coral Cove, Park Avenue, Unsplash, or image URLs.',
+          },
+          { role: 'user', content: prompt },
+        ],
+      }),
+      signal: AbortSignal.timeout(12000),
+    });
+    const payload = (await response.json().catch(() => null)) as {
+      choices?: { message?: { content?: string } }[];
+      error?: { message?: string };
+    } | null;
+    if (!response.ok) {
+      throw new Error(payload?.error?.message || `ChatGPT request failed (${response.status})`);
     }
-    throw new Error(lastError);
+    const parsed = extractJsonObject(payload?.choices?.[0]?.message?.content || '');
+    if (!parsed) throw new Error('ChatGPT returned empty JSON.');
+    return parsed;
   }
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -589,19 +584,31 @@ export async function fastFillProjectFromLead(options: {
   websitePrompt?: string;
   country?: string;
 }): Promise<{ replacements: number; mapsQuery: string }> {
-  const files = await listTextFiles(options.projectPath);
+  const images = await collectTemplateImages(options.projectPath);
   const local = localCopyPack(options.lead, options.country);
+  const toFile = (pack: CopyPack): FastCopyFile => {
+    const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
+    return {
+      ...pack,
+      images,
+      mapsQuery,
+      mapsUrl: mapsQuery ? mapsEmbed(mapsQuery) : '',
+    };
+  };
+  await writeFastCopy(options.projectPath, toFile(local));
   let pack = local;
-  let writes = await writePackToFiles(files, pack, options.lead.city, options.country);
   try {
     pack = await fetchCopyPack(options.lead, options.country, options.websitePrompt);
-    writes = await writePackToFiles(files, pack, options.lead.city, options.country);
+    await writeFastCopy(options.projectPath, toFile(pack));
   } catch (error) {
-    console.warn('[fastFill] GPT copy pack skipped, local copy already written:', error);
+    console.warn('[fastFill] GPT copy pack skipped, instant local copy already written:', error);
   }
-  await fs.writeFile(path.join(options.projectPath, '.fintoke-filled'), `${pack.name}\n`).catch(() => undefined);
+  const files = await listTextFiles(options.projectPath);
+  void writePackToFiles(files, pack, options.lead.city, options.country).catch((error) => {
+    console.warn('[fastFill] Background template rewrite skipped:', error);
+  });
   const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
-  return { replacements: writes, mapsQuery };
+  return { replacements: 1, mapsQuery };
 }
 
 async function writePackToFiles(files: string[], pack: CopyPack, city?: string, country?: string): Promise<number> {
@@ -726,10 +733,6 @@ export async function rewriteExistingProjectCopy(options: {
     }),
     websitePrompt: prompt,
     country: options.country,
-  });
-  const { previewManager } = await import('@/lib/services/preview');
-  void previewManager.start(options.projectId, { restart: true }).catch((error) => {
-    console.warn(`[fastFill] Preview start failed for ${options.projectId}:`, error);
   });
   return filled;
 }

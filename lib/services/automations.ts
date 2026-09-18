@@ -229,13 +229,6 @@ async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnTy
         .filter(Boolean)
         .join('\n'),
     });
-    const { previewManager } = await import('@/lib/services/preview');
-    await previewManager.start(projectId).catch((error) => {
-      console.warn(`[automations] Fast-track preview start failed for ${projectId}:`, error);
-    });
-    await previewManager.ensureReady(projectId).catch((error) => {
-      console.warn(`[automations] Fast-track preview not ready yet for ${projectId}:`, error);
-    });
     return { projectId, shareUrl: sharePreviewUrl(projectId), origin };
   }
 
@@ -297,10 +290,17 @@ Use SiteImage for photos. Do not invent Unsplash IDs. Keep copy about this busin
 async function sendOfferForLead(job: WorkspaceAutomation, lead: Awaited<ReturnType<typeof listLeads>>[number]) {
   if (!lead.projectId || !hasEmail(lead.email) || lead.offerSent) return null;
   const origin = appOrigin();
-  const { previewManager } = await import('@/lib/services/preview');
-  await previewManager.ensureReady(lead.projectId).catch((error) => {
-    console.warn(`[automations] Preview still starting before offer for ${lead.projectId}:`, error);
-  });
+  const { getProjectById } = await import('@/lib/services/project');
+  const { resolveProjectWorkspace } = await import('@/lib/server/projectWorkspace');
+  const { readFastCopy } = await import('@/lib/templates/fastPreview');
+  const project = await getProjectById(lead.projectId);
+  const copy = project ? await readFastCopy(await resolveProjectWorkspace(project, lead.projectId)) : null;
+  if (!copy) {
+    const { previewManager } = await import('@/lib/services/preview');
+    await previewManager.ensureReady(lead.projectId).catch((error) => {
+      console.warn(`[automations] Preview still starting before offer for ${lead.projectId}:`, error);
+    });
+  }
   const site = await getSerializedAgentSite(lead.projectId, origin);
   if (!site) return null;
   if (site.job.running) return null;
