@@ -52,8 +52,8 @@ const KNOWN_DEAD_UNSPLASH_IDS = new Set([
 export const GENERATED_IMAGES_CONFIG = `images: {
     unoptimized: true,
     remotePatterns: [
-      { protocol: 'https', hostname: '**' },
-      { protocol: 'http', hostname: '**' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: 'plus.unsplash.com' },
     ],
   }`;
 
@@ -300,29 +300,6 @@ function injectImageGuard(source: string, importLine: string): string {
 }
 
 export function ensureRemoteImageConfig(source: string): string {
-  const hasWildcard =
-    source.includes("hostname: '**'") || source.includes('hostname: "**"');
-  if (hasWildcard) {
-    if (source.includes('unoptimized: true')) return source;
-    return source.replace(/images:\s*\{/, 'images: {\n    unoptimized: true,');
-  }
-
-  const unsplashOnly =
-    /remotePatterns:\s*\[\s*\{\s*protocol:\s*'https',\s*hostname:\s*'images\.unsplash\.com'\s*\}\s*\]/;
-  if (unsplashOnly.test(source)) {
-    let next = source.replace(
-      unsplashOnly,
-      `remotePatterns: [
-      { protocol: 'https', hostname: '**' },
-      { protocol: 'http', hostname: '**' },
-    ]`,
-    );
-    if (!next.includes('unoptimized: true')) {
-      next = next.replace(/images:\s*\{/, 'images: {\n    unoptimized: true,');
-    }
-    return next;
-  }
-
   const imagesBlock = /images:\s*\{[\s\S]*?\n  \}/;
   if (imagesBlock.test(source)) {
     return source.replace(imagesBlock, GENERATED_IMAGES_CONFIG);

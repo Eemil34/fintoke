@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { collectTemplateImages, writeFastCopy, captureTemplateSource, buildCopySwaps, type FastCopyFile } from './fastPreview';
+import { ensureIsolatedNextConfig } from './isolateNext';
 import { getOpenaiApiKey } from '@/lib/services/leads';
 import type { WorkspaceLead } from '@/types/leads';
 
@@ -624,6 +625,7 @@ export async function fastFillProjectFromLead(options: {
   }
   const files = await listTextFiles(options.projectPath);
   const writes = await writePackToFiles(files, pack, options.lead.city, options.country, source);
+  await ensureIsolatedNextConfig(options.projectPath);
   const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
   return { replacements: writes, mapsQuery };
 }
@@ -648,9 +650,9 @@ async function writePackToFiles(
       next = applyCopyPack(original, pack);
       next = rewriteMaps(next, mapsQuery);
       next = injectMapsUrl(next, embed);
+      next = applySwaps(next, swaps);
     }
     next = rewriteTemplateBrands(next, pack);
-    next = applySwaps(next, swaps);
     if (next !== original) {
       await fs.writeFile(file, next);
       writes += 1;

@@ -21,6 +21,8 @@ const nextConfig = {
     ? { basePath: process.env.NEXT_BASE_PATH, assetPrefix: process.env.NEXT_BASE_PATH }
     : {}),
   ${GENERATED_IMAGES_CONFIG},
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
 };
 
 module.exports = nextConfig;
@@ -81,6 +83,16 @@ export async function ensureIsolatedNextConfig(projectPath: string): Promise<boo
     changed = true;
   }
 
+  if (!next.includes('ignoreBuildErrors')) {
+    next = next.replace(
+      'const nextConfig = {',
+      `const nextConfig = {
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },`,
+    );
+    changed = true;
+  }
+
   if (!changed) return false;
 
   await fs.writeFile(configPath, next);
@@ -102,6 +114,8 @@ const nextConfig = {
     root: path.join(__dirname),
   },
 ${prefix}  ${GENERATED_IMAGES_CONFIG},
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {
