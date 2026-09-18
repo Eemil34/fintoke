@@ -523,7 +523,80 @@ function applyCopyPack(source: string, pack: CopyPack): string {
   });
 }
 
-function rewriteTemplateBrands(source: string, pack: CopyPack, capturedName?: string): string {
+function escapeForQuote(value: string, quote: "'" | '"' | '`'): string {
+  const escaped = value.replace(/\\/g, '\\\\').replace(/\r/g, '\\r').replace(/\n/g, '\\n');
+  if (quote === '`') return escaped.replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+  return escaped.replace(new RegExp(quote, 'g'), `\\${quote}`);
+}
+
+function jsxText(value: string): string {
+  return `{${JSON.stringify(value)}}`;
+}
+
+function applyLiteralSwap(source: string, from: string, to: string, jsx: boolean): string {
+  if (!from || from === to || from.length < 3) return source;
+  let quote: "'" | '"' | '`' | null = null;
+  let escaped = false;
+  let i = 0;
+  let out = '';
+  while (i < source.length) {
+    if (quote) {
+      if (escaped) {
+        out += source[i];
+        escaped = false;
+        i += 1;
+        continue;
+      }
+      if (source[i] === '\\') {
+        out += source[i];
+        escaped = true;
+        i += 1;
+        continue;
+      }
+      if (source[i] === quote) {
+        out += source[i];
+        quote = null;
+        i += 1;
+        continue;
+      }
+      if (source.startsWith(from, i)) {
+        out += escapeForQuote(to, quote);
+        i += from.length;
+        continue;
+      }
+      out += source[i];
+      i += 1;
+      continue;
+    }
+    const ch = source[i];
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      out += ch;
+      i += 1;
+      continue;
+    }
+    if (source.startsWith(from, i)) {
+      let j = i - 1;
+      while (j >= 0 && /[ \t]/.test(source[j])) j -= 1;
+      if (
+        jsx &&
+        source[j] === '>' &&
+        source[j - 1] !== '=' &&
+        !/[;={}()<>]|=>/.test(from) &&
+        !/\b(return|const|let|function)\b/.test(from)
+      ) {
+        out += jsxText(to);
+        i += from.length;
+        continue;
+      }
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
+function rewriteTemplateBrands(source: string, pack: CopyPack, capturedName?: string, jsx = false): string {
   const brands = [
     capturedName,
     'New Restaurant',
@@ -541,9 +614,9 @@ function rewriteTemplateBrands(source: string, pack: CopyPack, capturedName?: st
   let next = source;
   for (const brand of brands) {
     if (!brand || brand === pack.name) continue;
-    next = next.split(brand).join(pack.name);
+    next = applyLiteralSwap(next, brand, pack.name, jsx);
     const encoded = brand.replace(/&/g, '&amp;');
-    if (encoded !== brand) next = next.split(encoded).join(pack.name.replace(/&/g, '&amp;'));
+    if (encoded !== brand) next = applyLiteralSwap(next, encoded, pack.name, jsx);
   }
   return next;
 }
@@ -558,27 +631,28 @@ function rewriteJsxCopy(source: string, pack: CopyPack): string {
     ...pack.features.map((item) => item.body),
   ].filter((value) => value && value.length >= 12);
   let index = 0;
-  return source.replace(/>([^<>{}\n][^<>{}]{17,})</g, (full, text: string) => {
+  return source.replace(/>([^<>{}\n]{18,})</g, (full, text: string) => {
     const value = text.replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
     if (KEEP_LABEL.test(value)) return full;
-    if (value.includes('{') || /https?:|className|svg|path /i.test(value)) return full;
+    if (value.includes('{') || /https?:|className|svg|path |===|;|=>/.test(value)) return full;
     if (!/[A-Za-zÀ-ÿ]/.test(value) || !/\s/.test(value)) return full;
     if (value === pack.name || value.includes(pack.name)) return full;
     const next = pool[index++ % pool.length];
     if (!next || next === value) return full;
-    return `>${next.replace(/&/g, '&amp;')}<`;
+    return `>${jsxText(next)}<`;
   });
 }
-function applySwaps(source: string, swaps: Array<{ from: string; to: string }>): string {
+
+function applySwaps(source: string, swaps: Array<{ from: string; to: string }>, jsx: boolean): string {
   let next = source;
   const seen = new Set<string>();
   const ordered = [...swaps].sort((a, b) => b.from.length - a.from.length);
   for (const { from, to } of ordered) {
-    if (!from || seen.has(from)) continue;
+    if (!from || seen.has(from) || from.includes('{') || to.includes('{') || /;|===|=>/.test(from)) continue;
     seen.add(from);
-    next = next.split(from).join(to);
+    next = applyLiteralSwap(next, from, to, jsx);
     const encoded = from.replace(/&/g, '&amp;');
-    if (encoded !== from) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
+    if (encoded !== from) next = applyLiteralSwap(next, encoded, to, jsx);
   }
   return next;
 }
@@ -633,17 +707,20 @@ async function writePackToFiles(
   let writes = 0;
   for (const file of files) {
     if (!/\.(ts|tsx|js|jsx)$/.test(file)) continue;
-    if (/imageLibrary|ImageGuard|tailwind\.config|next-env|SiteImage/.test(file)) continue;
+    if (/imageLibrary|ImageGuard|tailwind\.config|next\.config|postcss\.config|next-env|SiteImage|run-dev/.test(file)) {
+      continue;
+    }
     const original = await fs.readFile(file, 'utf8');
+    const jsx = file.endsWith('.tsx') || file.endsWith('.jsx');
     let next = applyCopyPack(original, pack);
     next = rewriteMaps(next, mapsQuery);
     if (path.basename(file) === 'site.ts') {
       next = injectMapsUrl(next, embed);
     }
     next = injectMapIframe(next);
-    next = applySwaps(next, swaps);
-    next = rewriteTemplateBrands(next, pack, source?.name);
-    if (file.endsWith('.tsx')) {
+    next = applySwaps(next, swaps, jsx);
+    next = rewriteTemplateBrands(next, pack, source?.name, jsx);
+    if (jsx) {
       next = rewriteJsxCopy(next, pack);
     }
     if (next !== original) {

@@ -150,10 +150,11 @@ export async function captureTemplateSource(projectPath: string): Promise<NonNul
           (text) =>
             text.length >= 12 &&
             text.length <= 280 &&
+            !/\n|;/.test(text) &&
             /\s/.test(text) &&
             /[A-Za-zÀ-ÿ]/.test(text) &&
             !keep.test(text) &&
-            !/[{}`]|=>|className/.test(text),
+            !/[{}`]|=>|className|return |const |let |function /.test(text),
         ),
     ),
   ].slice(0, 28);
@@ -205,7 +206,14 @@ export function buildCopySwaps(
     ...phraseSwaps,
   ].filter(
     (row): row is { from: string; to: string } =>
-      Boolean(row.from && row.to && row.from !== row.to && row.from.length >= 3),
+      Boolean(
+        row.from &&
+          row.to &&
+          row.from !== row.to &&
+          row.from.length >= 4 &&
+          !row.from.includes('{') &&
+          !row.to.includes('{'),
+      ),
   );
 }
 
