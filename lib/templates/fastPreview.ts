@@ -191,16 +191,63 @@ export async function extractTemplateTheme(projectPath: string): Promise<{
   const css = await fs.readFile(path.join(projectPath, 'app', 'globals.css'), 'utf8').catch(() => '');
   const tw = await fs.readFile(path.join(projectPath, 'tailwind.config.ts'), 'utf8').catch(() => '');
   const source = `${css}\n${tw}`;
+  const token = (names: string[], fallback: string) => {
+    for (const name of names) {
+      const match = source.match(new RegExp(`--${name}:\\s*([^;]+)`));
+      const value = match?.[1]?.trim();
+      if (value && /#|[a-z]/i.test(value)) return value.replace(/['"]/g, '');
+    }
+    return fallback;
+  };
   const hex = (pattern: RegExp, fallback: string) => source.match(pattern)?.[1] || fallback;
   return {
-    background: hex(/bg:\s*'?(#[0-9a-fA-F]{3,8})'?/, hex(/background:\s*(#[0-9a-fA-F]{3,8})/, '#f5f3ef')),
-    text: hex(/fg:\s*'?(#[0-9a-fA-F]{3,8})'?/, hex(/color:\s*(#[0-9a-fA-F]{3,8})/, '#1c1c1c')),
-    muted: hex(/muted:\s*'?(#[0-9a-fA-F]{3,8})'?/, '#6b6560'),
-    accent: hex(/accent:\s*'?(#[0-9a-fA-F]{3,8})'?/, '#3d4a52'),
-    surface: hex(/surface:\s*'?(#[0-9a-fA-F]{3,8})'?/, '#ebe8e1'),
-    sans: css.match(/--font-sans:\s*([^;]+)/)?.[1]?.trim() || 'DM Sans, system-ui, sans-serif',
-    serif: css.match(/--font-serif:\s*([^;]+)/)?.[1]?.trim() || 'Playfair Display, Georgia, serif',
+    background: token(['paper', 'bg', 'background'], hex(/background:\s*(#[0-9a-fA-F]{3,8})/, '#f4f0e8')),
+    text: token(['ink', 'fg', 'text'], hex(/color:\s*(#[0-9a-fA-F]{3,8})/, '#14110e')),
+    muted: token(['mute', 'muted', 'ink-2'], '#6f675c'),
+    accent: token(['accent', 'accent-2', 'gold'], '#9a7b4a'),
+    surface: token(['paper-2', 'surface', 'snow', 'card'], '#ebe4d8'),
+    sans: token(['font-body', 'font-sans'], 'Figtree, system-ui, sans-serif'),
+    serif: token(['font-display', 'font-serif'], 'Syne, Georgia, serif'),
   };
+}
+
+export const FAST_HTML_FILE = '.fintoke-preview.html';
+
+function sizedImage(src: string, width: number): string {
+  try {
+    const url = new URL(src);
+    if (!url.hostname.includes('unsplash.com')) return src;
+    url.searchParams.set('auto', 'format');
+    url.searchParams.set('fit', 'crop');
+    url.searchParams.set('w', String(width));
+    url.searchParams.set('q', '72');
+    return url.toString();
+  } catch {
+    return src;
+  }
+}
+
+function fontHref(sans: string, serif: string): string {
+  const names = [serif, sans]
+    .map((value) => value.split(',')[0]?.replace(/['"]/g, '').trim())
+    .filter(Boolean)
+    .map((name) => name.replace(/\s+/g, '+'));
+  const family = [...new Set(names)].map((name) => `family=${name}:ital,wght@0,400;0,600;0,700;1,400`).join('&');
+  return `https://fonts.googleapis.com/css2?${family}&display=swap`;
+}
+
+export async function writeFastPreviewHtml(projectPath: string, pack: FastCopyFile): Promise<void> {
+  const theme = await extractTemplateTheme(projectPath);
+  await fs.writeFile(path.join(projectPath, FAST_HTML_FILE), `${renderFastPreviewHtml(pack, theme)}\n`);
+}
+
+export async function readFastPreviewHtml(projectPath: string): Promise<string | null> {
+  try {
+    const html = await fs.readFile(path.join(projectPath, FAST_HTML_FILE), 'utf8');
+    return html.includes('<html') ? html : null;
+  } catch {
+    return null;
+  }
 }
 
 export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
@@ -247,19 +294,23 @@ export function renderFastPreviewHtml(
     sans: 'DM Sans, system-ui, sans-serif',
     serif: 'Playfair Display, Georgia, serif',
   };
-  const images = pack.images?.length ? pack.images : restaurantFallbackImages();
-  const hero = images[0] || restaurantFallbackImages()[0];
+  const images = (pack.images?.length ? pack.images : restaurantFallbackImages()).map((src, index) =>
+    sizedImage(src, index === 0 ? 1400 : 800),
+  );
+  const hero = images[0] || sizedImage(restaurantFallbackImages()[0], 1400);
   const gallery = images.slice(1, 7);
   const menu = pack.menu?.length ? pack.menu : [{ title: 'Seasonal plate', body: pack.description }];
   const about = pack.aboutColumns?.length ? pack.aboutColumns : [pack.description];
   const features = pack.features?.length ? pack.features : [];
+  const events = pack.events?.length ? pack.events : [];
+  const team = pack.team?.length ? pack.team : [];
   const quotes = pack.testimonials?.length ? pack.testimonials : [];
   const maps = pack.mapsUrl || (pack.mapsQuery
     ? `https://maps.google.com/maps?q=${encodeURIComponent(pack.mapsQuery)}&z=15&output=embed`
     : '');
 
-  const img = (src: string, alt: string, className: string) =>
-    `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" class="${className}" loading="lazy" referrerpolicy="origin" />`;
+  const img = (src: string, alt: string, eager = false) =>
+    `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" ${eager ? 'fetchpriority="high" loading="eager"' : 'loading="lazy"'} decoding="async" referrerpolicy="origin" />`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -270,7 +321,9 @@ export function renderFastPreviewHtml(
   <title>${escapeHtml(pack.name)}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://images.unsplash.com" />
+  <link rel="preload" as="image" href="${escapeHtml(hero)}" />
+  <link href="${escapeHtml(fontHref(colors.sans, colors.serif))}" rel="stylesheet" />
   <style>
     :root {
       --bg:${escapeHtml(colors.background)};
@@ -282,32 +335,33 @@ export function renderFastPreviewHtml(
       --serif:${escapeHtml(colors.serif)};
     }
     * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body { margin:0; font-family: var(--sans); background:var(--bg); color:var(--ink); }
     h1, h2, h3, .brand { font-family: var(--serif); }
-    a { color: inherit; }
+    a { color: inherit; text-decoration: none; }
     img { display:block; width:100%; height:100%; object-fit:cover; }
-    header { display:flex; justify-content:space-between; align-items:center; padding:20px 6vw; position:sticky; top:0; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); z-index:2; }
-    .brand { font-weight:700; letter-spacing:.04em; }
+    header { display:flex; justify-content:space-between; align-items:center; padding:18px 6vw; position:sticky; top:0; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); z-index:2; }
+    .brand { font-weight:700; letter-spacing:.04em; font-size:1.15rem; }
     nav { display:flex; gap:18px; color:var(--muted); font-size:14px; }
-    .hero { display:grid; grid-template-columns: 1.1fr .9fr; min-height: 78vh; }
-    .hero-copy { padding: 8vh 6vw; display:flex; flex-direction:column; justify-content:center; gap:18px; }
+    .hero { display:grid; grid-template-columns: 1.05fr .95fr; min-height: 82vh; }
+    .hero-copy { padding: 9vh 6vw; display:flex; flex-direction:column; justify-content:center; gap:18px; }
     .eyebrow { color:var(--accent); letter-spacing:.18em; text-transform:uppercase; font-size:12px; }
-    h1 { font-size: clamp(2.4rem, 6vw, 5rem); line-height: .95; margin:0; font-weight:600; }
-    .lede { color:var(--muted); font-size:1.15rem; max-width: 38rem; line-height:1.6; }
-    .btn { display:inline-block; background:var(--accent); color:#fff; padding:12px 18px; border-radius:999px; text-decoration:none; width:fit-content; }
-    section { padding: 72px 6vw; }
-    h2 { font-size:2rem; margin:0 0 24px; }
+    h1 { font-size: clamp(2.6rem, 6vw, 5.2rem); line-height: .95; margin:0; font-weight:600; }
+    .lede { color:var(--muted); font-size:1.15rem; max-width: 38rem; line-height:1.65; }
+    .btn { display:inline-block; background:var(--accent); color:#fff; padding:12px 18px; border-radius:999px; width:fit-content; }
+    section { padding: 80px 6vw; }
+    h2 { font-size:2.1rem; margin:0 0 28px; }
     .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:18px; }
-    .card { background:var(--card); padding:20px; border-radius:16px; }
+    .card { background:var(--card); padding:22px; border-radius:16px; }
     .card h3 { margin:0 0 8px; }
-    .card p, .muted { color:var(--muted); line-height:1.55; }
+    .card p, .muted { color:var(--muted); line-height:1.55; margin:0; }
     .gallery { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
     .gallery div { aspect-ratio: 4/3; overflow:hidden; border-radius:14px; }
-    iframe { width:100%; height:280px; border:0; border-radius:16px; }
-    footer { padding: 32px 6vw 48px; color:var(--muted); border-top:1px solid #2a2a30; }
+    iframe { width:100%; min-height:280px; border:0; border-radius:16px; }
+    footer { padding: 32px 6vw 48px; color:var(--muted); display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; }
     @media (max-width: 800px) {
       .hero { grid-template-columns: 1fr; }
-      .hero-photo { min-height: 42vh; }
+      .hero-photo { min-height: 44vh; }
       nav { display:none; }
       .gallery { grid-template-columns: 1fr 1fr; }
     }
@@ -315,21 +369,22 @@ export function renderFastPreviewHtml(
 </head>
 <body>
   <header>
-    <div class="brand">${escapeHtml(pack.name)}</div>
+    <a class="brand" href="#top">${escapeHtml(pack.name)}</a>
     <nav>
       <a href="#menu">Menu</a>
       <a href="#about">About</a>
+      <a href="#gallery">Gallery</a>
       <a href="#visit">Visit</a>
     </nav>
   </header>
-  <section class="hero" style="padding:0">
+  <section class="hero" id="top" style="padding:0">
     <div class="hero-copy">
       <div class="eyebrow">${escapeHtml(pack.eyebrow || pack.tagline || pack.name)}</div>
       <h1>${escapeHtml(pack.heroTitle || pack.name)}</h1>
       <p class="lede">${escapeHtml(pack.heroSubtitle || pack.description)}</p>
       <a class="btn" href="#visit">${escapeHtml(pack.ctaButton || 'Reservation')}</a>
     </div>
-    <div class="hero-photo">${img(hero, pack.name, '')}</div>
+    <div class="hero-photo">${img(hero, pack.name, true)}</div>
   </section>
   <section id="menu">
     <h2>Menu</h2>
@@ -360,8 +415,18 @@ export function renderFastPreviewHtml(
   </section>
   ${
     gallery.length
-      ? `<section><h2>Gallery</h2><div class="gallery">${gallery
-          .map((src, index) => `<div>${img(src, `${pack.name} ${index + 1}`, '')}</div>`)
+      ? `<section id="gallery"><h2>Gallery</h2><div class="gallery">${gallery
+          .map((src, index) => `<div>${img(src, `${pack.name} ${index + 1}`, index < 2)}</div>`)
+          .join('')}</div></section>`
+      : ''
+  }
+  ${
+    events.length
+      ? `<section><h2>Events</h2><div class="grid">${events
+          .map(
+            (item) =>
+              `<article class="card"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(item.body)}</p></article>`,
+          )
           .join('')}</div></section>`
       : ''
   }
@@ -370,9 +435,19 @@ export function renderFastPreviewHtml(
       ? `<section><h2>Guests</h2><div class="grid">${quotes
           .map(
             (item) =>
-              `<article class="card"><p>“${escapeHtml(item.quote)}”</p><p class="muted">${escapeHtml(item.name)}${
+              `<article class="card"><p>“${escapeHtml(item.quote)}”</p><p class="muted" style="margin-top:10px">${escapeHtml(item.name)}${
                 item.role ? ` · ${escapeHtml(item.role)}` : ''
               }</p></article>`,
+          )
+          .join('')}</div></section>`
+      : ''
+  }
+  ${
+    team.length
+      ? `<section><h2>Team</h2><div class="grid">${team
+          .map(
+            (item) =>
+              `<article class="card"><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.role)}</p><p style="margin-top:8px">${escapeHtml(item.bio)}</p></article>`,
           )
           .join('')}</div></section>`
       : ''
@@ -390,7 +465,7 @@ export function renderFastPreviewHtml(
       <article class="card">${maps ? `<iframe title="Location" src="${escapeHtml(maps)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>` : `<p>${escapeHtml(pack.footer || pack.name)}</p>`}</article>
     </div>
   </section>
-  <footer>${escapeHtml(pack.footer || pack.name)}</footer>
+  <footer><span>${escapeHtml(pack.footer || pack.name)}</span><span>${escapeHtml(pack.phone || '')}</span></footer>
 </body>
 </html>`;
 }

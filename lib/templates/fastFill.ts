@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { collectTemplateImages, writeFastCopy, captureTemplateSource, buildCopySwaps, type FastCopyFile } from './fastPreview';
+import { collectTemplateImages, writeFastCopy, writeFastPreviewHtml, captureTemplateSource, buildCopySwaps, type FastCopyFile } from './fastPreview';
 import { getOpenaiApiKey } from '@/lib/services/leads';
 import type { WorkspaceLead } from '@/types/leads';
 
@@ -615,17 +615,17 @@ export async function fastFillProjectFromLead(options: {
     };
   };
   await writeFastCopy(options.projectPath, toFile(local));
+  await writeFastPreviewHtml(options.projectPath, toFile(local));
   let pack = local;
   try {
     pack = await fetchCopyPack(options.lead, options.country, options.websitePrompt);
     await writeFastCopy(options.projectPath, toFile(pack));
+    await writeFastPreviewHtml(options.projectPath, toFile(pack));
   } catch (error) {
     console.warn('[fastFill] GPT copy pack skipped, instant local copy already written:', error);
   }
-  const files = await listTextFiles(options.projectPath);
-  const writes = await writePackToFiles(files, pack, options.lead.city, options.country, source);
   const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
-  return { replacements: writes, mapsQuery };
+  return { replacements: 1, mapsQuery };
 }
 
 async function writePackToFiles(

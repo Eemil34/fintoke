@@ -1,10 +1,8 @@
 import { NextRequest } from 'next/server';
-import fs from 'fs/promises';
-import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { applyCopyToHtml, ensureCopySwaps, readFastCopy } from '@/lib/templates/fastPreview';
+import { extractTemplateTheme, readFastCopy, readFastPreviewHtml, renderFastPreviewHtml } from '@/lib/templates/fastPreview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -147,16 +145,22 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   const project = await getProjectById(projectId);
   let copyPack = null as Awaited<ReturnType<typeof readFastCopy>>;
-  let templateId = '';
+  let projectPath = '';
   if (project) {
-    const projectPath = await resolveProjectWorkspace(project, projectId);
+    projectPath = await resolveProjectWorkspace(project, projectId);
     copyPack = await readFastCopy(projectPath);
-    templateId =
-      copyPack?.templateId ||
-      (await fs.readFile(path.join(projectPath, '.fintoke-from'), 'utf8').catch(() => '')).trim();
-    if (copyPack) {
-      copyPack = await ensureCopySwaps({ ...copyPack, templateId: copyPack.templateId || templateId });
+  }
+
+  if (copyPack) {
+    if (isProbe) {
+      return new Response('ready', { status: 200, headers: { 'cache-control': 'no-store' } });
     }
+    const saved = projectPath ? await readFastPreviewHtml(projectPath) : null;
+    const theme = projectPath ? await extractTemplateTheme(projectPath) : undefined;
+    const body = saved || renderFastPreviewHtml(copyPack, theme);
+    const headers = previewSecurityHeaders(new Headers());
+    headers.set('content-type', 'text/html; charset=utf-8');
+    return new Response(body, { status: 200, headers });
   }
 
   const previewKey = projectId;
@@ -274,8 +278,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   if (contentType.includes('text/html')) {
-    let body = rewriteHtml(await upstream.text(), prefix, preview.port);
-    if (copyPack) body = applyCopyToHtml(body, copyPack);
+    const body = rewriteHtml(await upstream.text(), prefix, preview.port);
     out.delete('content-length');
     return new Response(body, { status: upstream.status, headers: out });
   }

@@ -5,7 +5,6 @@ import { generateProjectId } from '@/lib/utils';
 import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliModels';
 import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
-import { previewManager } from '@/lib/services/preview';
 import { publishSite } from '@/lib/services/publishSite';
 import { serializeAgentSite, getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { agentOrigin, extractAgentToken, requireMcpAgentKey } from '@/lib/agent-api/http';
@@ -516,9 +515,6 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
             details: args.details,
           }),
           websitePrompt: prompt,
-        });
-        void previewManager.start(projectId).catch((error) => {
-          console.warn('[mcp] Fast preview start skipped:', error);
         });
       }
       let published = null;
