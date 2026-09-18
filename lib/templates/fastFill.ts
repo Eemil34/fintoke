@@ -614,33 +614,16 @@ async function writePackToFiles(files: string[], pack: CopyPack, city?: string, 
   const embed = mapsQuery ? mapsEmbed(mapsQuery) : '';
   let writes = 0;
   for (const file of files) {
+    const base = path.basename(file);
+    if (base !== 'site.ts') continue;
     const original = await fs.readFile(file, 'utf8');
-    let next = original;
-    if (/\.(ts|tsx|js|jsx)$/.test(file) && path.basename(file) !== 'SiteImage.tsx') {
-      next = applyCopyPack(next, pack);
-      next = rewriteTemplateBrands(next, pack);
-      if (
-        !/imageLibrary|ImageGuard|tailwind\.config|next-env/.test(file) &&
-        (path.basename(file) === 'site.ts' || /export const site\s*=/.test(original) || /\.(tsx|jsx)$/.test(file))
-      ) {
-        next = rewriteLeftoverQuotes(next, pack, pack.name);
-      }
-      if (/\.(tsx|jsx)$/.test(file)) {
-        next = rewriteJsxCopy(next, pack);
-      }
-    }
+    let next = applyCopyPack(original, pack);
     next = rewriteTemplateBrands(next, pack);
+    next = rewriteLeftoverQuotes(next, pack, pack.name);
     next = next.split('Coral Cove').join(pack.name);
     next = next.split('Park Avenue, 60146 NY, USA').join(pack.address);
-    next = next.split('content="no-referrer"').join('content="origin"');
-    next = next.replace(/unsplash\((['"][^'"]+['"]),\s*\d+\)/g, 'unsplash($1, 900)');
     next = rewriteMaps(next, mapsQuery);
-    if (path.basename(file) === 'site.ts') {
-      next = injectMapsUrl(next, embed);
-    }
-    if (/\.(tsx|jsx)$/.test(file)) {
-      next = injectMapIframe(next);
-    }
+    next = injectMapsUrl(next, embed);
     if (next !== original) {
       await fs.writeFile(file, next);
       writes += 1;
@@ -731,10 +714,6 @@ export async function rewriteExistingProjectCopy(options: {
     }),
     websitePrompt: prompt,
     country: options.country,
-  });
-  const { previewManager } = await import('@/lib/services/preview');
-  void previewManager.start(options.projectId).catch((error) => {
-    console.warn(`[fastFill] Preview start failed for ${options.projectId}:`, error);
   });
   return filled;
 }

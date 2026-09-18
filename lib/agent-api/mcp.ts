@@ -516,10 +516,6 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
           }),
           websitePrompt: prompt,
         });
-        const { previewManager } = await import('@/lib/services/preview');
-        void previewManager.start(projectId).catch((error) => {
-          console.warn(`[MCP] Fast-track preview start failed for ${projectId}:`, error);
-        });
       }
       let published = null;
       if (publish) {
@@ -529,6 +525,7 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       return {
         ...site,
         buildMode: 'fast',
+        templateId: templateId || site.templateId,
         job: { running: false, activeCount: 0 },
         jobStarted: null,
         filled,

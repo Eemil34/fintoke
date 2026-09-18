@@ -1,5 +1,8 @@
 import { NextRequest } from 'next/server';
 import { previewManager } from '@/lib/services/preview';
+import { getProjectById } from '@/lib/services/project';
+import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
+import { renderProjectFastPreview } from '@/lib/templates/fastPreview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -138,9 +141,27 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   const { projectId: rawProjectId, path: segments } = await params;
   const projectId = decodeURIComponent(rawProjectId);
   const prefix = `/preview/${encodeURIComponent(projectId)}`;
+  const isProbe = request.nextUrl.searchParams.get('fintoke_probe') === '1';
+
+  const project = await getProjectById(projectId);
+  if (project) {
+    const projectPath = await resolveProjectWorkspace(project, projectId);
+    const html = await renderProjectFastPreview(projectPath);
+    if (html) {
+      return new Response(html, {
+        status: 200,
+        headers: {
+          'content-type': 'text/html; charset=utf-8',
+          'cache-control': 'no-store',
+          'x-robots-tag': 'noindex, nofollow',
+          'referrer-policy': 'origin',
+        },
+      });
+    }
+  }
+
   const logs = () => previewManager.getLogs(projectId);
   const preview = previewManager.getStatus(projectId);
-  const isProbe = request.nextUrl.searchParams.get('fintoke_probe') === '1';
 
   if (preview.status === 'error' || !preview.port) {
     void previewManager.start(projectId).catch((error) => {

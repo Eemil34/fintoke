@@ -86,7 +86,58 @@ export async function readFastCopy(projectPath: string): Promise<FastCopyFile | 
   }
 }
 
-export function renderFastPreviewHtml(pack: FastCopyFile): string {
+export async function extractTemplateTheme(projectPath: string): Promise<{
+  background: string;
+  text: string;
+  muted: string;
+  accent: string;
+  surface: string;
+  sans: string;
+  serif: string;
+}> {
+  const css = await fs.readFile(path.join(projectPath, 'app', 'globals.css'), 'utf8').catch(() => '');
+  const tw = await fs.readFile(path.join(projectPath, 'tailwind.config.ts'), 'utf8').catch(() => '');
+  const source = `${css}\n${tw}`;
+  const hex = (pattern: RegExp, fallback: string) => source.match(pattern)?.[1] || fallback;
+  return {
+    background: hex(/bg:\s*'?(#[0-9a-fA-F]{3,8})'?/, hex(/background:\s*(#[0-9a-fA-F]{3,8})/, '#f5f3ef')),
+    text: hex(/fg:\s*'?(#[0-9a-fA-F]{3,8})'?/, hex(/color:\s*(#[0-9a-fA-F]{3,8})/, '#1c1c1c')),
+    muted: hex(/muted:\s*'?(#[0-9a-fA-F]{3,8})'?/, '#6b6560'),
+    accent: hex(/accent:\s*'?(#[0-9a-fA-F]{3,8})'?/, '#3d4a52'),
+    surface: hex(/surface:\s*'?(#[0-9a-fA-F]{3,8})'?/, '#ebe8e1'),
+    sans: css.match(/--font-sans:\s*([^;]+)/)?.[1]?.trim() || 'DM Sans, system-ui, sans-serif',
+    serif: css.match(/--font-serif:\s*([^;]+)/)?.[1]?.trim() || 'Playfair Display, Georgia, serif',
+  };
+}
+
+export async function renderProjectFastPreview(projectPath: string): Promise<string | null> {
+  const pack = await readFastCopy(projectPath);
+  if (!pack) return null;
+  const theme = await extractTemplateTheme(projectPath);
+  return renderFastPreviewHtml(pack, theme);
+}
+
+export function renderFastPreviewHtml(
+  pack: FastCopyFile,
+  theme?: {
+    background: string;
+    text: string;
+    muted: string;
+    accent: string;
+    surface: string;
+    sans: string;
+    serif: string;
+  },
+): string {
+  const colors = theme || {
+    background: '#f5f3ef',
+    text: '#1c1c1c',
+    muted: '#6b6560',
+    accent: '#3d4a52',
+    surface: '#ebe8e1',
+    sans: 'DM Sans, system-ui, sans-serif',
+    serif: 'Playfair Display, Georgia, serif',
+  };
   const images = pack.images?.length ? pack.images : restaurantFallbackImages();
   const hero = images[0] || restaurantFallbackImages()[0];
   const gallery = images.slice(1, 7);
@@ -108,13 +159,25 @@ export function renderFastPreviewHtml(pack: FastCopyFile): string {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="referrer" content="origin" />
   <title>${escapeHtml(pack.name)}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,600;0,700;1,400&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet" />
   <style>
-    :root { --bg:#111113; --card:#1b1b1f; --ink:#f6f1ea; --muted:#b9b1a6; --accent:#de7356; }
+    :root {
+      --bg:${escapeHtml(colors.background)};
+      --card:${escapeHtml(colors.surface)};
+      --ink:${escapeHtml(colors.text)};
+      --muted:${escapeHtml(colors.muted)};
+      --accent:${escapeHtml(colors.accent)};
+      --sans:${escapeHtml(colors.sans)};
+      --serif:${escapeHtml(colors.serif)};
+    }
     * { box-sizing: border-box; }
-    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; background:var(--bg); color:var(--ink); }
+    body { margin:0; font-family: var(--sans); background:var(--bg); color:var(--ink); }
+    h1, h2, h3, .brand { font-family: var(--serif); }
     a { color: inherit; }
     img { display:block; width:100%; height:100%; object-fit:cover; }
-    header { display:flex; justify-content:space-between; align-items:center; padding:20px 6vw; position:sticky; top:0; background:rgba(17,17,19,.92); backdrop-filter: blur(8px); z-index:2; }
+    header { display:flex; justify-content:space-between; align-items:center; padding:20px 6vw; position:sticky; top:0; background:color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); z-index:2; }
     .brand { font-weight:700; letter-spacing:.04em; }
     nav { display:flex; gap:18px; color:var(--muted); font-size:14px; }
     .hero { display:grid; grid-template-columns: 1.1fr .9fr; min-height: 78vh; }
