@@ -5,6 +5,7 @@ import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliMode
 import { listManagedTemplates } from '@/lib/templates/store';
 import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
+import { previewManager } from '@/lib/services/preview';
 import { publishSite } from '@/lib/services/publishSite';
 import { waitForSiteIdle } from '@/lib/agent-api/wait';
 import { serializeAgentSite } from '@/lib/agent-api/serialize';
@@ -102,6 +103,9 @@ export async function POST(request: NextRequest) {
           details: body.details,
         }),
         websitePrompt: prompt,
+      });
+      void previewManager.start(projectId).catch((error) => {
+        console.warn('[sites] Fast preview start skipped:', error);
       });
     } else if (start) {
       job = await startProjectInstruction({

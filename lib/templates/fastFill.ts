@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { collectTemplateImages, writeFastCopy, type FastCopyFile } from './fastPreview';
+import { collectTemplateImages, writeFastCopy, captureTemplateSource, buildCopySwaps, type FastCopyFile } from './fastPreview';
 import { getOpenaiApiKey } from '@/lib/services/leads';
 import type { WorkspaceLead } from '@/types/leads';
 
@@ -578,21 +578,18 @@ function rewriteLeftoverQuotes(source: string, pack: CopyPack, business: string)
   });
 }
 
-function grabQuoted(source: string, key: string): string {
-  return source.match(new RegExp(`\\b${key}:\\s*['"\`]([^'"\`]{2,160})['"\`]`))?.[1] || '';
-}
-
-async function captureTemplateSource(projectPath: string): Promise<FastCopyFile['source']> {
-  const site = await fs.readFile(path.join(projectPath, 'lib', 'site.ts'), 'utf8').catch(() => '');
-  const page = site ? '' : await fs.readFile(path.join(projectPath, 'app', 'page.tsx'), 'utf8').catch(() => '');
-  const raw = site || page;
-  return {
-    name: grabQuoted(raw, 'name'),
-    tagline: grabQuoted(raw, 'tagline'),
-    heroTitle: grabQuoted(raw, 'title'),
-    heroSubtitle: grabQuoted(raw, 'subtitle'),
-    description: grabQuoted(raw, 'description'),
-  };
+function applySwaps(source: string, swaps: Array<{ from: string; to: string }>): string {
+  let next = source;
+  const seen = new Set<string>();
+  const ordered = [...swaps].sort((a, b) => b.from.length - a.from.length);
+  for (const { from, to } of ordered) {
+    if (!from || seen.has(from)) continue;
+    seen.add(from);
+    next = next.split(from).join(to);
+    const encoded = from.replace(/&/g, '&amp;');
+    if (encoded !== from) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
+  }
+  return next;
 }
 
 export async function fastFillProjectFromLead(options: {
@@ -614,6 +611,7 @@ export async function fastFillProjectFromLead(options: {
       mapsUrl: mapsQuery ? mapsEmbed(mapsQuery) : '',
       templateId,
       source,
+      swaps: buildCopySwaps(source, pack),
     };
   };
   await writeFastCopy(options.projectPath, toFile(local));
@@ -625,26 +623,34 @@ export async function fastFillProjectFromLead(options: {
     console.warn('[fastFill] GPT copy pack skipped, instant local copy already written:', error);
   }
   const files = await listTextFiles(options.projectPath);
-  const writes = await writePackToFiles(files, pack, options.lead.city, options.country);
+  const writes = await writePackToFiles(files, pack, options.lead.city, options.country, source);
   const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
   return { replacements: writes, mapsQuery };
 }
 
-async function writePackToFiles(files: string[], pack: CopyPack, city?: string, country?: string): Promise<number> {
+async function writePackToFiles(
+  files: string[],
+  pack: CopyPack,
+  city?: string,
+  country?: string,
+  source?: FastCopyFile['source'],
+): Promise<number> {
   const mapsQuery = [pack.name, pack.address || city, country].filter(Boolean).join(', ');
   const embed = mapsQuery ? mapsEmbed(mapsQuery) : '';
+  const swaps = buildCopySwaps(source, pack);
   let writes = 0;
   for (const file of files) {
-    const base = path.basename(file);
-    if (base !== 'site.ts') continue;
+    if (!/\.(ts|tsx|js|jsx)$/.test(file)) continue;
+    if (/imageLibrary|ImageGuard|tailwind\.config|next-env|SiteImage/.test(file)) continue;
     const original = await fs.readFile(file, 'utf8');
     let next = applyCopyPack(original, pack);
     next = rewriteTemplateBrands(next, pack);
-    next = rewriteLeftoverQuotes(next, pack, pack.name);
-    next = next.split('Coral Cove').join(pack.name);
-    next = next.split('Park Avenue, 60146 NY, USA').join(pack.address);
-    next = rewriteMaps(next, mapsQuery);
-    next = injectMapsUrl(next, embed);
+    next = applySwaps(next, swaps);
+    if (path.basename(file) === 'site.ts') {
+      next = rewriteLeftoverQuotes(next, pack, pack.name);
+      next = rewriteMaps(next, mapsQuery);
+      next = injectMapsUrl(next, embed);
+    }
     if (next !== original) {
       await fs.writeFile(file, next);
       writes += 1;

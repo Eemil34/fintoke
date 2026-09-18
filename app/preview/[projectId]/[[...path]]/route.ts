@@ -4,7 +4,7 @@ import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { applyCopyToHtml, readFastCopy } from '@/lib/templates/fastPreview';
+import { applyCopyToHtml, ensureCopySwaps, readFastCopy } from '@/lib/templates/fastPreview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -154,14 +154,13 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     templateId =
       copyPack?.templateId ||
       (await fs.readFile(path.join(projectPath, '.fintoke-from'), 'utf8').catch(() => '')).trim();
+    if (copyPack) {
+      copyPack = await ensureCopySwaps({ ...copyPack, templateId: copyPack.templateId || templateId });
+    }
   }
 
-  const previewKey = templateId ? `tpl:${templateId}` : projectId;
-  if (templateId) {
-    await previewManager.startSharedTemplate(templateId).catch((error) => {
-      console.error('[Preview proxy] Shared template failed:', error);
-    });
-  } else if (previewManager.getStatus(projectId).status === 'error' || !previewManager.getStatus(projectId).port) {
+  const previewKey = projectId;
+  if (previewManager.getStatus(projectId).status === 'error' || !previewManager.getStatus(projectId).port) {
     void previewManager.start(projectId).catch((error) => {
       console.error('[Preview proxy] Failed to start:', error);
     });

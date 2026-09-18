@@ -35,7 +35,9 @@ export type FastCopyFile = {
     heroTitle?: string;
     heroSubtitle?: string;
     description?: string;
+    phrases?: string[];
   };
+  swaps?: Array<{ from: string; to: string }>;
 };
 
 function escapeHtml(value: string) {
@@ -94,6 +96,89 @@ export async function readFastCopy(projectPath: string): Promise<FastCopyFile | 
   }
 }
 
+export async function captureTemplateSource(projectPath: string): Promise<NonNullable<FastCopyFile['source']>> {
+  const candidates = [
+    path.join(projectPath, 'lib', 'site.ts'),
+    path.join(projectPath, 'app', 'layout.tsx'),
+    path.join(projectPath, 'app', 'page.tsx'),
+    path.join(projectPath, 'components', 'Header.tsx'),
+    path.join(projectPath, 'components', 'SiteHeader.tsx'),
+    path.join(projectPath, 'components', 'Hero.tsx'),
+    path.join(projectPath, 'components', 'Footer.tsx'),
+  ];
+  let raw = '';
+  for (const file of candidates) {
+    raw += `\n${await fs.readFile(file, 'utf8').catch(() => '')}`;
+  }
+  const grab = (key: string) => raw.match(new RegExp(`\\b${key}:\\s*['"\`]([^'"\`]{2,160})['"\`]`))?.[1] || '';
+  const metaTitle = grab('title');
+  const firstName = grab('name');
+  const jsxBrand =
+    raw.match(/className=\{?["'`][^"'`]*brand[^"'`]*["'`][^>]*>\s*([^<{]{2,60})\s*</i)?.[1]?.trim() ||
+    raw.match(/>([A-Z][^<>{\n]{2,40})</)?.[1]?.trim() ||
+    '';
+  const name = firstName && !/loaf|salad|steak|pasta|chicken|oyster|tartare/i.test(firstName)
+    ? firstName
+    : metaTitle.split(/[—–\-|•]/)[0]?.trim() || jsxBrand || firstName;
+  const keep =
+    /^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|To begin|From the hearth|For the table|To finish|Reserve|Primary)$/i;
+  const phrases = [
+    ...new Set(
+      [...raw.matchAll(/>([^<{]*)</g)]
+        .map((match) => match[1].replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim())
+        .filter(
+          (text) =>
+            text.length >= 3 &&
+            text.length <= 240 &&
+            /[A-Za-zÀ-ÿ]/.test(text) &&
+            !keep.test(text) &&
+            !/[{}`]|=>|className/.test(text),
+        ),
+    ),
+  ].slice(0, 16);
+  return {
+    name,
+    tagline: grab('tagline') || grab('eyebrow'),
+    heroTitle: metaTitle || grab('title'),
+    heroSubtitle: grab('subtitle'),
+    description: grab('description'),
+    phrases,
+  };
+}
+
+export function buildCopySwaps(
+  source: FastCopyFile['source'] | undefined,
+  pack: Pick<FastCopyFile, 'name' | 'tagline' | 'heroTitle' | 'heroSubtitle' | 'description' | 'aboutColumns'>,
+): Array<{ from: string; to: string }> {
+  const src = source || {};
+  const pool = [pack.heroTitle, pack.heroSubtitle, pack.description, ...(pack.aboutColumns || [])].filter(Boolean);
+  let poolIndex = 0;
+  const phraseSwaps = (src.phrases || []).map((from) => {
+    const brandLike = from.length <= 48 && !/[.!?]/.test(from);
+    const to = brandLike ? pack.name : pool[poolIndex++] || pack.description;
+    return { from, to };
+  });
+  return [
+    { from: src.name, to: pack.name },
+    { from: src.tagline, to: pack.tagline },
+    { from: src.heroTitle, to: pack.heroTitle },
+    { from: src.heroSubtitle, to: pack.heroSubtitle },
+    { from: src.description, to: pack.description },
+    ...phraseSwaps,
+  ].filter((row): row is { from: string; to: string } => Boolean(row.from && row.to && row.from !== row.to && row.from.length >= 3));
+}
+
+export async function ensureCopySwaps(pack: FastCopyFile): Promise<FastCopyFile> {
+  let source = pack.source;
+  if ((!source?.name || !source.phrases?.length) && pack.templateId) {
+    const { resolveSnapshotDir } = await import('@/lib/templates/snapshot');
+    const dir = await resolveSnapshotDir(pack.templateId);
+    if (dir) source = await captureTemplateSource(dir);
+  }
+  const swaps = buildCopySwaps(source, pack);
+  return { ...pack, source, swaps: swaps.length ? swaps : pack.swaps };
+}
+
 export async function extractTemplateTheme(projectPath: string): Promise<{
   background: string;
   text: string;
@@ -119,21 +204,24 @@ export async function extractTemplateTheme(projectPath: string): Promise<{
 }
 
 export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
-  const replacements: Array<[string, string]> = [];
   const source = pack.source || {};
-  const pairs: Array<[string | undefined, string | undefined]> = [
-    [source.name, pack.name],
-    [source.tagline, pack.tagline],
-    [source.heroTitle, pack.heroTitle],
-    [source.heroSubtitle, pack.heroSubtitle],
-    [source.description, pack.description],
-  ];
-  for (const [from, to] of pairs) {
-    if (from && to && from !== to && from.length >= 3) replacements.push([from, to]);
-  }
+  const swaps = [
+    ...(pack.swaps || []),
+    { from: source.name, to: pack.name },
+    { from: source.tagline, to: pack.tagline },
+    { from: source.heroTitle, to: pack.heroTitle },
+    { from: source.heroSubtitle, to: pack.heroSubtitle },
+    { from: source.description, to: pack.description },
+  ].filter((row): row is { from: string; to: string } => Boolean(row.from && row.to && row.from !== row.to && row.from.length >= 3));
+  swaps.sort((a, b) => b.from.length - a.from.length);
   let next = html;
-  for (const [from, to] of replacements) {
+  const seen = new Set<string>();
+  for (const { from, to } of swaps) {
+    if (seen.has(from)) continue;
+    seen.add(from);
     next = next.split(from).join(to);
+    const encoded = from.replace(/&/g, '&amp;');
+    if (encoded !== from) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
   }
   return next;
 }
