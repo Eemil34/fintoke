@@ -7,7 +7,7 @@ import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 import { listEmails, listPeople } from '@/lib/services/workspace';
 
-const RELEASE = '2026-09-18-snapshot-html';
+const RELEASE = '2026-09-18-template-copy';
 
 export async function GET() {
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');

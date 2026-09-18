@@ -83,15 +83,21 @@ export function siteNameFromBrief(
   name: string | undefined,
   templates: Array<{ id: string; name: string }>,
 ): string {
-  const trimmed = name?.trim() || '';
-  const isTemplateName = (value: string) =>
-    templates.some(
+  const isTemplateName = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return true;
+    if (/^new restaurant\b/i.test(trimmed)) return true;
+    if (/\brestaurant\s*(template\s*)?\d+\b/i.test(trimmed) && trimmed.length < 48) return true;
+    if (/\s[—–-]\s*restaurant\s*\d+/i.test(trimmed)) return true;
+    return templates.some(
       (template) =>
-        template.name.toLowerCase() === value.toLowerCase() ||
-        template.id.toLowerCase() === value.toLowerCase() ||
-        /^restaurant template\b/i.test(value),
+        template.name.toLowerCase() === trimmed.toLowerCase() ||
+        template.id.toLowerCase() === trimmed.toLowerCase() ||
+        /^restaurant template\b/i.test(trimmed),
     );
-  if (trimmed && !isTemplateName(trimmed)) return trimmed.slice(0, 50);
+  };
+  const cleaned = (name || '').replace(/\s*[—–-]\s*Restaurant(?:\s*Template)?\s*\d+.*$/i, '').trim();
+  if (cleaned && !isTemplateName(cleaned)) return cleaned.slice(0, 50);
   const lines = prompt
     .split('\n')
     .map((line) => line.trim())
@@ -101,5 +107,5 @@ export function siteNameFromBrief(
     if (line.length > 80) continue;
     return line.length > 50 ? `${line.slice(0, 47)}...` : line;
   }
-  return trimmed.slice(0, 50) || 'New site';
+  return 'Neighborhood restaurant';
 }

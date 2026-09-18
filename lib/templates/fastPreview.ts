@@ -146,26 +146,30 @@ export async function captureTemplateSource(projectPath: string): Promise<NonNul
   };
 }
 
+function isTemplateLabel(value: string): boolean {
+  return /template|^\s*new restaurant\b|^restaurant\s*\d+\s*$|\s[—–-]\s*restaurant\s*\d+/i.test(value.trim());
+}
+
 export function buildCopySwaps(
   source: FastCopyFile['source'] | undefined,
   pack: Pick<FastCopyFile, 'name' | 'tagline' | 'heroTitle' | 'heroSubtitle' | 'description' | 'aboutColumns'>,
 ): Array<{ from: string; to: string }> {
   const src = source || {};
-  const pool = [pack.heroTitle, pack.heroSubtitle, pack.description, ...(pack.aboutColumns || [])].filter(Boolean);
-  let poolIndex = 0;
-  const phraseSwaps = (src.phrases || []).map((from) => {
-    const brandLike = from.length <= 48 && !/[.!?]/.test(from);
-    const to = brandLike ? pack.name : pool[poolIndex++] || pack.description;
-    return { from, to };
-  });
+  const brandFrom = src.name && !isTemplateLabel(src.name) ? src.name : '';
+  const brandTo = pack.name && !isTemplateLabel(pack.name) ? pack.name : '';
+  const longTo = pack.description || pack.heroSubtitle || pack.tagline;
+  const phraseSwaps = (src.phrases || [])
+    .filter((from) => from.length >= 48 && !isTemplateLabel(from))
+    .map((from, index) => ({
+      from,
+      to: [pack.heroSubtitle, pack.description, ...(pack.aboutColumns || [])][index] || longTo,
+    }));
   return [
-    { from: src.name, to: pack.name },
+    { from: brandFrom, to: brandTo },
     { from: src.tagline, to: pack.tagline },
-    { from: src.heroTitle, to: pack.heroTitle },
-    { from: src.heroSubtitle, to: pack.heroSubtitle },
     { from: src.description, to: pack.description },
     ...phraseSwaps,
-  ].filter((row): row is { from: string; to: string } => Boolean(row.from && row.to && row.from !== row.to && row.from.length >= 3));
+  ].filter((row): row is { from: string; to: string } => Boolean(row.from && row.to && row.from !== row.to && row.from.length >= 4));
 }
 
 export async function ensureCopySwaps(pack: FastCopyFile): Promise<FastCopyFile> {
@@ -253,20 +257,11 @@ export async function readFastPreviewHtml(projectPath: string): Promise<string |
 }
 
 export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
-  const source = pack.source || {};
-  const swaps = [
-    ...(pack.swaps || []),
-    { from: source.name, to: pack.name },
-    { from: source.tagline, to: pack.tagline },
-    { from: source.heroTitle, to: pack.heroTitle },
-    { from: source.heroSubtitle, to: pack.heroSubtitle },
-    { from: source.description, to: pack.description },
-  ].filter((row): row is { from: string; to: string } => Boolean(row.from && row.to && row.from !== row.to && row.from.length >= 3));
-  swaps.sort((a, b) => b.from.length - a.from.length);
+  const swaps = [...buildCopySwaps(pack.source, pack)].sort((a, b) => b.from.length - a.from.length);
   let next = html;
   const seen = new Set<string>();
   for (const { from, to } of swaps) {
-    if (seen.has(from)) continue;
+    if (seen.has(from) || isTemplateLabel(from) || isTemplateLabel(to)) continue;
     seen.add(from);
     next = next.split(from).join(to);
     const encoded = from.replace(/&/g, '&amp;');

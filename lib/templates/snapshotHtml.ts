@@ -206,7 +206,12 @@ function interpolate(jsx: string, scope: Record<string, unknown>): string {
   next = next.replace(/\{([^{}]+)\}/g, (full, expr: string) => {
     const trimmed = expr.trim();
     if (!trimmed || trimmed.startsWith('...') || trimmed.startsWith('/*')) return '';
-    if (trimmed.startsWith('new ') || trimmed.includes('=>') || trimmed.includes('(') && !trimmed.startsWith('site.') && !trimmed.startsWith('item.')) {
+    if (trimmed.startsWith('new ') || (trimmed.includes('=>') && !trimmed.startsWith('img(') && !trimmed.startsWith('unsplash('))) {
+      return '';
+    }
+    const call = trimmed.match(/^(img|unsplash)\((['"])([^'"]+)\2(?:,\s*(\d+))?\)$/);
+    if (call) return unsplash(call[3], call[4] ? Number(call[4]) : 1400);
+    if (trimmed.includes('(') && !trimmed.startsWith('site.') && !trimmed.startsWith('item.')) {
       if (/^(site|item|pack|page)\.[\w.?[\]]+$/.test(trimmed)) return stringify(lookup(trimmed, scope));
       return '';
     }
@@ -220,7 +225,7 @@ function interpolate(jsx: string, scope: Record<string, unknown>): string {
 }
 
 function siteImageToImg(html: string): string {
-  return html.replace(/<SiteImage\b([^>]*)\/>/g, (_, attrs: string) => {
+  return html.replace(/<(SiteImage|Image)\b([^>]*)(?:\/>|><\/\1>)/g, (_, _name: string, attrs: string) => {
     const src = attrs.match(/\ssrc="([^"]+)"/)?.[1] || attrs.match(/\ssrc='([^']+)'/)?.[1] || '';
     const alt = attrs.match(/\salt="([^"]*)"/)?.[1] || '';
     const cls = attrs.match(/\sclass(?:Name)?="([^"]*)"/)?.[1] || 'object-cover';
@@ -228,6 +233,33 @@ function siteImageToImg(html: string): string {
     const extra = fill ? ' style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"' : '';
     return `<img src="${src}" alt="${alt}" class="${cls}" decoding="async" referrerpolicy="origin"${extra} />`;
   });
+}
+
+function convertInlineStyles(html: string): string {
+  return html.replace(/style=\{\{([\s\S]*?)\}\}/g, (_, raw: string) => {
+    const url = raw.match(/url\((['"`]?)([^)'"`]+)\1\)/)?.[2] || '';
+    if (!url) return '';
+    return `style="background-image:url('${url}');background-size:cover;background-position:center"`;
+  });
+}
+
+function injectImages(html: string, images: string[]): string {
+  if (!images.length) return html;
+  let index = 0;
+  let next = html.replace(/<img\b([^>]*?)src="([^"]*)"/g, (full, attrs: string, src: string) => {
+    if (/^https?:\/\//.test(src)) return full;
+    const fallback = images[index++ % images.length];
+    return `<img${attrs}src="${fallback}"`;
+  });
+  if (!/src="https?:\/\//.test(next) && !/background-image:url\('https?:/.test(next)) {
+    const hero = images[0];
+    next = next.replace(
+      /<body([^>]*)>/,
+      `<body$1><div aria-hidden="true" style="position:fixed;inset:0;z-index:0;background:url('${hero}') center/cover;opacity:.35"></div><div style="position:relative;z-index:1">`,
+    );
+    next = next.replace('</body>', '</div></body>');
+  }
+  return next;
 }
 
 function toHtml(jsx: string): string {
@@ -242,6 +274,7 @@ function toHtml(jsx: string): string {
   html = html.replace(/\s(onClick|onScroll|onChange|onSubmit|ref|key)=("[^"]*"|'[^']*')/g, '');
   html = html.replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
   html = html.replace(/\s{2,}/g, ' ');
+  html = convertInlineStyles(html);
   html = siteImageToImg(html);
   return html;
 }
@@ -282,13 +315,21 @@ export async function renderSnapshotPreviewHtml(projectPath: string, pack: FastC
   const siteSource = await fs.readFile(path.join(projectPath, 'lib', 'site.ts'), 'utf8').catch(() => '');
   const files = await listSourceFiles(projectPath);
   const components: Record<string, string> = {};
+  const imageUrls: string[] = [];
   let consts: Record<string, unknown> = collectConsts(page);
+  const takeImages = (source: string) => {
+    imageUrls.push(...(source.match(/https:\/\/images\.unsplash\.com\/[^"' \s)]+/g) || []));
+  };
+  takeImages(page);
+  takeImages(siteSource);
   for (const file of files) {
     const source = await fs.readFile(file, 'utf8');
+    takeImages(source);
     consts = { ...consts, ...collectConsts(source) };
     const names = [
       ...fileNameToExport(file),
       ...(source.match(/export function ([A-Z][A-Za-z0-9]*)/g) || []).map((row) => row.replace('export function ', '')),
+      ...(source.match(/export default function ([A-Z][A-Za-z0-9]*)/g) || []).map((row) => row.replace('export default function ', '')),
       ...(source.match(/export const ([A-Z][A-Za-z0-9]*)/g) || []).map((row) => row.replace('export const ', '')),
     ];
     for (const name of names) components[name] = source;
@@ -301,6 +342,7 @@ export async function renderSnapshotPreviewHtml(projectPath: string, pack: FastC
   jsx = interpolate(jsx, scope);
   let body = toHtml(jsx);
   if (body.length < 400) return null;
+  body = injectImages(body, [...new Set(imageUrls)]);
   const extraCss = css.replace(/@tailwind[^;]+;/g, '').replace(/@apply[^;]+;/g, '');
   const useTailwind = /@tailwind/.test(css);
   const extend = extractTailwindExtend(tw);

@@ -688,9 +688,11 @@ export function leadFromSiteBrief(input: {
   details?: unknown;
   notes?: unknown;
 }): FastFillLead {
-  const business = field(input.business) || field(input.name) || input.prompt.split('\n')[0]?.trim() || 'Business';
+  const business = field(input.business) || field(input.name) || input.prompt.split('\n')[0]?.trim() || 'Kitchen';
+  const cleaned = business.replace(/\s*[—–-]\s*Restaurant(?:\s*Template)?\s*\d+.*$/i, '').trim() || business;
+  const name = /^new restaurant\b/i.test(cleaned) || /^restaurant\s*\d+$/i.test(cleaned) ? 'Kitchen' : cleaned;
   return {
-    business: business.slice(0, 80),
+    business: name.slice(0, 80),
     contactName: field(input.contactName),
     whatTheyDo: field(input.whatTheyDo) || input.prompt.slice(0, 800),
     email: field(input.email),
