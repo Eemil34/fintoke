@@ -494,7 +494,7 @@ export async function connectVercelProject(
   return serviceData;
 }
 
-export async function triggerVercelDeployment(projectId: string) {
+export async function triggerVercelDeployment(projectId: string, options?: { skipGitPush?: boolean }) {
   const token = await getPlainServiceToken('vercel');
   if (!token) {
     throw new VercelError('Vercel token not configured', 401);
@@ -523,14 +523,16 @@ export async function triggerVercelDeployment(projectId: string) {
 
   assertPatchedNextVersion(repoPath);
 
-  try {
-    const { pushProjectToGitHub } = await import('@/lib/services/github');
-    await pushProjectToGitHub(projectId);
-  } catch (error) {
-    console.warn(
-      '[Vercel] GitHub push before deploy failed:',
-      error instanceof Error ? error.message : error,
-    );
+  if (!options?.skipGitPush) {
+    try {
+      const { pushProjectToGitHub } = await import('@/lib/services/github');
+      await pushProjectToGitHub(projectId);
+    } catch (error) {
+      console.warn(
+        '[Vercel] GitHub push before deploy failed:',
+        error instanceof Error ? error.message : error,
+      );
+    }
   }
 
   await unlinkVercelGitRepository(token, data.project_id, teamId);
@@ -710,7 +712,7 @@ export async function getCurrentDeploymentStatus(projectId: string) {
   }
 }
 
-export async function waitForVercelReady(projectId: string, timeoutMs = 130_000): Promise<string | null> {
+export async function waitForVercelReady(projectId: string, timeoutMs = 110_000): Promise<string | null> {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const status = await getCurrentDeploymentStatus(projectId).catch(() => null);
@@ -718,13 +720,10 @@ export async function waitForVercelReady(projectId: string, timeoutMs = 130_000)
     const url = status?.deployment_url || status?.last_deployment_url || null;
     if (state === 'READY' && url) {
       const live = url.startsWith('http') ? url : `https://${url}`;
-      const ok = await fetch(live, { method: 'GET', redirect: 'follow', signal: AbortSignal.timeout(10000) })
-        .then((response) => response.ok)
-        .catch(() => false);
-      if (ok) return live;
+      return live;
     }
     if (state === 'ERROR' || state === 'CANCELED') return null;
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
   }
   const last = await getCurrentDeploymentStatus(projectId).catch(() => null);
   const url = last?.deployment_url || last?.last_deployment_url;

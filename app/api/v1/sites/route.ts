@@ -5,7 +5,6 @@ import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliMode
 import { listManagedTemplates } from '@/lib/templates/store';
 import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
-import { previewManager } from '@/lib/services/preview';
 import { publishFastTrackLive, publishSite } from '@/lib/services/publishSite';
 import { waitForSiteIdle } from '@/lib/agent-api/wait';
 import { serializeAgentSite } from '@/lib/agent-api/serialize';
@@ -104,11 +103,6 @@ export async function POST(request: NextRequest) {
         }),
         websitePrompt: prompt,
       });
-      if (templateId) {
-        void previewManager.startSharedTemplate(templateId).catch((error) => {
-          console.warn('[sites] Template preview start skipped:', error);
-        });
-      }
     } else if (start) {
       job = await startProjectInstruction({
         projectId,

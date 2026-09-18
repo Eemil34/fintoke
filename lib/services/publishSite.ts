@@ -16,7 +16,7 @@ function resourceSlug(name: string, projectId: string): string {
   return `${base}-${suffix}`.slice(0, 40);
 }
 
-export async function publishSite(projectId: string) {
+export async function publishSite(projectId: string, options?: { skipGithub?: boolean }) {
   const project = await getProjectById(projectId);
   if (!project) {
     throw new AgentApiError('Site not found', 404);
@@ -31,7 +31,7 @@ export async function publishSite(projectId: string) {
   }
 
   const slug = resourceSlug(project.name, projectId);
-  const githubToken = await getPlainServiceToken('github');
+  const githubToken = options?.skipGithub ? '' : await getPlainServiceToken('github');
   let github: { repo_url?: string; owner?: string } | null = null;
 
   if (githubToken) {
@@ -71,7 +71,7 @@ export async function publishSite(projectId: string) {
     await connectVercelProject(projectId, projectName);
   }
 
-  const deployment = await triggerVercelDeployment(projectId);
+  const deployment = await triggerVercelDeployment(projectId, { skipGitPush: Boolean(options?.skipGithub) });
   return {
     github,
     deployment: {
@@ -88,7 +88,7 @@ export async function publishFastTrackLive(projectId: string): Promise<{
   error?: string;
 }> {
   try {
-    const published = await publishSite(projectId);
+    const published = await publishSite(projectId, { skipGithub: true });
     const { waitForVercelReady } = await import('@/lib/services/vercel');
     const url = await waitForVercelReady(projectId, 130_000);
     return { url: url || published.deployment.url, published };

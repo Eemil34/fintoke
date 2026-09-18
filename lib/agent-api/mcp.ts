@@ -5,7 +5,6 @@ import { generateProjectId } from '@/lib/utils';
 import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliModels';
 import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
-import { previewManager } from '@/lib/services/preview';
 import { publishFastTrackLive, publishSite } from '@/lib/services/publishSite';
 import { serializeAgentSite, getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { agentOrigin, extractAgentToken, requireMcpAgentKey } from '@/lib/agent-api/http';
@@ -517,11 +516,6 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
           }),
           websitePrompt: prompt,
         });
-        if (templateId) {
-          void previewManager.startSharedTemplate(templateId).catch((error) => {
-            console.warn('[mcp] Template preview start skipped:', error);
-          });
-        }
       }
       const live = await publishFastTrackLive(projectId);
       const published = live.published;

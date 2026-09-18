@@ -302,7 +302,7 @@ async function completeFillJson(prompt: string): Promise<Record<string, unknown>
           { role: 'user', content: prompt },
         ],
       }),
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(25000),
     });
     const payload = (await response.json().catch(() => null)) as {
       choices?: { message?: { content?: string } }[];
@@ -523,8 +523,11 @@ function applyCopyPack(source: string, pack: CopyPack): string {
   });
 }
 
-function rewriteTemplateBrands(source: string, pack: CopyPack): string {
+function rewriteTemplateBrands(source: string, pack: CopyPack, capturedName?: string): string {
   const brands = [
+    capturedName,
+    'New Restaurant',
+    'NEW RESTAURANT',
     'Hearth & Vale',
     'Hearth &amp; Vale',
     'Coral Cove',
@@ -539,46 +542,33 @@ function rewriteTemplateBrands(source: string, pack: CopyPack): string {
   for (const brand of brands) {
     if (!brand || brand === pack.name) continue;
     next = next.split(brand).join(pack.name);
+    const encoded = brand.replace(/&/g, '&amp;');
+    if (encoded !== brand) next = next.split(encoded).join(pack.name.replace(/&/g, '&amp;'));
   }
   return next;
 }
 
 function rewriteJsxCopy(source: string, pack: CopyPack): string {
   const pool = [
-    pack.heroTitle,
     pack.heroSubtitle,
     pack.description,
     ...pack.aboutColumns,
-    pack.ctaTitle,
     pack.ctaSubtitle,
-  ].filter(Boolean);
+    ...pack.menu.map((item) => item.body),
+    ...pack.features.map((item) => item.body),
+  ].filter((value) => value && value.length >= 12);
   let index = 0;
-  return source.replace(/>([^<>{}\n][^<>{}]{11,})</g, (full, text: string) => {
-    const value = text.replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').trim();
+  return source.replace(/>([^<>{}\n][^<>{}]{17,})</g, (full, text: string) => {
+    const value = text.replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
     if (KEEP_LABEL.test(value)) return full;
     if (value.includes('{') || /https?:|className|svg|path /i.test(value)) return full;
-    if (!/[A-Za-zÀ-ÿ]/.test(value)) return full;
+    if (!/[A-Za-zÀ-ÿ]/.test(value) || !/\s/.test(value)) return full;
+    if (value === pack.name || value.includes(pack.name)) return full;
     const next = pool[index++ % pool.length];
     if (!next || next === value) return full;
     return `>${next.replace(/&/g, '&amp;')}<`;
   });
 }
-function rewriteLeftoverQuotes(source: string, pack: CopyPack, business: string): string {
-  let index = 0;
-  const pool = [...pack.aboutColumns, pack.description, pack.heroSubtitle, ...pack.menu.map((item) => item.body)];
-  return source.replace(/(["'`])((?:\\.|[^\\])*?)\1/g, (full, quote: string, raw: string) => {
-    const value = decodeQuoted(raw);
-    if (isTechnicalString(value) || KEEP_LABEL.test(value)) return full;
-    if (value.includes(business) && value.length < 80) return full;
-    if (value.length < 20) return full;
-    if (!/[A-Za-zÀ-ÿ]/.test(value)) return full;
-    if (/className|href|slug|kind|layout|mode/.test(full)) return full;
-    const next = pool[index++ % pool.length] || pack.description;
-    if (!next || next === value) return full;
-    return `${quote}${escapeQuoted(next, quote)}${quote}`;
-  });
-}
-
 function applySwaps(source: string, swaps: Array<{ from: string; to: string }>): string {
   let next = source;
   const seen = new Set<string>();
@@ -645,14 +635,17 @@ async function writePackToFiles(
     if (!/\.(ts|tsx|js|jsx)$/.test(file)) continue;
     if (/imageLibrary|ImageGuard|tailwind\.config|next-env|SiteImage/.test(file)) continue;
     const original = await fs.readFile(file, 'utf8');
-    let next = original;
+    let next = applyCopyPack(original, pack);
+    next = rewriteMaps(next, mapsQuery);
     if (path.basename(file) === 'site.ts') {
-      next = applyCopyPack(original, pack);
-      next = rewriteMaps(next, mapsQuery);
       next = injectMapsUrl(next, embed);
-      next = applySwaps(next, swaps);
     }
-    next = rewriteTemplateBrands(next, pack);
+    next = injectMapIframe(next);
+    next = applySwaps(next, swaps);
+    next = rewriteTemplateBrands(next, pack, source?.name);
+    if (file.endsWith('.tsx')) {
+      next = rewriteJsxCopy(next, pack);
+    }
     if (next !== original) {
       await fs.writeFile(file, next);
       writes += 1;

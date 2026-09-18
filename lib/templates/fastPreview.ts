@@ -96,51 +96,72 @@ export async function readFastCopy(projectPath: string): Promise<FastCopyFile | 
   }
 }
 
+async function readTemplateText(projectPath: string): Promise<string> {
+  const chunks: string[] = [];
+  const walk = async (dir: string) => {
+    let entries;
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name === 'node_modules' || entry.name === '.next' || entry.name.startsWith('.')) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(full);
+        continue;
+      }
+      if (!/\.(ts|tsx|js|jsx)$/.test(entry.name)) continue;
+      if (/imageLibrary|ImageGuard|SiteImage|next-env/.test(entry.name)) continue;
+      chunks.push(await fs.readFile(full, 'utf8').catch(() => ''));
+      if (chunks.length >= 40) return;
+    }
+  };
+  await walk(projectPath);
+  return chunks.join('\n');
+}
+
+function isDishName(value: string): boolean {
+  return /loaf|salad|steak|pasta|chicken|oyster|tartare|pizza|soup|wine|cocktail|nigiri|ramen|espresso|bun\b/i.test(
+    value,
+  );
+}
+
 export async function captureTemplateSource(projectPath: string): Promise<NonNullable<FastCopyFile['source']>> {
-  const candidates = [
-    path.join(projectPath, 'lib', 'site.ts'),
-    path.join(projectPath, 'app', 'layout.tsx'),
-    path.join(projectPath, 'app', 'page.tsx'),
-    path.join(projectPath, 'components', 'Header.tsx'),
-    path.join(projectPath, 'components', 'SiteHeader.tsx'),
-    path.join(projectPath, 'components', 'Hero.tsx'),
-    path.join(projectPath, 'components', 'Footer.tsx'),
-  ];
-  let raw = '';
-  for (const file of candidates) {
-    raw += `\n${await fs.readFile(file, 'utf8').catch(() => '')}`;
-  }
+  const raw = await readTemplateText(projectPath);
   const grab = (key: string) => raw.match(new RegExp(`\\b${key}:\\s*['"\`]([^'"\`]{2,160})['"\`]`))?.[1] || '';
+  const decode = (value: string) => value.replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
   const metaTitle = grab('title');
-  const firstName = grab('name');
+  const named = [...raw.matchAll(/\bname:\s*['"`]([^'"`]{2,80})['"`]/g)].map((match) => decode(match[1]));
+  const siteName = named.find((value) => value && !isDishName(value) && !/^[a-z0-9-]+$/.test(value));
   const jsxBrand =
-    raw.match(/className=\{?["'`][^"'`]*brand[^"'`]*["'`][^>]*>\s*([^<{]{2,60})\s*</i)?.[1]?.trim() ||
-    raw.match(/>([A-Z][^<>{\n]{2,40})</)?.[1]?.trim() ||
-    '';
-  const name = firstName && !/loaf|salad|steak|pasta|chicken|oyster|tartare/i.test(firstName)
-    ? firstName
-    : metaTitle.split(/[—–\-|•]/)[0]?.trim() || jsxBrand || firstName;
+    decode(
+      raw.match(/className=\{?["'`][^"'`]*brand[^"'`]*["'`][^>]*>\s*([^<{]{2,80})\s*</i)?.[1] || '',
+    ) || decode(raw.match(/<h1[^>]*>\s*([^<{]{2,80})\s*</i)?.[1] || '');
+  const name = jsxBrand || siteName || metaTitle.split(/[—–\-|•]/)[0]?.trim() || named[0] || '';
   const keep =
     /^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|To begin|From the hearth|For the table|To finish|Reserve|Primary)$/i;
   const phrases = [
     ...new Set(
       [...raw.matchAll(/>([^<{]*)</g)]
-        .map((match) => match[1].replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim())
+        .map((match) => decode(match[1]))
         .filter(
           (text) =>
-            text.length >= 3 &&
-            text.length <= 240 &&
+            text.length >= 12 &&
+            text.length <= 280 &&
+            /\s/.test(text) &&
             /[A-Za-zÀ-ÿ]/.test(text) &&
             !keep.test(text) &&
             !/[{}`]|=>|className/.test(text),
         ),
     ),
-  ].slice(0, 16);
+  ].slice(0, 28);
   return {
     name,
     tagline: grab('tagline') || grab('eyebrow'),
-    heroTitle: metaTitle || grab('title'),
-    heroSubtitle: grab('subtitle'),
+    heroTitle: jsxBrand || metaTitle || grab('title'),
+    heroSubtitle: grab('subtitle') || phrases.find((text) => text.length >= 40) || '',
     description: grab('description'),
     phrases,
   };
@@ -155,21 +176,37 @@ export function buildCopySwaps(
   pack: Pick<FastCopyFile, 'name' | 'tagline' | 'heroTitle' | 'heroSubtitle' | 'description' | 'aboutColumns'>,
 ): Array<{ from: string; to: string }> {
   const src = source || {};
-  const brandFrom = src.name && !isTemplateLabel(src.name) ? src.name : '';
   const brandTo = pack.name && !isTemplateLabel(pack.name) ? pack.name : '';
   const longTo = pack.description || pack.heroSubtitle || pack.tagline;
+  const bodies = [pack.heroSubtitle, pack.description, ...(pack.aboutColumns || [])].filter(Boolean);
   const phraseSwaps = (src.phrases || [])
-    .filter((from) => from.length >= 48 && !isTemplateLabel(from))
+    .filter((from) => from.length >= 18 && /\s/.test(from) && from !== brandTo)
     .map((from, index) => ({
       from,
-      to: [pack.heroSubtitle, pack.description, ...(pack.aboutColumns || [])][index] || longTo,
+      to: bodies[index] || longTo,
     }));
+  const brands = [
+    src.name,
+    src.heroTitle,
+    'New Restaurant',
+    'NEW RESTAURANT',
+    'Hearth & Vale',
+    'Coral Cove',
+    'Veloura Dining & Lounge',
+    'Veloura Steak',
+    'Veloura',
+    'Säde',
+  ];
   return [
-    { from: brandFrom, to: brandTo },
-    { from: src.tagline, to: pack.tagline },
-    { from: src.description, to: pack.description },
+    ...brands.map((from) => ({ from: from || '', to: brandTo })),
+    { from: src.tagline || '', to: pack.tagline },
+    { from: src.heroSubtitle || '', to: pack.heroSubtitle },
+    { from: src.description || '', to: pack.description },
     ...phraseSwaps,
-  ].filter((row): row is { from: string; to: string } => Boolean(row.from && row.to && row.from !== row.to && row.from.length >= 4));
+  ].filter(
+    (row): row is { from: string; to: string } =>
+      Boolean(row.from && row.to && row.from !== row.to && row.from.length >= 3),
+  );
 }
 
 export async function ensureCopySwaps(pack: FastCopyFile): Promise<FastCopyFile> {
@@ -261,7 +298,7 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
   let next = html;
   const seen = new Set<string>();
   for (const { from, to } of swaps) {
-    if (seen.has(from) || isTemplateLabel(from) || isTemplateLabel(to)) continue;
+    if (seen.has(from) || isTemplateLabel(to)) continue;
     seen.add(from);
     next = next.split(from).join(to);
     const encoded = from.replace(/&/g, '&amp;');
