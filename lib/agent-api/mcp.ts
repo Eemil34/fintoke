@@ -5,7 +5,8 @@ import { generateProjectId } from '@/lib/utils';
 import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliModels';
 import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
-import { publishFastTrackLive, publishSite } from '@/lib/services/publishSite';
+import { previewManager } from '@/lib/services/preview';
+import { publishSite } from '@/lib/services/publishSite';
 import { serializeAgentSite, getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { agentOrigin, extractAgentToken, requireMcpAgentKey } from '@/lib/agent-api/http';
 import { AgentApiError } from '@/lib/agent-api/keys';
@@ -45,6 +46,7 @@ import {
   wantsFastTrack,
 } from '@/lib/templates/fastFill';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
+import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 
 const PROTOCOL_VERSIONS = new Set(['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25']);
 
@@ -497,6 +499,12 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       });
       let filled = null;
       if (fast) {
+        const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
+        const warming = resolvedTemplate
+          ? previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
+              console.warn('[mcp] Template preview start skipped:', error);
+            })
+          : Promise.resolve();
         const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
         filled = await fastFillProjectFromLead({
           projectPath,
@@ -516,25 +524,26 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
           }),
           websitePrompt: prompt,
         });
+        await warming;
+        if (resolvedTemplate) {
+          await previewManager.ensureSharedReady(resolvedTemplate, 40_000).catch((error) => {
+            console.warn('[mcp] Template preview wait skipped:', error);
+          });
+        }
       }
-      const live = await publishFastTrackLive(projectId);
-      const published = live.published;
       const site = await serializeAgentSite(project, origin);
-      const shareUrl = live.url || site.shareUrl;
       return {
         ...site,
-        shareUrl,
-        preview: { ...site.preview, url: shareUrl },
+        shareUrl: site.shareUrl,
+        preview: { ...site.preview, url: site.shareUrl },
         buildMode: 'fast',
         templateId: templateId || site.templateId,
         job: { running: false, activeCount: 0 },
         jobStarted: null,
         filled,
-        published,
-        liveError: live.error || null,
-        next: live.url
-          ? 'The site is live. Send shareUrl to the client. Do not send a preview URL. Do not wait for job.running.'
-          : 'Fast-track site is created but Vercel is not live yet. Open shareUrl only if it is a vercel.app link. Otherwise wait and poll GET /sites/{id}.',
+        published: null,
+        liveError: null,
+        next: 'Send shareUrl to the client. It is a Fintoke preview link. Do not wait for Vercel. Do not wait for job.running.',
       };
     }
     case 'claudable_rewrite_site_copy': {

@@ -13,8 +13,9 @@ import { generateProjectId } from '@/lib/utils';
 import { pickWebsiteTemplate } from '@/lib/templates/match';
 import { listManagedTemplates } from '@/lib/templates/store';
 import { fastFillProjectFromLead } from '@/lib/templates/fastFill';
-import { publishFastTrackLive } from '@/lib/services/publishSite';
+import { previewManager } from '@/lib/services/preview';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
+import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { getAgentWorkspaceSnapshot } from '@/lib/agent-api/workspaceAccess';
 import { appOrigin } from '@/lib/agent-api/http';
@@ -212,14 +213,21 @@ async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnTy
       websiteTemplateId: template?.id,
     });
     const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
+    const resolvedTemplate = template?.id ? await resolveSnapshotTemplateId(template.id) : '';
+    const warming = resolvedTemplate
+      ? previewManager.startSharedTemplate(resolvedTemplate).catch(() => undefined)
+      : Promise.resolve();
     const filled = await fastFillProjectFromLead({
       projectPath,
       lead,
       websitePrompt: job.websitePrompt,
       country: job.country,
     });
-    const live = await publishFastTrackLive(projectId);
-    const shareUrl = live.url || sharePreviewUrl(projectId);
+    await warming;
+    if (resolvedTemplate) {
+      await previewManager.ensureSharedReady(resolvedTemplate, 40_000).catch(() => undefined);
+    }
+    const shareUrl = sharePreviewUrl(projectId);
     const personId = await ensureClient(lead);
     await updateLead(lead.id, {
       projectId,
@@ -228,7 +236,7 @@ async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnTy
       notes: [
         lead.notes,
         `Fast-track site ${projectId} from template ${template?.id || 'default'} (${filled.replacements} files, map ${filled.mapsQuery || 'city'}).`,
-        live.url ? `Live: ${live.url}` : live.error || '',
+        `Preview: ${shareUrl}`,
       ]
         .filter(Boolean)
         .join('\n'),

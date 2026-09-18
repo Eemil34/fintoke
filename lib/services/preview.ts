@@ -873,6 +873,24 @@ class PreviewManager {
     return this.toInfo(previewProcess);
   }
 
+  public async ensureSharedReady(templateId: string, timeoutMs = 40_000): Promise<PreviewInfo> {
+    const resolvedId = await resolveSnapshotTemplateId(templateId);
+    const key = `tpl:${resolvedId}`;
+    const started = await this.startSharedTemplate(resolvedId);
+    const port = this.getStatus(key).port || started.port;
+    if (!port) return this.getStatus(key);
+    await waitForPreviewReady(
+      previewInternalUrl(key, port),
+      (chunk) => {
+        const live = this.processes.get(key);
+        if (live) live.logs.push(typeof chunk === 'string' ? chunk : chunk.toString());
+      },
+      timeoutMs,
+      800,
+    );
+    return this.getStatus(key);
+  }
+
   public async ensureReady(projectId: string, timeoutMs = 150_000): Promise<PreviewInfo> {
     const started = await this.start(projectId);
     const port = this.getStatus(projectId).port || started.port;

@@ -5,7 +5,8 @@ import { getDefaultModelForCli, normalizeModelId } from '@/lib/constants/cliMode
 import { listManagedTemplates } from '@/lib/templates/store';
 import { pickWebsiteTemplate, siteNameFromBrief } from '@/lib/templates/match';
 import { startProjectInstruction } from '@/lib/services/agentRun';
-import { publishFastTrackLive, publishSite } from '@/lib/services/publishSite';
+import { previewManager } from '@/lib/services/preview';
+import { publishSite } from '@/lib/services/publishSite';
 import { waitForSiteIdle } from '@/lib/agent-api/wait';
 import { serializeAgentSite } from '@/lib/agent-api/serialize';
 import {
@@ -18,6 +19,7 @@ import {
 import { AgentApiError } from '@/lib/agent-api/keys';
 import { fastFillProjectFromLead, leadFromSiteBrief, wantsFastTrack } from '@/lib/templates/fastFill';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
+import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 
 export function OPTIONS() {
   return agentOptions();
@@ -84,6 +86,12 @@ export async function POST(request: NextRequest) {
     let job: { requestId: string; userMessageId: string } | null = null;
     let filled = null;
     if (fast) {
+      const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
+      const warming = resolvedTemplate
+        ? previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
+            console.warn('[sites] Template preview start skipped:', error);
+          })
+        : Promise.resolve();
       const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
       filled = await fastFillProjectFromLead({
         projectPath,
@@ -103,6 +111,12 @@ export async function POST(request: NextRequest) {
         }),
         websitePrompt: prompt,
       });
+      await warming;
+      if (resolvedTemplate) {
+        await previewManager.ensureSharedReady(resolvedTemplate, 40_000).catch((error) => {
+          console.warn('[sites] Template preview wait skipped:', error);
+        });
+      }
     } else if (start) {
       job = await startProjectInstruction({
         projectId,
@@ -114,12 +128,7 @@ export async function POST(request: NextRequest) {
 
     let published = null;
     let timedOut = false;
-    let liveUrl: string | null = null;
-    if (fast) {
-      const live = await publishFastTrackLive(projectId);
-      published = live.published;
-      liveUrl = live.url;
-    } else if (publish) {
+    if (!fast && publish) {
       if (start) {
         const idle = await waitForSiteIdle(projectId);
         if (!idle) timedOut = true;
@@ -130,14 +139,13 @@ export async function POST(request: NextRequest) {
     }
 
     const site = await serializeAgentSite(project, origin);
-    const shareUrl = liveUrl || site.shareUrl;
     return agentJson(
       {
         success: true,
         data: {
           ...site,
-          shareUrl,
-          preview: { ...site.preview, url: shareUrl },
+          shareUrl: site.shareUrl,
+          preview: { ...site.preview, url: site.shareUrl },
           buildMode: fast ? 'fast' : 'full',
           job: fast ? { running: false, activeCount: 0 } : site.job,
           jobStarted: job,
@@ -145,9 +153,7 @@ export async function POST(request: NextRequest) {
           published,
           timedOut,
           next: fast
-            ? liveUrl
-              ? 'The site is live. Send shareUrl to the client.'
-              : 'Site files are ready. Vercel is not live yet — do not send a compiling preview link.'
+            ? 'Send shareUrl to the client. It is a Fintoke preview link. Do not wait for Vercel.'
             : undefined,
           message: timedOut
             ? 'The agent is still working. Poll GET /sites/{id} until job.running is false, then POST /sites/{id}/publish.'

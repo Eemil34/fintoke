@@ -4,7 +4,7 @@ import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { applyCopyToHtml, readFastCopy } from '@/lib/templates/fastPreview';
+import { applyCopyToHtml, ensureCopySwaps, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
 
@@ -283,7 +283,10 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   if (contentType.includes('text/html')) {
     let body = rewriteHtml(await upstream.text(), prefix, preview.port);
-    if (copyPack) body = applyCopyToHtml(body, copyPack);
+    if (copyPack) {
+      const packed = await ensureCopySwaps(copyPack);
+      body = applyCopyToHtml(body, packed);
+    }
     out.delete('content-length');
     return new Response(body, { status: upstream.status, headers: out });
   }
