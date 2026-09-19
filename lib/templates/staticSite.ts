@@ -93,11 +93,39 @@ export async function readStaticExportFile(
 
 export function rewriteStaticUrls(source: string, prefix: string): string {
   const base = prefix.replace(/\/$/, '');
+  return unwrapNextImageUrls(
+    source
+      .replace(/(["'`(=])\/_next\//g, `$1${base}/_next/`)
+      .replace(/(\s(?:href|src|srcset|srcSet|action))="([^"]*)"/gi, (_, attr: string, value: string) => {
+        const next = value.replace(/(^|[\s,])\/(?!\/|preview\/)/g, `$1${base}/`);
+        return `${attr}="${next}"`;
+      })
+      .replace(/url\(\s*(['"]?)\/(?!\/|preview\/)/g, `url($1${base}/`),
+  );
+}
+
+export function unwrapNextImageUrls(source: string): string {
+  return source.replace(
+    /(?:\/preview\/[^/]+)?\/_next\/image\?((?:(?!["'<>\s]).)+)/g,
+    (full, query: string) => {
+      try {
+        const params = new URLSearchParams(query.replace(/&amp;/g, '&'));
+        const url = params.get('url');
+        if (!url) return full;
+        const decoded = decodeURIComponent(url);
+        if (/^https?:\/\//i.test(decoded)) return decoded;
+      } catch {
+        // keep original
+      }
+      return full;
+    },
+  );
+}
+
+export function disableImagePatcher(source: string): string {
   return source
-    .replace(/(["'`(=])\/_next\//g, `$1${base}/_next/`)
-    .replace(/(\s(?:href|src|srcset|srcSet|action))="([^"]*)"/gi, (_, attr: string, value: string) => {
-      const next = value.replace(/(^|[\s,])\/(?!\/|preview\/)/g, `$1${base}/`);
-      return `${attr}="${next}"`;
-    })
-    .replace(/url\(\s*(['"]?)\/(?!\/|preview\/)/g, `url($1${base}/`);
+    .replace(/removeAttribute\("srcset"\)/g, 'getAttribute("srcset")')
+    .replace(/dataset\.clbReliable="1",[a-z]\.src=e/g, 'dataset.clbReliable="1"')
+    .replace(/[a-z]\.src=e;return/g, 'return')
+    .replace(/dataset\.clbFallback="1",[a-z]\.src=/g, 'dataset.clbFallback="1";0&&');
 }

@@ -6,7 +6,7 @@ import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { applyCopyToHtml, ensureCopySwaps, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
-import { readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
+import { disableImagePatcher, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
 
 export const runtime = 'nodejs';
@@ -101,12 +101,6 @@ function childPath(segments?: string[]) {
   return `/${segments.join('/')}`;
 }
 
-function lockPreviewImages(html: string): string {
-  const script = `<script>(function(){try{var bad=/photo-1497366216548-37526070297c/;var srcDesc=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');if(srcDesc&&srcDesc.set){Object.defineProperty(HTMLImageElement.prototype,'src',{configurable:true,enumerable:srcDesc.enumerable,get:srcDesc.get,set:function(v){if(typeof v==='string'&&(bad.test(v)||v.indexOf('data:image/svg+xml')===0))return;srcDesc.set.call(this,v);}});}var setAttr=Element.prototype.setAttribute;Element.prototype.setAttribute=function(name,value){if(this instanceof HTMLImageElement&&String(name).toLowerCase()==='src'&&(bad.test(String(value))||String(value).indexOf('data:image/svg+xml')===0))return;return setAttr.apply(this,arguments);};}catch(e){}})();</script>`;
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${script}`);
-  return `${script}${html}`;
-}
-
 function previewSecurityHeaders(headers: Headers) {
   headers.delete('set-cookie');
   headers.set('x-robots-tag', 'noindex, nofollow');
@@ -173,6 +167,17 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     if (isProbe) {
       return new Response('ready', { status: 200, headers: { 'cache-control': 'no-store' } });
     }
+    if (segments?.[0] === '_next' && segments[1] === 'image') {
+      const target = request.nextUrl.searchParams.get('url') || '';
+      try {
+        const decoded = decodeURIComponent(target);
+        if (/^https?:\/\//i.test(decoded)) {
+          return Response.redirect(decoded, 302);
+        }
+      } catch {
+        // fall through
+      }
+    }
     const file = await readStaticExportFile(staticRoot, segments);
     if (file) {
       let body: Buffer | string = file.body;
@@ -180,22 +185,21 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       const rewriteText = type.includes('text/html') || type.includes('text/css') || type.includes('javascript');
       if (rewriteText) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
+        text = disableImagePatcher(text);
         if (copyPack && type.includes('text/html')) {
           const packed = await ensureCopySwaps(copyPack);
           text = applyCopyToHtml(text, packed);
         }
         if (type.includes('text/html')) {
-          text = lockPreviewImages(
-            text
-              .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
-              .replace(/\sreferrerpolicy=["'][^"']*["']/gi, ''),
-          );
+          text = text
+            .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
+            .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '');
         }
         body = text;
       }
       const headers = previewSecurityHeaders(new Headers());
       headers.set('content-type', type);
-      headers.set('cache-control', type.includes('text/html') ? 'no-store' : 'public, max-age=86400');
+      headers.set('cache-control', 'no-store');
       const payload: BodyInit = typeof body === 'string' ? body : new Uint8Array(body);
       return new Response(payload, { status: 200, headers });
     }
@@ -330,7 +334,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       const packed = await ensureCopySwaps(copyPack);
       body = applyCopyToHtml(body, packed);
     }
-    body = lockPreviewImages(body);
+    body = disableImagePatcher(body);
     out.delete('content-length');
     return new Response(body, { status: upstream.status, headers: out });
   }
