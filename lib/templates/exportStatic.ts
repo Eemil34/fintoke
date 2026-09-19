@@ -78,12 +78,51 @@ export async function exportSnapshotStatic(snapshotPath: string): Promise<string
   }
 }
 
+const inFlight = new Map<string, Promise<boolean>>();
+const lastFailAt = new Map<string, number>();
+const FAIL_COOLDOWN_MS = 10 * 60 * 1000;
+
 export async function ensureTemplateStatic(templateId: string): Promise<boolean> {
-  const { hasStaticExport } = await import('./staticSite');
-  const { resolveSnapshotDir } = await import('./snapshot');
-  if (await hasStaticExport(templateId)) return true;
-  const dir = await resolveSnapshotDir(templateId);
-  if (!dir) return false;
-  await exportSnapshotStatic(dir);
-  return hasStaticExport(templateId);
+  const existing = inFlight.get(templateId);
+  if (existing) return existing;
+
+  const work = (async () => {
+    const { hasStaticExport } = await import('./staticSite');
+    const { resolveSnapshotDir } = await import('./snapshot');
+    if (await hasStaticExport(templateId)) return true;
+    const failedAt = lastFailAt.get(templateId) || 0;
+    if (failedAt && Date.now() - failedAt < FAIL_COOLDOWN_MS) return false;
+    const dir = await resolveSnapshotDir(templateId);
+    if (!dir) return false;
+    try {
+      await exportSnapshotStatic(dir);
+      lastFailAt.delete(templateId);
+    } catch (error) {
+      lastFailAt.set(templateId, Date.now());
+      throw error;
+    }
+    return hasStaticExport(templateId);
+  })();
+
+  inFlight.set(templateId, work);
+  try {
+    return await work;
+  } finally {
+    inFlight.delete(templateId);
+  }
+}
+
+let freezeQueue: Promise<void> = Promise.resolve();
+
+export function scheduleMissingStaticExports(templateIds: string[]): void {
+  for (const templateId of templateIds) {
+    freezeQueue = freezeQueue.then(() =>
+      ensureTemplateStatic(templateId).then(
+        () => undefined,
+        (error) => {
+          console.warn(`[static] Freeze skipped for ${templateId}:`, error);
+        },
+      ),
+    );
+  }
 }
