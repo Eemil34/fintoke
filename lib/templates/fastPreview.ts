@@ -302,22 +302,28 @@ export async function readFastPreviewHtml(projectPath: string): Promise<string |
 }
 
 export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
-  const scripts: string[] = [];
-  const withoutScripts = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, (block) => {
-    scripts.push(block);
-    return `<!--FINTOKE_SCRIPT_${scripts.length - 1}-->`;
-  });
+  const held: string[] = [];
+  const hold = (block: string) => {
+    held.push(block);
+    return `<!--FINTOKE_HOLD_${held.length - 1}-->`;
+  };
+  let next = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold)
+    .replace(/<img\b[^>]*>/gi, hold)
+    .replace(/<source\b[^>]*>/gi, hold)
+    .replace(/url\(\s*(['"]?)[^)]+\)/gi, hold)
+    .replace(/\s(?:src|srcset|srcSet|poster|data-src|data-bg)=["'][^"']*["']/gi, hold);
   const swaps = [...buildCopySwaps(pack.source, pack)].sort((a, b) => b.from.length - a.from.length);
-  let next = withoutScripts;
   const seen = new Set<string>();
   for (const { from, to } of swaps) {
     if (seen.has(from) || isTemplateLabel(to)) continue;
+    if (/unsplash|photo-[a-z0-9-]+|\.(?:png|jpe?g|webp|gif|svg|avif)/i.test(from)) continue;
     seen.add(from);
     next = next.split(from).join(to);
     const encoded = from.replace(/&/g, '&amp;');
     if (encoded !== from) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
   }
-  return next.replace(/<!--FINTOKE_SCRIPT_(\d+)-->/g, (_, index) => scripts[Number(index)] || '');
+  return next.replace(/<!--FINTOKE_HOLD_(\d+)-->/g, (_, index) => held[Number(index)] || '');
 }
 
 export function renderFastPreviewHtml(

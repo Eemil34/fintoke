@@ -9,7 +9,7 @@ import { listEmails, listPeople } from '@/lib/services/workspace';
 import { syncSeedSnapshotsToVolume } from '@/lib/templates/snapshot';
 import { scheduleMissingStaticExports, staticFreezeStatus } from '@/lib/templates/exportStatic';
 
-const RELEASE = '2026-09-19-freeze-4b';
+const RELEASE = '2026-09-19-keep-photos';
 
 export async function GET() {
   void syncSeedSnapshotsToVolume().catch(() => undefined);
@@ -53,7 +53,12 @@ export async function GET() {
     fs.existsSync(path.join(snapshotsRoot, id, '.fintoke-static', 'index.html')),
   );
   const staticPending = volumeTemplates.filter((id) => !staticReady.includes(id));
-  scheduleMissingStaticExports(volumeHasApp.filter((id) => /^restaurant-4/.test(id) && !staticReady.includes(id)));
+  const staticVersionReady = volumeTemplates.filter((id) =>
+    fs.existsSync(path.join(snapshotsRoot, id, '.fintoke-static', '.fintoke-export')),
+  );
+  scheduleMissingStaticExports(
+    volumeHasApp.filter((id) => /^restaurant-4/.test(id) && !staticVersionReady.includes(id)),
+  );
   const staticFreeze = staticFreezeStatus();
 
   let projectCount = 0;
@@ -110,6 +115,7 @@ export async function GET() {
         seedStaticReady,
         staticReady,
         staticPending,
+        staticVersionReady,
         staticFreeze,
         disk,
         databaseUrl: (process.env.DATABASE_URL || '').replace(/\/\/.*@/, '//***@'),

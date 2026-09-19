@@ -73,7 +73,7 @@ function previewPage(title: string, message: string, logs: string[]) {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
       'x-robots-tag': 'noindex, nofollow',
-      'referrer-policy': 'no-referrer',
+      'referrer-policy': 'strict-origin-when-cross-origin',
     },
   });
 }
@@ -104,7 +104,7 @@ function childPath(segments?: string[]) {
 function previewSecurityHeaders(headers: Headers) {
   headers.delete('set-cookie');
   headers.set('x-robots-tag', 'noindex, nofollow');
-  headers.set('referrer-policy', 'no-referrer');
+  headers.set('referrer-policy', 'strict-origin-when-cross-origin');
   headers.set('x-content-type-options', 'nosniff');
   headers.set('x-frame-options', 'SAMEORIGIN');
   headers.set(
@@ -177,6 +177,11 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         if (copyPack && type.includes('text/html')) {
           const packed = await ensureCopySwaps(copyPack);
           text = applyCopyToHtml(text, packed);
+        }
+        if (type.includes('text/html')) {
+          text = text
+            .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
+            .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '');
         }
         body = text;
       }

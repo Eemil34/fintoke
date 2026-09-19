@@ -3,6 +3,7 @@ import path from 'path';
 import { resolveSnapshotDir } from './snapshot';
 
 export const STATIC_EXPORT_DIR = '.fintoke-static';
+export const STATIC_EXPORT_VERSION = 'keep-photos-1';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -40,6 +41,18 @@ export async function resolveStaticExportDir(templateId: string): Promise<string
 
 export async function hasStaticExport(templateId: string): Promise<boolean> {
   return Boolean(await resolveStaticExportDir(templateId));
+}
+
+export async function hasCurrentStaticExport(templateId: string): Promise<boolean> {
+  const dir = await resolveStaticExportDir(templateId);
+  if (!dir) return false;
+  if (!/^restaurant-4/.test(templateId)) return true;
+  try {
+    const version = (await fs.readFile(path.join(dir, '.fintoke-export'), 'utf8')).trim();
+    return version === STATIC_EXPORT_VERSION;
+  } catch {
+    return false;
+  }
 }
 
 function safeJoin(root: string, segments?: string[]): string | null {
@@ -82,6 +95,9 @@ export function rewriteStaticUrls(source: string, prefix: string): string {
   const base = prefix.replace(/\/$/, '');
   return source
     .replace(/(["'`(=])\/_next\//g, `$1${base}/_next/`)
-    .replace(/(\s(?:href|src|srcset|srcSet|action))="\/(?!\/|preview\/)/gi, `$1="${base}/`)
+    .replace(/(\s(?:href|src|srcset|srcSet|action))="([^"]*)"/gi, (_, attr: string, value: string) => {
+      const next = value.replace(/(^|[\s,])\/(?!\/|preview\/)/g, `$1${base}/`);
+      return `${attr}="${next}"`;
+    })
     .replace(/url\(\s*(['"]?)\/(?!\/|preview\/)/g, `url($1${base}/`);
 }

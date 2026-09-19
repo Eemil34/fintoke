@@ -4,7 +4,7 @@ import os from 'os';
 import path from 'path';
 import { npmInstallEnv, reclaimVolumeSpaceSync } from '@/lib/server/volumeCleanup';
 import { GENERATED_IMAGES_CONFIG } from './siteImages';
-import { STATIC_EXPORT_DIR } from './staticSite';
+import { STATIC_EXPORT_DIR, STATIC_EXPORT_VERSION } from './staticSite';
 
 const EXPORT_CONFIG = `const path = require('path');
 
@@ -45,6 +45,7 @@ async function copyTree(from: string, to: string): Promise<void> {
     if (entry.name === 'node_modules' || entry.name === '.next' || entry.name === 'out' || entry.name === STATIC_EXPORT_DIR) {
       continue;
     }
+    if (entry.name === 'instrumentation-client.ts' || entry.name === 'instrumentation-client.js') continue;
     if (entry.name.startsWith('.') && entry.name !== '.fintoke-from') continue;
     const src = path.join(from, entry.name);
     const dest = path.join(to, entry.name);
@@ -53,10 +54,27 @@ async function copyTree(from: string, to: string): Promise<void> {
   }
 }
 
+async function stripImagePatchers(work: string): Promise<void> {
+  await fs.rm(path.join(work, 'instrumentation-client.ts'), { force: true });
+  await fs.rm(path.join(work, 'instrumentation-client.js'), { force: true });
+  for (const rel of ['app/layout.tsx', 'app/layout.jsx', 'src/app/layout.tsx', 'src/app/layout.jsx']) {
+    const file = path.join(work, rel);
+    try {
+      const original = await fs.readFile(file, 'utf8');
+      const next = original
+        .replace(/import\s+[^;]*ImageGuard[^;]*;?\s*/g, '')
+        .replace(/<ImageGuard\s*\/>/g, '');
+      if (next !== original) await fs.writeFile(file, next);
+    } catch {
+      // layout may not exist
+    }
+  }
+}
 export async function exportSnapshotStatic(snapshotPath: string): Promise<string> {
   const work = await fs.mkdtemp(path.join(os.tmpdir(), 'fintoke-static-'));
   try {
     await copyTree(snapshotPath, work);
+    await stripImagePatchers(work);
     await fs.writeFile(path.join(work, 'next.config.js'), EXPORT_CONFIG);
     reclaimVolumeSpaceSync();
     const exportEnv = npmInstallEnv({
@@ -77,6 +95,7 @@ export async function exportSnapshotStatic(snapshotPath: string): Promise<string
     const dest = path.join(snapshotPath, STATIC_EXPORT_DIR);
     await fs.rm(dest, { recursive: true, force: true });
     await fs.cp(generated, dest, { recursive: true });
+    await fs.writeFile(path.join(dest, '.fintoke-export'), `${STATIC_EXPORT_VERSION}\n`);
     return dest;
   } finally {
     await fs.rm(work, { recursive: true, force: true }).catch(() => undefined);
@@ -108,9 +127,9 @@ export async function ensureTemplateStatic(templateId: string): Promise<boolean>
   if (existing) return existing;
 
   const work = (async () => {
-    const { hasStaticExport } = await import('./staticSite');
+    const { hasStaticExport, hasCurrentStaticExport } = await import('./staticSite');
     const { resolveSnapshotDir } = await import('./snapshot');
-    if (await hasStaticExport(templateId)) return true;
+    if (await hasCurrentStaticExport(templateId)) return true;
     const failedAt = lastFailAt.get(templateId) || 0;
     if (failedAt && Date.now() - failedAt < FAIL_COOLDOWN_MS) return false;
     const dir = await resolveSnapshotDir(templateId);
