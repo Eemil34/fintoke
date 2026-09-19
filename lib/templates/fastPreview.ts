@@ -94,6 +94,36 @@ function clipCopy(value: string, max: number): string {
   return (space > max * 0.55 ? cut.slice(0, space) : cut).replace(/[,:;–—-]+$/g, '');
 }
 
+function sectionCopy(pack: FastCopyFile) {
+  return {
+    categoriesTitle: clipCopy('Our menu', 28),
+    newestTitle: clipCopy(`New at ${pack.name}`, 32),
+    customersTitle: clipCopy('Our guests', 28),
+    visitTitle: clipCopy(`Find ${pack.name}`, 28),
+  };
+}
+
+function headingReplacement(from: string, pack: FastCopyFile): string {
+  const text = from.replace(/\s+/g, ' ').trim();
+  const sections = sectionCopy(pack);
+  if (/categor/i.test(text) && text.length < 48) return sections.categoriesTitle;
+  if (/newest|explore .{0,24}item|best sellers?/i.test(text)) return sections.newestTitle;
+  if (/^customers$|our customers|what (our )?(customers|guests)|testimonials?/i.test(text) && text.length < 64) {
+    return sections.customersTitle;
+  }
+  if (/reserve your evening|book your evening|reserve a table|join us for/i.test(text)) return pack.ctaTitle;
+  if (/hours\s*&\s*location|^location$|find us|visit us/i.test(text) && text.length < 48) return sections.visitTitle;
+  return '';
+}
+
+function allowHtmlSwap(from: string): boolean {
+  if (from.length < 4 || /unsplash|photo-[a-z0-9-]+|class=|href=|\.(?:png|jpe?g|webp|gif|svg)/i.test(from)) {
+    return false;
+  }
+  if (from.length >= 10) return true;
+  return from.split(/\s+/).length <= 3 && !/[<>{}]/.test(from);
+}
+
 export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
   const items = (rows: FastCopyItem[] | undefined, titleMax: number, bodyMax: number) =>
     (rows || []).map((row) => ({
@@ -190,7 +220,7 @@ export async function captureTemplateSource(projectPath: string): Promise<NonNul
     ) || decode(raw.match(/<h1[^>]*>\s*([^<{]{2,80})\s*</i)?.[1] || '');
   const name = jsxBrand || siteName || metaTitle.split(/[—–\-|•]/)[0]?.trim() || named[0] || '';
   const keep =
-    /^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|To begin|From the hearth|For the table|To finish|Reserve|Primary)$/i;
+    /^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Our categories|Categories|Explore newest items|Customers|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|To begin|From the hearth|For the table|To finish|Reserve|Primary)$/i;
   const phrases = [
     ...new Set(
       [...raw.matchAll(/>([^<{]*)</g)]
@@ -203,6 +233,7 @@ export async function captureTemplateSource(projectPath: string): Promise<NonNul
             /\s/.test(text) &&
             /[A-Za-zÀ-ÿ]/.test(text) &&
             !keep.test(text) &&
+            !/categor|newest items|reserve your evening/i.test(text) &&
             !/[{}`]|=>|className|return |const |let |function /.test(text),
         ),
     ),
@@ -369,7 +400,7 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
   ].sort((a, b) => b.from.length - a.from.length);
   const seen = new Set<string>();
   for (const { from, to } of swaps) {
-    if (seen.has(from) || isTemplateLabel(to) || from.length < 10) continue;
+    if (seen.has(from) || isTemplateLabel(to) || !allowHtmlSwap(from)) continue;
     if (/unsplash|photo-[a-z0-9-]+|\.(?:png|jpe?g|webp|gif|svg|avif)/i.test(from)) continue;
     seen.add(from);
     next = next.split(from).join(to);
@@ -403,8 +434,9 @@ function extractTagTexts(html: string, tag: string): string[] {
 
 function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: string; to: string }> {
   const keep =
-    /^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Our categories|Categories|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|Reserve)$/i;
+    /^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|Reserve|Login|Bag)$/i;
   const h1 = extractTagTexts(html, 'h1');
+  const h2 = extractTagTexts(html, 'h2');
   const h3 = extractTagTexts(html, 'h3').concat(extractTagTexts(html, 'h4')).filter((text) => !keep.test(text));
   const paragraphs = extractTagTexts(html, 'p').filter((text) => text.length > 28);
   const titles = [
@@ -422,17 +454,29 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
   ].filter(Boolean);
   const rows: Array<{ from: string; to: string }> = [];
   if (h1[0] && (pack.heroTitle || pack.name)) rows.push({ from: h1[0], to: pack.heroTitle || pack.name });
+  h2.forEach((from) => {
+    const to = headingReplacement(from, pack);
+    if (to) rows.push({ from, to });
+  });
+  h3.forEach((from) => {
+    const to = headingReplacement(from, pack);
+    if (to) rows.push({ from, to });
+  });
   paragraphs.forEach((from, index) => {
-    if (bodies[index]) rows.push({ from, to: bodies[index] });
+    const mapped = headingReplacement(from, pack);
+    if (mapped) rows.push({ from, to: mapped });
+    else if (bodies[index]) rows.push({ from, to: bodies[index] });
   });
   h3.forEach((from, index) => {
+    if (headingReplacement(from, pack) || keep.test(from)) return;
     if (titles[index]) rows.push({ from, to: titles[index] });
   });
-  return rows.filter((row) => row.from && row.to && row.from !== row.to && row.from.length >= 16);
+  return rows.filter((row) => row.from && row.to && row.from !== row.to && allowHtmlSwap(row.from));
 }
 
 export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string {
   pack = fitCopyPack(pack);
+  const sections = sectionCopy(pack);
   const swaps = [
     ...buildHtmlCopySwaps(html, pack),
     ...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack)),
@@ -442,12 +486,12 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
         row.from &&
         row.to &&
         row.from !== row.to &&
-        row.from.length >= 12 &&
+        allowHtmlSwap(row.from) &&
         !row.to.includes(row.from) &&
         !/unsplash|photo-[a-z0-9-]+|class=|href=/i.test(row.from),
     )
     .sort((a, b) => b.from.length - a.from.length)
-    .slice(0, 40)
+    .slice(0, 48)
     .map((row) => [row.from, row.to]);
   const data = {
     name: pack.name,
@@ -456,18 +500,141 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
     description: pack.description,
     phone: pack.phone,
     email: pack.email,
+    address: pack.address,
     mapsUrl: pack.mapsUrl,
-    aboutColumns: pack.aboutColumns || [],
     menu: pack.menu || [],
     features: pack.features || [],
-    events: pack.events || [],
+    testimonials: pack.testimonials || [],
     ctaTitle: pack.ctaTitle,
     ctaSubtitle: pack.ctaSubtitle,
     ctaButton: pack.ctaButton,
-    footer: pack.footer,
+    ...sections,
     swaps,
   };
-  const script = `<script>(function(){var d=${JSON.stringify(data)};var s=d.swaps||[];var n=0;var KEEP=/^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Our categories|Categories|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|Reserve)$/i;function leaf(el){return!!el&&!el.querySelector("img,svg,iframe,nav,ul,input,button")&&el.children.length<=2;}function apply(){if(n>2)return;n+=1;if(d.name)document.title=d.name;function walk(node){if(!node)return;if(node.nodeType===3){var t=node.nodeValue,o=t;if(!t||t.length<3)return;for(var i=0;i<s.length;i++){if(t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}if(t!==o)node.nodeValue=t;return;}if(node.nodeType===1&&node.tagName!=="SCRIPT"&&node.tagName!=="STYLE"){for(var c=node.firstChild;c;c=c.nextSibling)walk(c);}}walk(document.body);var h1=document.querySelector("h1");if(leaf(h1)&&d.heroTitle)h1.textContent=d.heroTitle;var heroP=document.querySelector("[class*='hero'] p, .hero-copy p");if(leaf(heroP)&&(d.heroSubtitle||d.description))heroP.textContent=d.heroSubtitle||d.description;var titles=[].concat((d.menu||[]).map(function(i){return i.title;}),(d.features||[]).map(function(i){return i.title;}),(d.events||[]).map(function(i){return i.title;})).filter(Boolean);var ti=0;document.querySelectorAll("h3,h4").forEach(function(el){var t=(el.textContent||"").trim();if(!leaf(el)||!t||KEEP.test(t))return;if(titles[ti])el.textContent=titles[ti++];});var bodies=[].concat(d.aboutColumns||[],[d.description],(d.menu||[]).map(function(i){return i.body;}),(d.features||[]).map(function(i){return i.body;}),[d.ctaSubtitle,d.footer]).filter(Boolean);var bi=0;document.querySelectorAll("p").forEach(function(el){if(!leaf(el)||el===heroP||el.closest("[class*='hero']"))return;var t=(el.textContent||"").trim();if(t.length<18)return;if(bodies[bi])el.textContent=bodies[bi++];});if(d.phone)document.querySelectorAll('a[href^="tel:"]').forEach(function(a){if(leaf(a)){a.textContent=d.phone;a.href="tel:"+String(d.phone).replace(/\\s/g,"");}});if(d.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){if(leaf(a)){a.textContent=d.email;a.href="mailto:"+d.email;}});if(d.mapsUrl){var f=document.querySelector("iframe[src*='map']");if(f)f.src=d.mapsUrl;}var btn=[].slice.call(document.querySelectorAll("a,button")).find(function(el){return leaf(el)&&/book|reserv|table|order/i.test(el.textContent||"");});if(btn&&d.ctaButton)btn.textContent=d.ctaButton;}document.addEventListener("DOMContentLoaded",apply);window.addEventListener("load",apply);setTimeout(apply,700);})();</script>`;
+  const script = `<script>(function(){
+var d=${JSON.stringify(data)};
+var s=d.swaps||[];
+var n=0;
+var NAV=/^(menu|home|about|bar|login|bag|search|reservations?|experience|contact|gallery|book now|reservation)$/i;
+function txt(el){return (el&&(el.textContent||"").replace(/\\s+/g," ").trim())||"";}
+function set(el,v){
+  if(!el||!v)return;
+  if(el.querySelector&&el.querySelector("img,svg,iframe,input,ul,nav")){
+    for(var c=el.firstChild;c;c=c.nextSibling){
+      if(c.nodeType===3&&c.nodeValue&&c.nodeValue.trim()){c.nodeValue=v;return;}
+    }
+    return;
+  }
+  el.textContent=v;
+}
+function kind(t){
+  if(/categor/i.test(t)&&t.length<48)return "categories";
+  if(/newest|explore .{0,24}item|best sellers?/i.test(t))return "newest";
+  if(/(^customers$|our customers|what (our )?(customers|guests)|testimonials?)/i.test(t)&&t.length<64)return "customers";
+  if(/reserve your evening|book your evening|reserve a table|join us for/i.test(t))return "reserve";
+  if(/(hours\\s*&\\s*location|^location$|find us|visit us)/i.test(t)&&t.length<48)return "location";
+  if(d.categoriesTitle&&t===d.categoriesTitle)return "categories";
+  if(d.newestTitle&&t===d.newestTitle)return "newest";
+  if(d.customersTitle&&t===d.customersTitle)return "customers";
+  if(d.ctaTitle&&t===d.ctaTitle)return "reserve";
+  if(d.visitTitle&&t===d.visitTitle)return "location";
+  return "";
+}
+function sectionOf(el){return el.closest("section")||el.parentElement||el;}
+function fillCards(sec,items){
+  if(!sec||!items||!items.length)return;
+  var i=0;
+  sec.querySelectorAll("h3,h4,article p,article span,figcaption,li p,button,a").forEach(function(el){
+    var t=txt(el);
+    if(!t||NAV.test(t)||kind(t)||/view|see all|explore|shop|menu|book|reserv/i.test(t)||el.querySelector&&el.querySelector("img,svg,input"))return;
+    var item=items[i];
+    if(!item)return;
+    if(el.tagName==="P"&&t.length>42){if(item.body)set(el,item.body);i+=1;return;}
+    if(item.title)set(el,item.title);
+    i+=1;
+  });
+}
+function fillQuotes(sec){
+  if(!sec)return;
+  var q=d.testimonials||[];
+  var i=0;
+  sec.querySelectorAll("p,blockquote,figcaption").forEach(function(el){
+    var t=txt(el);
+    if(!t||kind(t)||t.length<18||NAV.test(t))return;
+    if(q[i]&&q[i].quote){set(el,q[i].quote);i+=1;}
+  });
+}
+function fillPlace(sec){
+  if(!sec)return;
+  var loc=[d.address,d.phone,d.email].filter(Boolean);
+  var i=0;
+  sec.querySelectorAll("p,li,address,span").forEach(function(el){
+    var t=txt(el);
+    if(!t||kind(t)||NAV.test(t)||t.length>90)return;
+    if(el.tagName==="P"&&t.length>40&&!/\\d|@|\\+|lane|street|road|ave/i.test(t)){
+      if(d.ctaSubtitle)set(el,d.ctaSubtitle);
+      return;
+    }
+    if(loc[i]&&(/\\d|@|\\+|lane|street|road|avenue|downtown|[A-Z]{2}\\b/.test(t)||t.length<56)){
+      set(el,loc[i]);i+=1;
+    }
+  });
+}
+function apply(){
+  if(n>12)return;
+  n+=1;
+  if(d.name)document.title=d.name;
+  function walk(node){
+    if(!node)return;
+    if(node.nodeType===3){
+      var t=node.nodeValue,o=t;
+      if(!t||t.length<3)return;
+      for(var i=0;i<s.length;i++){if(t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}
+      if(t!==o)node.nodeValue=t;
+      return;
+    }
+    if(node.nodeType===1&&node.tagName!=="SCRIPT"&&node.tagName!=="STYLE"){
+      for(var c=node.firstChild;c;c=c.nextSibling)walk(c);
+    }
+  }
+  if(document.body)walk(document.body);
+  document.querySelectorAll("header a, header [class*='logo'], header [class*='brand'], a[href='#top'], footer a, footer p").forEach(function(el){
+    var t=txt(el);
+    if(!t||t.length>36||NAV.test(t)||/login|bag|©|copyright|privacy|terms/i.test(t)||kind(t))return;
+    if(el.querySelector&&el.querySelector("img,svg"))return;
+    set(el,d.name);
+  });
+  document.querySelectorAll("h1,h2,h3,p").forEach(function(el){
+    var k=kind(txt(el));
+    if(k==="categories")fillCards(sectionOf(el),d.menu||d.features);
+    if(k==="newest")fillCards(sectionOf(el),(d.menu||[]).slice().reverse());
+    if(k==="customers")fillQuotes(sectionOf(el));
+    if(k==="reserve"||k==="location")fillPlace(sectionOf(el));
+  });
+  document.querySelectorAll("h1,h2,h3,p").forEach(function(el){
+    var k=kind(txt(el));
+    if(k==="categories")set(el,d.categoriesTitle);
+    if(k==="newest")set(el,d.newestTitle);
+    if(k==="customers")set(el,d.customersTitle);
+    if(k==="reserve"&&/^H[12]$/.test(el.tagName))set(el,d.ctaTitle);
+    if(k==="location"&&/^H[12]$/.test(el.tagName))set(el,d.visitTitle);
+  });
+  var box=document.querySelector("[id*='location'],[class*='location'],[id*='contact'],[class*='contact'],[class*='map']");
+  if(box)fillPlace(box);
+  var h1=document.querySelector("h1");
+  if(h1&&d.heroTitle)set(h1,d.heroTitle);
+  var heroP=document.querySelector("[class*='hero'] p, .hero-copy p");
+  if(heroP&&(d.heroSubtitle||d.description))set(heroP,d.heroSubtitle||d.description);
+  if(d.phone)document.querySelectorAll('a[href^="tel:"]').forEach(function(a){set(a,d.phone);a.href="tel:"+String(d.phone).replace(/\\s/g,"");});
+  if(d.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){set(a,d.email);a.href="mailto:"+d.email;});
+  if(d.mapsUrl){var f=document.querySelector("iframe[src*='map']");if(f)f.src=d.mapsUrl;}
+  var btn=[].slice.call(document.querySelectorAll("a,button")).find(function(el){return /book|reserv|table/i.test(txt(el));});
+  if(btn&&d.ctaButton&&txt(btn).length<28)set(btn,d.ctaButton);
+}
+document.addEventListener("DOMContentLoaded",apply);
+window.addEventListener("load",apply);
+[0,250,700,1400,2200,3500,5000].forEach(function(ms){setTimeout(apply,ms);});
+})();</script>`;
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}</body>`);
   return `${html}${script}`;
 }
