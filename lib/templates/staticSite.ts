@@ -136,23 +136,9 @@ export function disableImagePatcher(source: string): string {
     .replace(/dataset\.clbFallback="1",[a-z]\.src=/g, 'dataset.clbFallback="1";0&&');
 }
 
-export function sterilizeStaticHtml(html: string): string {
-  return html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<script\b[^>]*\/>/gi, '')
-    .replace(/<link\b[^>]*as=["']script["'][^>]*>/gi, '')
-    .replace(/<link\b[^>]*rel=["'](?:modulepreload|preload)["'][^>]*as=["']script["'][^>]*>/gi, '');
-}
-
-export function showStaticContent(html: string): string {
-  const css =
-    '<style id="fintoke-show">.reveal,.reveal-up,.reveal-left,.reveal-right,.reveal-scale,.reveal-in,[class*="reveal-"],[data-reveal]{opacity:1!important;transform:none!important;visibility:visible!important;animation:none!important;filter:none!important}.hero-copy>*,.site-header,main,section{opacity:1!important;transform:none!important;visibility:visible!important}</style>';
-  const js =
-    '<script>document.documentElement.classList.add("hydrated","js");document.querySelectorAll(".reveal,[data-reveal]").forEach(function(el){el.classList.add("is-visible","reveal-in");});</script>';
-  let next = html;
-  if (/<head[^>]*>/i.test(next)) next = next.replace(/<head[^>]*>/i, (open) => `${open}${css}`);
-  else next = `${css}${next}`;
-  if (/<\/body>/i.test(next)) next = next.replace(/<\/body>/i, `${js}</body>`);
-  else next = `${next}${js}`;
-  return next;
+export function protectPreviewPhotos(html: string): string {
+  const script =
+    '<script>(function(){try{var bad=/photo-1497366216548-37526070297c/;var desc=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,"src");if(desc&&desc.set){Object.defineProperty(HTMLImageElement.prototype,"src",{configurable:true,enumerable:desc.enumerable,get:desc.get,set:function(v){if(typeof v==="string"&&bad.test(v))return;desc.set.call(this,v);}});}var setAttr=Element.prototype.setAttribute;Element.prototype.setAttribute=function(name,value){if(this instanceof HTMLImageElement&&String(name).toLowerCase()==="src"&&bad.test(String(value)))return;return setAttr.apply(this,arguments);};}catch(e){}})();</script>';
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${script}`);
+  return `${script}${html}`;
 }
