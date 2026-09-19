@@ -319,7 +319,7 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
   ].sort((a, b) => b.from.length - a.from.length);
   const seen = new Set<string>();
   for (const { from, to } of swaps) {
-    if (seen.has(from) || isTemplateLabel(to)) continue;
+    if (seen.has(from) || isTemplateLabel(to) || from.length < 10) continue;
     if (/unsplash|photo-[a-z0-9-]+|\.(?:png|jpe?g|webp|gif|svg|avif)/i.test(from)) continue;
     seen.add(from);
     next = next.split(from).join(to);
@@ -378,30 +378,37 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
   h3.forEach((from, index) => {
     if (titles[index]) rows.push({ from, to: titles[index] });
   });
-  return rows.filter((row) => row.from && row.to && row.from !== row.to && row.from.length >= 3);
+  return rows.filter((row) => row.from && row.to && row.from !== row.to && row.from.length >= 16);
 }
 
 export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string {
+  const swaps = [
+    ...buildHtmlCopySwaps(html, pack),
+    ...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack)),
+  ]
+    .filter(
+      (row) =>
+        row.from &&
+        row.to &&
+        row.from !== row.to &&
+        row.from.length >= 12 &&
+        !row.to.includes(row.from) &&
+        !/unsplash|photo-[a-z0-9-]+|class=|href=/i.test(row.from),
+    )
+    .sort((a, b) => b.from.length - a.from.length)
+    .slice(0, 40)
+    .map((row) => [row.from, row.to]);
   const data = {
     name: pack.name,
-    eyebrow: pack.eyebrow,
     heroTitle: pack.heroTitle,
     heroSubtitle: pack.heroSubtitle,
     description: pack.description,
-    address: pack.address,
     phone: pack.phone,
     email: pack.email,
-    aboutColumns: pack.aboutColumns || [],
-    menu: pack.menu || [],
-    features: pack.features || [],
-    events: pack.events || [],
-    ctaTitle: pack.ctaTitle,
-    ctaSubtitle: pack.ctaSubtitle,
-    ctaButton: pack.ctaButton,
-    footer: pack.footer,
     mapsUrl: pack.mapsUrl,
+    swaps,
   };
-  const script = `<script>(function(){var p=${JSON.stringify(data)};var KEEP=/^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Our categories|Categories|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|Reserve)$/i;function set(el,v){if(el&&v)el.textContent=v;}function run(){set(document.querySelector("h1"),p.heroTitle||p.name);document.title=p.name||document.title;var brand=document.querySelector("header a:not([href*='#']) , [class*='brand'], [class*='logo']");if(brand&&p.name&&!brand.querySelector("img")&&(brand.textContent||"").trim().length<48)set(brand,p.name);var hero=document.querySelector("[class*='hero']")||document.body;var heroPs=[].slice.call(hero.querySelectorAll("p")).filter(function(n){return (n.textContent||"").trim().length>24;});if(heroPs[0])set(heroPs[0],p.heroSubtitle||p.description);var longPs=[].slice.call(document.querySelectorAll("p")).filter(function(n){var t=(n.textContent||"").trim();return t.length>46&&n!==heroPs[0];});var bodies=[].concat(p.aboutColumns||[],[p.description],(p.menu||[]).map(function(i){return i.body;}),(p.features||[]).map(function(i){return i.body;}),[p.ctaSubtitle,p.footer]).filter(Boolean);longPs.forEach(function(el,i){if(bodies[i])set(el,bodies[i]);});var titles=[].concat((p.menu||[]).map(function(i){return i.title;}),(p.features||[]).map(function(i){return i.title;}),(p.events||[]).map(function(i){return i.title;})).filter(Boolean);var ti=0;document.querySelectorAll("h3,h4").forEach(function(el){var t=(el.textContent||"").trim();if(!t||KEEP.test(t))return;if(titles[ti])set(el,titles[ti++]);});if(p.ctaTitle){var h2s=[].slice.call(document.querySelectorAll("h2")).filter(function(el){return !KEEP.test((el.textContent||"").trim());});if(h2s[0])set(h2s[h2s.length-1],p.ctaTitle);}if(p.phone)document.querySelectorAll('a[href^="tel:"]').forEach(function(a){a.textContent=p.phone;a.setAttribute("href","tel:"+String(p.phone).replace(/\\s/g,""));});if(p.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){a.textContent=p.email;a.setAttribute("href","mailto:"+p.email);});if(p.mapsUrl)document.querySelectorAll("iframe[src*='map']").forEach(function(f){f.src=p.mapsUrl;});var btn=[].slice.call(document.querySelectorAll("a,button")).find(function(el){return /book|reserv|table|order/i.test(el.textContent||"");});if(btn&&p.ctaButton)set(btn,p.ctaButton);}run();document.addEventListener("DOMContentLoaded",run);window.addEventListener("load",run);[100,400,1000].forEach(function(ms){setTimeout(run,ms);});try{new MutationObserver(function(){run();}).observe(document.documentElement,{subtree:true,childList:true});}catch(e){}})();</script>`;
+  const script = `<script>(function(){var d=${JSON.stringify(data)};var s=d.swaps||[];var n=0;function leaf(el){return!!el&&!el.querySelector("img,svg,iframe,nav,ul,input,button")&&el.children.length<=2;}function apply(){if(n>2)return;n+=1;if(d.name)document.title=d.name;function walk(node){if(!node)return;if(node.nodeType===3){var t=node.nodeValue,o=t;if(!t||t.length<3)return;for(var i=0;i<s.length;i++){if(t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}if(t!==o)node.nodeValue=t;return;}if(node.nodeType===1&&node.tagName!=="SCRIPT"&&node.tagName!=="STYLE"){for(var c=node.firstChild;c;c=c.nextSibling)walk(c);}}walk(document.body);var h1=document.querySelector("h1");if(leaf(h1)&&d.heroTitle)h1.textContent=d.heroTitle;var p=document.querySelector("[class*='hero'] p, .hero-copy p");if(leaf(p)&&(d.heroSubtitle||d.description))p.textContent=d.heroSubtitle||d.description;if(d.phone)document.querySelectorAll('a[href^="tel:"]').forEach(function(a){if(leaf(a)){a.textContent=d.phone;a.href="tel:"+String(d.phone).replace(/\\s/g,"");}});if(d.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){if(leaf(a)){a.textContent=d.email;a.href="mailto:"+d.email;}});if(d.mapsUrl){var f=document.querySelector("iframe[src*='map']");if(f)f.src=d.mapsUrl;}}document.addEventListener("DOMContentLoaded",apply);window.addEventListener("load",apply);setTimeout(apply,700);})();</script>`;
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}</body>`);
   return `${html}${script}`;
 }
