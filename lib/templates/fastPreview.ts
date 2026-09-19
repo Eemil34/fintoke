@@ -81,8 +81,57 @@ export async function collectTemplateImages(projectPath: string): Promise<string
 }
 
 export async function writeFastCopy(projectPath: string, pack: FastCopyFile): Promise<void> {
-  await fs.writeFile(path.join(projectPath, FAST_COPY_FILE), `${JSON.stringify(pack, null, 2)}\n`);
-  await fs.writeFile(path.join(projectPath, '.fintoke-filled'), `${pack.name}\n`).catch(() => undefined);
+  const fitted = fitCopyPack(pack);
+  await fs.writeFile(path.join(projectPath, FAST_COPY_FILE), `${JSON.stringify(fitted, null, 2)}\n`);
+  await fs.writeFile(path.join(projectPath, '.fintoke-filled'), `${fitted.name}\n`).catch(() => undefined);
+}
+
+function clipCopy(value: string, max: number): string {
+  const text = (value || '').replace(/\s+/g, ' ').trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max);
+  const space = cut.lastIndexOf(' ');
+  return (space > max * 0.55 ? cut.slice(0, space) : cut).replace(/[,:;–—-]+$/g, '');
+}
+
+export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
+  const items = (rows: FastCopyItem[] | undefined, titleMax: number, bodyMax: number) =>
+    (rows || []).map((row) => ({
+      title: clipCopy(row.title, titleMax),
+      body: clipCopy(row.body, bodyMax),
+    }));
+  const fitted: FastCopyFile = {
+    ...pack,
+    name: clipCopy(pack.name, 28),
+    tagline: clipCopy(pack.tagline, 72),
+    description: clipCopy(pack.description, 220),
+    eyebrow: clipCopy(pack.eyebrow, 36),
+    heroTitle: clipCopy(pack.heroTitle || pack.name, 42),
+    heroSubtitle: clipCopy(pack.heroSubtitle, 140),
+    address: clipCopy(pack.address, 48),
+    aboutColumns: (pack.aboutColumns || []).map((column) => clipCopy(column, 180)),
+    menu: items(pack.menu, 22, 72),
+    features: items(pack.features, 22, 90),
+    events: items(pack.events, 24, 90),
+    ctaTitle: clipCopy(pack.ctaTitle, 32),
+    ctaSubtitle: clipCopy(pack.ctaSubtitle, 100),
+    ctaButton: clipCopy(pack.ctaButton, 18),
+    footer: clipCopy(pack.footer, 56),
+    testimonials: (pack.testimonials || []).map((row) => ({
+      ...row,
+      quote: clipCopy(row.quote, 120),
+      name: clipCopy(row.name, 24),
+      role: clipCopy(row.role, 24),
+    })),
+    team: (pack.team || []).map((row) => ({
+      ...row,
+      name: clipCopy(row.name, 24),
+      role: clipCopy(row.role, 24),
+      bio: clipCopy(row.bio, 90),
+    })),
+  };
+  fitted.swaps = buildCopySwaps(fitted.source, fitted);
+  return fitted;
 }
 
 export async function readFastCopy(projectPath: string): Promise<FastCopyFile | null> {
@@ -302,6 +351,7 @@ export async function readFastPreviewHtml(projectPath: string): Promise<string |
 }
 
 export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
+  pack = fitCopyPack(pack);
   const held: string[] = [];
   const hold = (block: string) => {
     held.push(block);
@@ -382,6 +432,7 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
 }
 
 export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string {
+  pack = fitCopyPack(pack);
   const swaps = [
     ...buildHtmlCopySwaps(html, pack),
     ...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack)),
@@ -406,9 +457,17 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
     phone: pack.phone,
     email: pack.email,
     mapsUrl: pack.mapsUrl,
+    aboutColumns: pack.aboutColumns || [],
+    menu: pack.menu || [],
+    features: pack.features || [],
+    events: pack.events || [],
+    ctaTitle: pack.ctaTitle,
+    ctaSubtitle: pack.ctaSubtitle,
+    ctaButton: pack.ctaButton,
+    footer: pack.footer,
     swaps,
   };
-  const script = `<script>(function(){var d=${JSON.stringify(data)};var s=d.swaps||[];var n=0;function leaf(el){return!!el&&!el.querySelector("img,svg,iframe,nav,ul,input,button")&&el.children.length<=2;}function apply(){if(n>2)return;n+=1;if(d.name)document.title=d.name;function walk(node){if(!node)return;if(node.nodeType===3){var t=node.nodeValue,o=t;if(!t||t.length<3)return;for(var i=0;i<s.length;i++){if(t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}if(t!==o)node.nodeValue=t;return;}if(node.nodeType===1&&node.tagName!=="SCRIPT"&&node.tagName!=="STYLE"){for(var c=node.firstChild;c;c=c.nextSibling)walk(c);}}walk(document.body);var h1=document.querySelector("h1");if(leaf(h1)&&d.heroTitle)h1.textContent=d.heroTitle;var p=document.querySelector("[class*='hero'] p, .hero-copy p");if(leaf(p)&&(d.heroSubtitle||d.description))p.textContent=d.heroSubtitle||d.description;if(d.phone)document.querySelectorAll('a[href^="tel:"]').forEach(function(a){if(leaf(a)){a.textContent=d.phone;a.href="tel:"+String(d.phone).replace(/\\s/g,"");}});if(d.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){if(leaf(a)){a.textContent=d.email;a.href="mailto:"+d.email;}});if(d.mapsUrl){var f=document.querySelector("iframe[src*='map']");if(f)f.src=d.mapsUrl;}}document.addEventListener("DOMContentLoaded",apply);window.addEventListener("load",apply);setTimeout(apply,700);})();</script>`;
+  const script = `<script>(function(){var d=${JSON.stringify(data)};var s=d.swaps||[];var n=0;var KEEP=/^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Our categories|Categories|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|Reserve)$/i;function leaf(el){return!!el&&!el.querySelector("img,svg,iframe,nav,ul,input,button")&&el.children.length<=2;}function apply(){if(n>2)return;n+=1;if(d.name)document.title=d.name;function walk(node){if(!node)return;if(node.nodeType===3){var t=node.nodeValue,o=t;if(!t||t.length<3)return;for(var i=0;i<s.length;i++){if(t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}if(t!==o)node.nodeValue=t;return;}if(node.nodeType===1&&node.tagName!=="SCRIPT"&&node.tagName!=="STYLE"){for(var c=node.firstChild;c;c=c.nextSibling)walk(c);}}walk(document.body);var h1=document.querySelector("h1");if(leaf(h1)&&d.heroTitle)h1.textContent=d.heroTitle;var heroP=document.querySelector("[class*='hero'] p, .hero-copy p");if(leaf(heroP)&&(d.heroSubtitle||d.description))heroP.textContent=d.heroSubtitle||d.description;var titles=[].concat((d.menu||[]).map(function(i){return i.title;}),(d.features||[]).map(function(i){return i.title;}),(d.events||[]).map(function(i){return i.title;})).filter(Boolean);var ti=0;document.querySelectorAll("h3,h4").forEach(function(el){var t=(el.textContent||"").trim();if(!leaf(el)||!t||KEEP.test(t))return;if(titles[ti])el.textContent=titles[ti++];});var bodies=[].concat(d.aboutColumns||[],[d.description],(d.menu||[]).map(function(i){return i.body;}),(d.features||[]).map(function(i){return i.body;}),[d.ctaSubtitle,d.footer]).filter(Boolean);var bi=0;document.querySelectorAll("p").forEach(function(el){if(!leaf(el)||el===heroP||el.closest("[class*='hero']"))return;var t=(el.textContent||"").trim();if(t.length<18)return;if(bodies[bi])el.textContent=bodies[bi++];});if(d.phone)document.querySelectorAll('a[href^="tel:"]').forEach(function(a){if(leaf(a)){a.textContent=d.phone;a.href="tel:"+String(d.phone).replace(/\\s/g,"");}});if(d.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){if(leaf(a)){a.textContent=d.email;a.href="mailto:"+d.email;}});if(d.mapsUrl){var f=document.querySelector("iframe[src*='map']");if(f)f.src=d.mapsUrl;}var btn=[].slice.call(document.querySelectorAll("a,button")).find(function(el){return leaf(el)&&/book|reserv|table|order/i.test(el.textContent||"");});if(btn&&d.ctaButton)btn.textContent=d.ctaButton;}document.addEventListener("DOMContentLoaded",apply);window.addEventListener("load",apply);setTimeout(apply,700);})();</script>`;
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}</body>`);
   return `${html}${script}`;
 }

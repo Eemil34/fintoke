@@ -188,6 +188,11 @@ img[fetchpriority=high],.hero img,[class*="hero"] img:first-of-type{animation:fi
 .hero-copy>:nth-child(2),[class*="hero"] h1{animation-delay:.16s}
 .hero-copy>:nth-child(3),[class*="hero"] p{animation-delay:.28s}
 .hero-copy>:nth-child(n+4),[class*="hero"] a{animation-delay:.4s}
+[class*="hero"] h1,h1{max-width:min(16ch,100%);overflow-wrap:anywhere;text-wrap:balance;line-height:1.08}
+[class*="hero"] p,.hero-copy p{max-width:34rem;overflow-wrap:break-word;text-wrap:pretty;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden}
+h2,h3,h4{overflow-wrap:anywhere;text-wrap:balance}
+p,li,blockquote{overflow-wrap:break-word}
+article p,[class*="card"] p,[class*="feature"] p,[class*="menu"] p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>`;
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${css}`);
