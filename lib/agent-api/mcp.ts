@@ -120,7 +120,7 @@ const RAW_MCP_TOOLS = [
   {
     name: 'claudable_rewrite_site_copy',
     description:
-      'Rewrite all visitor-facing text on an existing Fintoke site. Photos, files, and layout stay. Use this instead of claudable_edit_site when the user wants a full copy rewrite. This is not blocked by the Cursor image safety rules.',
+      'Rewrite all visitor-facing text on an existing Fintoke site and keep the same fast preview link. Photos, files, and layout stay. Use this instead of claudable_edit_site when the user wants names, menu, about, or contact text changed.',
     inputSchema: {
       type: 'object',
       required: ['id'],
