@@ -168,25 +168,27 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       return new Response('ready', { status: 200, headers: { 'cache-control': 'no-store' } });
     }
     const file = await readStaticExportFile(staticRoot, segments);
-    if (!file) {
+    if (file) {
+      let body: Buffer | string = file.body;
+      const type = file.contentType;
+      const rewriteText = type.includes('text/html') || type.includes('text/css') || type.includes('javascript');
+      if (rewriteText) {
+        let text = rewriteStaticUrls(body.toString('utf8'), prefix);
+        if (copyPack && type.includes('text/html')) {
+          const packed = await ensureCopySwaps(copyPack);
+          text = applyCopyToHtml(text, packed);
+        }
+        body = text;
+      }
+      const headers = previewSecurityHeaders(new Headers());
+      headers.set('content-type', type);
+      headers.set('cache-control', type.includes('text/html') ? 'no-store' : 'public, max-age=86400');
+      const payload: BodyInit = typeof body === 'string' ? body : new Uint8Array(body);
+      return new Response(payload, { status: 200, headers });
+    }
+    if (isAssetRequest(segments)) {
       return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
     }
-    let body: Buffer | string = file.body;
-    const type = file.contentType;
-    const rewriteText = type.includes('text/html') || type.includes('text/css') || type.includes('javascript');
-    if (rewriteText) {
-      let text = rewriteStaticUrls(body.toString('utf8'), prefix);
-      if (copyPack && (type.includes('text/html') || type.includes('javascript'))) {
-        const packed = await ensureCopySwaps(copyPack);
-        text = applyCopyToHtml(text, packed);
-      }
-      body = text;
-    }
-    const headers = previewSecurityHeaders(new Headers());
-    headers.set('content-type', type);
-    headers.set('cache-control', type.includes('text/html') ? 'no-store' : 'public, max-age=86400');
-    const payload: BodyInit = typeof body === 'string' ? body : new Uint8Array(body);
-    return new Response(payload, { status: 200, headers });
   }
 
   const previewKey = resolvedTemplate ? `tpl:${resolvedTemplate}` : projectId;

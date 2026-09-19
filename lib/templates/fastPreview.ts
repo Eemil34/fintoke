@@ -302,8 +302,13 @@ export async function readFastPreviewHtml(projectPath: string): Promise<string |
 }
 
 export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
+  const scripts: string[] = [];
+  const withoutScripts = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, (block) => {
+    scripts.push(block);
+    return `<!--FINTOKE_SCRIPT_${scripts.length - 1}-->`;
+  });
   const swaps = [...buildCopySwaps(pack.source, pack)].sort((a, b) => b.from.length - a.from.length);
-  let next = html;
+  let next = withoutScripts;
   const seen = new Set<string>();
   for (const { from, to } of swaps) {
     if (seen.has(from) || isTemplateLabel(to)) continue;
@@ -312,7 +317,7 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
     const encoded = from.replace(/&/g, '&amp;');
     if (encoded !== from) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
   }
-  return next;
+  return next.replace(/<!--FINTOKE_SCRIPT_(\d+)-->/g, (_, index) => scripts[Number(index)] || '');
 }
 
 export function renderFastPreviewHtml(
