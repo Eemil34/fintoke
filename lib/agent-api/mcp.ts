@@ -47,6 +47,7 @@ import {
 } from '@/lib/templates/fastFill';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
+import { hasStaticExport } from '@/lib/templates/staticSite';
 
 const PROTOCOL_VERSIONS = new Set(['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25']);
 
@@ -500,11 +501,13 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       let filled = null;
       if (fast) {
         const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
-        const warming = resolvedTemplate
-          ? previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
-              console.warn('[mcp] Template preview start skipped:', error);
-            })
-          : Promise.resolve();
+        const staticReady = resolvedTemplate ? await hasStaticExport(resolvedTemplate) : false;
+        const warming =
+          resolvedTemplate && !staticReady
+            ? previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
+                console.warn('[mcp] Template preview start skipped:', error);
+              })
+            : Promise.resolve();
         const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
         filled = await fastFillProjectFromLead({
           projectPath,
@@ -525,7 +528,7 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
           websitePrompt: prompt,
         });
         await warming;
-        if (resolvedTemplate) {
+        if (resolvedTemplate && !staticReady) {
           await previewManager.ensureSharedReady(resolvedTemplate, 40_000).catch((error) => {
             console.warn('[mcp] Template preview wait skipped:', error);
           });

@@ -5,6 +5,7 @@ import { dataFile, mkdirpSync } from '@/lib/server/paths';
 
 const SNAPSHOTS_DIR = dataFile('templates', 'snapshots');
 const SEED_SNAPSHOTS_DIR = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
+const STATIC_EXPORT_DIR = '.fintoke-static';
 
 const IGNORE_NAMES = new Set([
   'node_modules',
@@ -24,6 +25,7 @@ const IGNORE_NAMES = new Set([
   '.DS_Store',
   'tsconfig.tsbuildinfo',
   '.fintoke-user-snapshot',
+  STATIC_EXPORT_DIR,
 ]);
 
 const USER_SNAPSHOT_MARK = '.fintoke-user-snapshot';
@@ -79,12 +81,20 @@ export async function syncSeedSnapshotsToVolume(): Promise<number> {
     if (!(await directoryHasApp(from))) continue;
     try {
       await fs.access(path.join(to, 'app', 'page.tsx'));
-      continue;
     } catch {
-      // incomplete volume copy
+      await fs.cp(from, to, { recursive: true });
+      copied += 1;
     }
-    await fs.cp(from, to, { recursive: true });
-    copied += 1;
+    if (await isUserVolumeSnapshot(entry.name)) continue;
+    const staticFrom = path.join(from, STATIC_EXPORT_DIR);
+    try {
+      await fs.access(path.join(staticFrom, 'index.html'));
+      const staticTo = path.join(to, STATIC_EXPORT_DIR);
+      await fs.rm(staticTo, { recursive: true, force: true });
+      await fs.cp(staticFrom, staticTo, { recursive: true });
+    } catch {
+      // seed has no frozen HTML yet
+    }
   }
   return copied;
 }
@@ -230,6 +240,10 @@ export async function writeProjectSnapshot(templateId: string, projectPath: stri
   await rewritePackageName(destination, templateId);
   await normalizeGeneratedProject(destination);
   await markUserVolumeSnapshot(templateId);
+  const { exportSnapshotStatic } = await import('./exportStatic');
+  void exportSnapshotStatic(destination).catch((error) => {
+    console.warn('[snapshot] Static export skipped:', error);
+  });
   return count;
 }
 
@@ -263,5 +277,14 @@ export async function duplicateProjectSnapshot(fromId: string, toId: string): Pr
   await copyDirectory(source, destination);
   await rewritePackageName(destination, toId);
   await normalizeGeneratedProject(destination);
+  const staticFrom = path.join(source, STATIC_EXPORT_DIR);
+  try {
+    await fs.access(path.join(staticFrom, 'index.html'));
+    const staticTo = path.join(destination, STATIC_EXPORT_DIR);
+    await fs.rm(staticTo, { recursive: true, force: true });
+    await fs.cp(staticFrom, staticTo, { recursive: true });
+  } catch {
+    // source has no frozen HTML yet
+  }
   return true;
 }

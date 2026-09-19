@@ -16,6 +16,7 @@ import { fastFillProjectFromLead } from '@/lib/templates/fastFill';
 import { previewManager } from '@/lib/services/preview';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
+import { hasStaticExport } from '@/lib/templates/staticSite';
 import { getSerializedAgentSite } from '@/lib/agent-api/serialize';
 import { getAgentWorkspaceSnapshot } from '@/lib/agent-api/workspaceAccess';
 import { appOrigin } from '@/lib/agent-api/http';
@@ -214,9 +215,11 @@ async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnTy
     });
     const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
     const resolvedTemplate = template?.id ? await resolveSnapshotTemplateId(template.id) : '';
-    const warming = resolvedTemplate
-      ? previewManager.startSharedTemplate(resolvedTemplate).catch(() => undefined)
-      : Promise.resolve();
+    const staticReady = resolvedTemplate ? await hasStaticExport(resolvedTemplate) : false;
+    const warming =
+      resolvedTemplate && !staticReady
+        ? previewManager.startSharedTemplate(resolvedTemplate).catch(() => undefined)
+        : Promise.resolve();
     const filled = await fastFillProjectFromLead({
       projectPath,
       lead,
@@ -224,7 +227,7 @@ async function startSiteForLead(job: WorkspaceAutomation, lead: Awaited<ReturnTy
       country: job.country,
     });
     await warming;
-    if (resolvedTemplate) {
+    if (resolvedTemplate && !staticReady) {
       await previewManager.ensureSharedReady(resolvedTemplate, 40_000).catch(() => undefined);
     }
     const shareUrl = sharePreviewUrl(projectId);

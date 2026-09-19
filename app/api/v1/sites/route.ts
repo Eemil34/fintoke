@@ -20,6 +20,7 @@ import { AgentApiError } from '@/lib/agent-api/keys';
 import { fastFillProjectFromLead, leadFromSiteBrief, wantsFastTrack } from '@/lib/templates/fastFill';
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
+import { hasStaticExport } from '@/lib/templates/staticSite';
 
 export function OPTIONS() {
   return agentOptions();
@@ -87,11 +88,13 @@ export async function POST(request: NextRequest) {
     let filled = null;
     if (fast) {
       const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
-      const warming = resolvedTemplate
-        ? previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
-            console.warn('[sites] Template preview start skipped:', error);
-          })
-        : Promise.resolve();
+      const staticReady = resolvedTemplate ? await hasStaticExport(resolvedTemplate) : false;
+      const warming =
+        resolvedTemplate && !staticReady
+          ? previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
+              console.warn('[sites] Template preview start skipped:', error);
+            })
+          : Promise.resolve();
       const projectPath = await resolveAndPersistProjectWorkspace(project, project.id);
       filled = await fastFillProjectFromLead({
         projectPath,
@@ -112,7 +115,7 @@ export async function POST(request: NextRequest) {
         websitePrompt: prompt,
       });
       await warming;
-      if (resolvedTemplate) {
+      if (resolvedTemplate && !staticReady) {
         await previewManager.ensureSharedReady(resolvedTemplate, 40_000).catch((error) => {
           console.warn('[sites] Template preview wait skipped:', error);
         });
