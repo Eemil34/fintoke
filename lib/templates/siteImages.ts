@@ -219,7 +219,8 @@ export function SiteImage({
       width={fill ? undefined : width ?? 1600}
       height={fill ? undefined : height ?? 900}
       className={fill ? \`absolute inset-0 h-full w-full object-cover \${className}\` : className}
-      loading={priority ? 'eager' : 'lazy'}
+      loading="eager"
+      fetchPriority={priority ? 'high' : 'auto'}
       decoding="async"
       referrerPolicy="origin"
       onError={() => setIndex((current) => Math.min(current + 1, sources.length - 1))}

@@ -203,8 +203,8 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
           text = applyCopyToHtml(text, packed);
         }
         if (type.includes('text/html')) {
-          text = prioritizeLcpImage(
-            protectPreviewPhotos(
+          text = protectPreviewPhotos(
+            prioritizeLcpImage(
               text
                 .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
                 .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '')
