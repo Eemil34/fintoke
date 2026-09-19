@@ -133,45 +133,35 @@ export function disableImagePatcher(source: string): string {
     .replace(/removeAttribute\("srcset"\)/g, 'getAttribute("srcset")')
     .replace(/dataset\.clbReliable="1",[a-z]\.src=e/g, 'dataset.clbReliable="1"')
     .replace(/[a-z]\.src=e;return/g, 'return')
-    .replace(/dataset\.clbFallback="1",[a-z]\.src=/g, 'dataset.clbFallback="1";0&&')
-    .replace(/\?["']eager["']\s*:\s*["']lazy["']/g, '?"eager":"eager"')
-    .replace(/loading:\s*["']lazy["']/g, 'loading:"eager"')
-    .replace(/loading=["']lazy["']/g, 'loading="eager"');
-}
-
-export function protectPreviewPhotos(html: string): string {
-  const script =
-    '<script>(function(){try{var bad=/photo-1497366216548-37526070297c/;var desc=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,"src");if(desc&&desc.set){Object.defineProperty(HTMLImageElement.prototype,"src",{configurable:true,enumerable:desc.enumerable,get:desc.get,set:function(v){if(typeof v==="string"&&bad.test(v))return;desc.set.call(this,v);}});}var setAttr=Element.prototype.setAttribute;Element.prototype.setAttribute=function(name,value){if(this instanceof HTMLImageElement&&String(name).toLowerCase()==="src"&&bad.test(String(value)))return;return setAttr.apply(this,arguments);};}catch(e){}})();</script>';
-  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${script}</head>`);
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${script}`);
-  return `${script}${html}`;
+    .replace(/dataset\.clbFallback="1",[a-z]\.src=/g, 'dataset.clbFallback="1";0&&');
 }
 
 export function prioritizeLcpImage(html: string): string {
-  let count = 0;
-  let next = html.replace(/<img\b([^>]*)>/gi, (full, attrs: string) => {
-    count += 1;
-    if (count > 4) return full;
+  let next = html.replace(/<img\b([^>]*)>/i, (_full, attrs: string) => {
     const cleaned = attrs
       .replace(/\sloading=["'][^"']*["']/gi, '')
       .replace(/\sfetchpriority=["'][^"']*["']/gi, '')
       .replace(/\sfetchPriority=["'][^"']*["']/gi, '');
-    const prio = count === 1 ? 'high' : 'auto';
-    return `<img loading="eager" fetchpriority="${prio}" decoding="async"${cleaned}>`;
+    return `<img loading="eager" fetchpriority="high" decoding="async"${cleaned}>`;
   });
-  const urls = [
-    ...next.matchAll(/https:\/\/images\.unsplash\.com\/photo-[a-zA-Z0-9-]+[^"'<>\s]*/g),
-  ]
-    .map((match) => match[0].replace(/&amp;/g, '&').replace(/&quot;/g, ''))
-    .filter((url, index, all) => all.indexOf(url) === index)
-    .slice(0, 4);
+  const unsplash = [...next.matchAll(/https:\/\/images\.unsplash\.com\/photo-[a-zA-Z0-9-]+[^"'<>\s]*/g)].map((match) =>
+    match[0].replace(/&amp;/g, '&'),
+  );
+  let hero = unsplash[0] || next.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || '';
+  for (const url of unsplash) {
+    try {
+      const width = Number(new URL(url).searchParams.get('w') || '0');
+      const heroWidth = hero ? Number(new URL(hero).searchParams.get('w') || '0') : 0;
+      if (width > heroWidth) hero = url;
+    } catch {
+      // keep current
+    }
+  }
   const links = [
-    '<link rel="preconnect" href="https://images.unsplash.com" />',
-    '<link rel="dns-prefetch" href="https://images.unsplash.com" />',
-    ...urls.map(
-      (url) =>
-        `<link rel="preload" as="image" href="${url.replace(/&/g, '&amp;')}" fetchpriority="high" />`,
-    ),
+    '<link rel="preconnect" href="https://images.unsplash.com" crossorigin />',
+    hero
+      ? `<link rel="preload" as="image" href="${hero.replace(/&/g, '&amp;')}" fetchpriority="high" />`
+      : '',
   ].join('');
   if (/<head[^>]*>/i.test(next)) next = next.replace(/<head[^>]*>/i, (open) => `${open}${links}`);
   return next;

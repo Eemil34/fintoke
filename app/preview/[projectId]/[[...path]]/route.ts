@@ -6,7 +6,7 @@ import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { applyCopyToHtml, ensureCopySwaps, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
-import { disableImagePatcher, prioritizeLcpImage, protectPreviewPhotos, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
+import { prioritizeLcpImage, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
 
 export const runtime = 'nodejs';
@@ -197,26 +197,23 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       const rewriteText = type.includes('text/html') || type.includes('text/css') || type.includes('javascript');
       if (rewriteText) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
-        text = disableImagePatcher(text);
         if (copyPack && type.includes('text/html')) {
           const packed = await ensureCopySwaps(copyPack);
           text = applyCopyToHtml(text, packed);
         }
         if (type.includes('text/html')) {
-          text = protectPreviewPhotos(
-            prioritizeLcpImage(
-              text
-                .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
-                .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '')
-                .replace(/<img\b/gi, '<img referrerpolicy="origin"'),
-            ),
+          text = prioritizeLcpImage(
+            text
+              .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
+              .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '')
+              .replace(/<img\b/gi, '<img referrerpolicy="origin"'),
           );
         }
         body = text;
       }
       const headers = previewSecurityHeaders(new Headers());
       headers.set('content-type', type);
-      headers.set('cache-control', 'no-store');
+      headers.set('cache-control', type.includes('text/html') ? 'no-store' : 'public, max-age=86400, immutable');
       const payload: BodyInit = typeof body === 'string' ? body : new Uint8Array(body);
       return new Response(payload, { status: 200, headers });
     }
@@ -351,7 +348,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       const packed = await ensureCopySwaps(copyPack);
       body = applyCopyToHtml(body, packed);
     }
-    body = protectPreviewPhotos(disableImagePatcher(body));
+    body = prioritizeLcpImage(body);
     out.delete('content-length');
     return new Response(body, { status: upstream.status, headers: out });
   }
