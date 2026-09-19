@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { npmInstallEnv, reclaimVolumeSpaceSync } from '@/lib/server/volumeCleanup';
 import { GENERATED_IMAGES_CONFIG } from './siteImages';
 import { STATIC_EXPORT_DIR } from './staticSite';
 
@@ -57,15 +58,19 @@ export async function exportSnapshotStatic(snapshotPath: string): Promise<string
   try {
     await copyTree(snapshotPath, work);
     await fs.writeFile(path.join(work, 'next.config.js'), EXPORT_CONFIG);
-    await run('npm', ['install', '--include=dev', '--no-audit', '--no-fund'], work, {
+    reclaimVolumeSpaceSync();
+    const exportEnv = npmInstallEnv({
       ...process.env,
-      NODE_ENV: 'development',
+      TMPDIR: os.tmpdir(),
       NEXT_TELEMETRY_DISABLED: '1',
     });
+    await run('npm', ['install', '--include=dev', '--no-audit', '--no-fund'], work, {
+      ...exportEnv,
+      NODE_ENV: 'development',
+    });
     await run('npx', ['next', 'build'], work, {
-      ...process.env,
+      ...exportEnv,
       NODE_ENV: 'production',
-      NEXT_TELEMETRY_DISABLED: '1',
     });
     const generated = path.join(work, 'out');
     await fs.access(path.join(generated, 'index.html'));
@@ -80,7 +85,23 @@ export async function exportSnapshotStatic(snapshotPath: string): Promise<string
 
 const inFlight = new Map<string, Promise<boolean>>();
 const lastFailAt = new Map<string, number>();
+const lastErrors = new Map<string, { at: string; message: string }>();
 const FAIL_COOLDOWN_MS = 10 * 60 * 1000;
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message.slice(-800);
+  return String(error).slice(-800);
+}
+
+export function staticFreezeStatus(): {
+  running: string[];
+  lastErrors: Record<string, { at: string; message: string }>;
+} {
+  return {
+    running: [...inFlight.keys()],
+    lastErrors: Object.fromEntries(lastErrors.entries()),
+  };
+}
 
 export async function ensureTemplateStatic(templateId: string): Promise<boolean> {
   const existing = inFlight.get(templateId);
@@ -97,8 +118,10 @@ export async function ensureTemplateStatic(templateId: string): Promise<boolean>
     try {
       await exportSnapshotStatic(dir);
       lastFailAt.delete(templateId);
+      lastErrors.delete(templateId);
     } catch (error) {
       lastFailAt.set(templateId, Date.now());
+      lastErrors.set(templateId, { at: new Date().toISOString(), message: errorMessage(error) });
       throw error;
     }
     return hasStaticExport(templateId);

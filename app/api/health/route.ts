@@ -7,9 +7,9 @@ import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 import { listEmails, listPeople } from '@/lib/services/workspace';
 import { syncSeedSnapshotsToVolume } from '@/lib/templates/snapshot';
-import { scheduleMissingStaticExports } from '@/lib/templates/exportStatic';
+import { scheduleMissingStaticExports, staticFreezeStatus } from '@/lib/templates/exportStatic';
 
-const RELEASE = '2026-09-19-freeze-4';
+const RELEASE = '2026-09-19-freeze-4b';
 
 export async function GET() {
   void syncSeedSnapshotsToVolume().catch(() => undefined);
@@ -43,11 +43,18 @@ export async function GET() {
     volumeTemplates = [];
   }
 
+  const volumeHasApp = volumeTemplates.filter((id) =>
+    fs.existsSync(path.join(snapshotsRoot, id, 'app', 'page.tsx')),
+  );
+  const seedStaticReady = savedTemplates.filter((id) =>
+    fs.existsSync(path.join(seed, id, '.fintoke-static', 'index.html')),
+  );
   const staticReady = volumeTemplates.filter((id) =>
     fs.existsSync(path.join(snapshotsRoot, id, '.fintoke-static', 'index.html')),
   );
   const staticPending = volumeTemplates.filter((id) => !staticReady.includes(id));
-  scheduleMissingStaticExports(staticPending.filter((id) => /^restaurant-4/.test(id)));
+  scheduleMissingStaticExports(volumeHasApp.filter((id) => /^restaurant-4/.test(id) && !staticReady.includes(id)));
+  const staticFreeze = staticFreezeStatus();
 
   let projectCount = 0;
   try {
@@ -99,8 +106,11 @@ export async function GET() {
         emailCount,
         peopleCount,
         volumeTemplates,
+        volumeHasApp,
+        seedStaticReady,
         staticReady,
         staticPending,
+        staticFreeze,
         disk,
         databaseUrl: (process.env.DATABASE_URL || '').replace(/\/\/.*@/, '//***@'),
         secrets: {
