@@ -48,6 +48,7 @@ import {
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { hasStaticExport } from '@/lib/templates/staticSite';
+import { ensureTemplateStatic } from '@/lib/templates/exportStatic';
 
 const PROTOCOL_VERSIONS = new Set(['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25']);
 
@@ -501,7 +502,13 @@ async function callTool(request: NextRequest, name: string, args: Record<string,
       let filled = null;
       if (fast) {
         const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
-        const staticReady = resolvedTemplate ? await hasStaticExport(resolvedTemplate) : false;
+        let staticReady = resolvedTemplate ? await hasStaticExport(resolvedTemplate) : false;
+        if (resolvedTemplate && !staticReady) {
+          staticReady = await ensureTemplateStatic(resolvedTemplate).catch((error) => {
+            console.warn('[mcp] Static export skipped:', error);
+            return false;
+          });
+        }
         const warming =
           resolvedTemplate && !staticReady
             ? previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {

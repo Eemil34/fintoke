@@ -14,7 +14,6 @@ const nextConfig = {
   outputFileTracingRoot: path.join(__dirname),
   ${GENERATED_IMAGES_CONFIG},
   typescript: { ignoreBuildErrors: true },
-  eslint: { ignoreDuringBuilds: true },
 };
 
 module.exports = nextConfig;
@@ -77,4 +76,14 @@ export async function exportSnapshotStatic(snapshotPath: string): Promise<string
   } finally {
     await fs.rm(work, { recursive: true, force: true }).catch(() => undefined);
   }
+}
+
+export async function ensureTemplateStatic(templateId: string): Promise<boolean> {
+  const { hasStaticExport } = await import('./staticSite');
+  const { resolveSnapshotDir } = await import('./snapshot');
+  if (await hasStaticExport(templateId)) return true;
+  const dir = await resolveSnapshotDir(templateId);
+  if (!dir) return false;
+  await exportSnapshotStatic(dir);
+  return hasStaticExport(templateId);
 }

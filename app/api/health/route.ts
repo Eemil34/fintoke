@@ -6,10 +6,12 @@ import { volumeDiskInfo } from '@/lib/server/volumeCleanup';
 import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 import { listEmails, listPeople } from '@/lib/services/workspace';
+import { syncSeedSnapshotsToVolume } from '@/lib/templates/snapshot';
 
-const RELEASE = '2026-09-19-static-preview';
+const RELEASE = '2026-09-19-static-all';
 
 export async function GET() {
+  void syncSeedSnapshotsToVolume().catch(() => undefined);
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
   const volume = volumeDataDir();
   const dataDir = writableDataDir();

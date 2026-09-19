@@ -21,6 +21,7 @@ import { fastFillProjectFromLead, leadFromSiteBrief, wantsFastTrack } from '@/li
 import { resolveAndPersistProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { hasStaticExport } from '@/lib/templates/staticSite';
+import { ensureTemplateStatic } from '@/lib/templates/exportStatic';
 
 export function OPTIONS() {
   return agentOptions();
@@ -88,7 +89,13 @@ export async function POST(request: NextRequest) {
     let filled = null;
     if (fast) {
       const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
-      const staticReady = resolvedTemplate ? await hasStaticExport(resolvedTemplate) : false;
+      let staticReady = resolvedTemplate ? await hasStaticExport(resolvedTemplate) : false;
+      if (resolvedTemplate && !staticReady) {
+        staticReady = await ensureTemplateStatic(resolvedTemplate).catch((error) => {
+          console.warn('[sites] Static export skipped:', error);
+          return false;
+        });
+      }
       const warming =
         resolvedTemplate && !staticReady
           ? previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
