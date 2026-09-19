@@ -143,3 +143,16 @@ export function sterilizeStaticHtml(html: string): string {
     .replace(/<link\b[^>]*as=["']script["'][^>]*>/gi, '')
     .replace(/<link\b[^>]*rel=["'](?:modulepreload|preload)["'][^>]*as=["']script["'][^>]*>/gi, '');
 }
+
+export function showStaticContent(html: string): string {
+  const css =
+    '<style id="fintoke-show">.reveal,.reveal-up,.reveal-left,.reveal-right,.reveal-scale,.reveal-in,[class*="reveal-"],[data-reveal]{opacity:1!important;transform:none!important;visibility:visible!important;animation:none!important;filter:none!important}.hero-copy>*,.site-header,main,section{opacity:1!important;transform:none!important;visibility:visible!important}</style>';
+  const js =
+    '<script>document.documentElement.classList.add("hydrated","js");document.querySelectorAll(".reveal,[data-reveal]").forEach(function(el){el.classList.add("is-visible","reveal-in");});</script>';
+  let next = html;
+  if (/<head[^>]*>/i.test(next)) next = next.replace(/<head[^>]*>/i, (open) => `${open}${css}`);
+  else next = `${css}${next}`;
+  if (/<\/body>/i.test(next)) next = next.replace(/<\/body>/i, `${js}</body>`);
+  else next = `${next}${js}`;
+  return next;
+}

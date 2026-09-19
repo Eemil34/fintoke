@@ -6,7 +6,7 @@ import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { applyCopyToHtml, ensureCopySwaps, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
-import { disableImagePatcher, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls, sterilizeStaticHtml } from '@/lib/templates/staticSite';
+import { disableImagePatcher, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls, showStaticContent, sterilizeStaticHtml } from '@/lib/templates/staticSite';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
 
 export const runtime = 'nodejs';
@@ -203,11 +203,13 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
           text = applyCopyToHtml(text, packed);
         }
         if (type.includes('text/html')) {
-          text = sterilizeStaticHtml(
-            text
-              .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
-              .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '')
-              .replace(/<img\b/gi, '<img referrerpolicy="origin"'),
+          text = showStaticContent(
+            sterilizeStaticHtml(
+              text
+                .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
+                .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '')
+                .replace(/<img\b/gi, '<img referrerpolicy="origin"'),
+            ),
           );
         }
         body = text;
