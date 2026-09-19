@@ -6,7 +6,7 @@ import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { applyCopyToHtml, ensureCopySwaps, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
-import { disableImagePatcher, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
+import { disableImagePatcher, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls, sterilizeStaticHtml } from '@/lib/templates/staticSite';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
 
 export const runtime = 'nodejs';
@@ -174,6 +174,18 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         if (/^https?:\/\//i.test(decoded)) {
           return Response.redirect(decoded, 302);
         }
+        if (decoded.startsWith('/')) {
+          const local = await readStaticExportFile(
+            staticRoot,
+            decoded.split('/').filter(Boolean),
+          );
+          if (local) {
+            const headers = previewSecurityHeaders(new Headers());
+            headers.set('content-type', local.contentType);
+            headers.set('cache-control', 'no-store');
+            return new Response(new Uint8Array(local.body), { status: 200, headers });
+          }
+        }
       } catch {
         // fall through
       }
@@ -191,9 +203,12 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
           text = applyCopyToHtml(text, packed);
         }
         if (type.includes('text/html')) {
-          text = text
-            .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
-            .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '');
+          text = sterilizeStaticHtml(
+            text
+              .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
+              .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '')
+              .replace(/<img\b/gi, '<img referrerpolicy="origin"'),
+          );
         }
         body = text;
       }

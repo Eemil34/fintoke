@@ -93,18 +93,22 @@ export async function readStaticExportFile(
 
 export function rewriteStaticUrls(source: string, prefix: string): string {
   const base = prefix.replace(/\/$/, '');
-  return unwrapNextImageUrls(
-    source
-      .replace(/(["'`(=])\/_next\//g, `$1${base}/_next/`)
-      .replace(/(\s(?:href|src|srcset|srcSet|action))="([^"]*)"/gi, (_, attr: string, value: string) => {
-        const next = value.replace(/(^|[\s,])\/(?!\/|preview\/)/g, `$1${base}/`);
-        return `${attr}="${next}"`;
-      })
-      .replace(/url\(\s*(['"]?)\/(?!\/|preview\/)/g, `url($1${base}/`),
-  );
+  const prefixed = source
+    .replace(/(["'`(=])\/_next\//g, `$1${base}/_next/`)
+    .replace(/(\s(?:href|src|srcset|srcSet|action))="([^"]*)"/gi, (_, attr: string, value: string) => {
+      const next = value.replace(/(^|[\s,])\/(?!\/|preview\/)/g, `$1${base}/`);
+      return `${attr}="${next}"`;
+    })
+    .replace(/url\(\s*(['"]?)\/(?!\/|preview\/)/g, `url($1${base}/`)
+    .replace(/(["'`])(\/(?:images|uploads|photos|img|assets|public)\/[^"'`]+)/g, (full, quote: string, url: string) => {
+      if (url.startsWith(`${base}/`)) return full;
+      return `${quote}${base}${url}`;
+    });
+  return unwrapNextImageUrls(prefixed, base);
 }
 
-export function unwrapNextImageUrls(source: string): string {
+export function unwrapNextImageUrls(source: string, prefix = ''): string {
+  const base = prefix.replace(/\/$/, '');
   return source.replace(
     /(?:\/preview\/[^/]+)?\/_next\/image\?((?:(?!["'<>\s]).)+)/g,
     (full, query: string) => {
@@ -114,6 +118,7 @@ export function unwrapNextImageUrls(source: string): string {
         if (!url) return full;
         const decoded = decodeURIComponent(url);
         if (/^https?:\/\//i.test(decoded)) return decoded;
+        if (decoded.startsWith('/') && base) return `${base}${decoded}`;
       } catch {
         // keep original
       }
@@ -124,8 +129,17 @@ export function unwrapNextImageUrls(source: string): string {
 
 export function disableImagePatcher(source: string): string {
   return source
+    .replace(/https:\/\/images\.unsplash\.com\/photo-1497366216548-37526070297c[^"'`\s]*/g, '')
     .replace(/removeAttribute\("srcset"\)/g, 'getAttribute("srcset")')
     .replace(/dataset\.clbReliable="1",[a-z]\.src=e/g, 'dataset.clbReliable="1"')
     .replace(/[a-z]\.src=e;return/g, 'return')
     .replace(/dataset\.clbFallback="1",[a-z]\.src=/g, 'dataset.clbFallback="1";0&&');
+}
+
+export function sterilizeStaticHtml(html: string): string {
+  return html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<script\b[^>]*\/>/gi, '')
+    .replace(/<link\b[^>]*as=["']script["'][^>]*>/gi, '')
+    .replace(/<link\b[^>]*rel=["'](?:modulepreload|preload)["'][^>]*as=["']script["'][^>]*>/gi, '');
 }
