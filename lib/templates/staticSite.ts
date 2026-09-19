@@ -142,3 +142,25 @@ export function protectPreviewPhotos(html: string): string {
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${script}`);
   return `${script}${html}`;
 }
+
+export function prioritizeLcpImage(html: string): string {
+  let count = 0;
+  let next = html.replace(/<img\b([^>]*)>/gi, (full, attrs: string) => {
+    count += 1;
+    if (count > 2) return full;
+    const cleaned = attrs
+      .replace(/\sloading=["'][^"']*["']/gi, '')
+      .replace(/\sfetchpriority=["'][^"']*["']/gi, '')
+      .replace(/\sfetchPriority=["'][^"']*["']/gi, '');
+    const prio = count === 1 ? 'high' : 'auto';
+    return `<img loading="eager" fetchpriority="${prio}" decoding="async"${cleaned}>`;
+  });
+  const src = next.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
+  if (src && /unsplash|\.(?:jpe?g|png|webp|avif)/i.test(src)) {
+    const href = src.replace(/&/g, '&amp;');
+    if (!next.includes(`href="${href}"`) || !/rel=["']preload["'][^>]*as=["']image["']/i.test(next)) {
+      next = next.replace(/<head[^>]*>/i, (open) => `${open}<link rel="preload" as="image" href="${href}" fetchpriority="high" />`);
+    }
+  }
+  return next;
+}
