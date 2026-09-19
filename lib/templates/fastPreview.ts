@@ -313,7 +313,9 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
     .replace(/<source\b[^>]*>/gi, hold)
     .replace(/url\(\s*(['"]?)[^)]+\)/gi, hold)
     .replace(/\s(?:src|srcset|srcSet|poster|data-src|data-bg)=["'][^"']*["']/gi, hold);
-  const swaps = [...buildCopySwaps(pack.source, pack)].sort((a, b) => b.from.length - a.from.length);
+  const swaps = [...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack))].sort(
+    (a, b) => b.from.length - a.from.length,
+  );
   const seen = new Set<string>();
   for (const { from, to } of swaps) {
     if (seen.has(from) || isTemplateLabel(to)) continue;
@@ -324,6 +326,26 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
     if (encoded !== from) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
   }
   return next.replace(/<!--FINTOKE_HOLD_(\d+)-->/g, (_, index) => held[Number(index)] || '');
+}
+
+export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string {
+  const swaps = [...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack))]
+    .filter(
+      (row) =>
+        row.from &&
+        row.to &&
+        row.from !== row.to &&
+        row.from.length >= 4 &&
+        !row.to.includes(row.from) &&
+        !/unsplash|photo-[a-z0-9-]+/i.test(row.from),
+    )
+    .sort((a, b) => b.from.length - a.from.length)
+    .slice(0, 80)
+    .map((row) => [row.from, row.to]);
+  if (!swaps.length) return html;
+  const script = `<script>(function(){var s=${JSON.stringify(swaps)};var skip={SCRIPT:1,STYLE:1,NOSCRIPT:1,TEXTAREA:1};function run(){function walk(n){if(!n)return;if(n.nodeType===3){var t=n.nodeValue,o=t;if(!t)return;for(var i=0;i<s.length;i++){if(t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}if(t!==o)n.nodeValue=t;return;}if(n.nodeType===1&&!skip[n.tagName]){for(var c=n.firstChild;c;c=c.nextSibling)walk(c);}}walk(document.body);var title=document.title;if(title){for(var i=0;i<s.length;i++)title=title.split(s[i][0]).join(s[i][1]);if(title!==document.title)document.title=title;}}run();document.addEventListener("DOMContentLoaded",run);window.addEventListener("load",run);[50,250,800].forEach(function(ms){setTimeout(run,ms);});try{new MutationObserver(run).observe(document.documentElement,{subtree:true,childList:true,characterData:true});}catch(e){}})();</script>`;
+  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}</body>`);
+  return `${html}${script}`;
 }
 
 export function renderFastPreviewHtml(

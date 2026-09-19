@@ -4,7 +4,7 @@ import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { applyCopyToHtml, ensureCopySwaps, readFastCopy } from '@/lib/templates/fastPreview';
+import { applyCopyToHtml, ensureCopySwaps, injectLiveCopyOverlay, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { prioritizeLcpImage, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
@@ -199,7 +199,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (copyPack && type.includes('text/html')) {
           const packed = await ensureCopySwaps(copyPack);
-          text = applyCopyToHtml(text, packed);
+          text = injectLiveCopyOverlay(applyCopyToHtml(text, packed), packed);
         }
         if (type.includes('text/html')) {
           text = prioritizeLcpImage(
@@ -346,7 +346,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     let body = rewriteHtml(await upstream.text(), prefix, preview.port);
     if (copyPack) {
       const packed = await ensureCopySwaps(copyPack);
-      body = applyCopyToHtml(body, packed);
+      body = injectLiveCopyOverlay(applyCopyToHtml(body, packed), packed);
     }
     body = prioritizeLcpImage(body);
     out.delete('content-length');
