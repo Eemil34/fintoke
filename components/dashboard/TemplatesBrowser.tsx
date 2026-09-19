@@ -15,15 +15,16 @@ import {
 export default function TemplatesBrowser() {
   const { templates, loading, error, reload } = useTemplates();
   const [category, setCategory] = useState<TemplateCategoryId | 'all'>('all');
+  const [speed, setSpeed] = useState<'all' | 'fast' | 'slow'>('all');
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const filtered = useMemo(
-    () =>
-      category === 'all'
-        ? templates
-        : templates.filter((template) => template.category === category),
-    [category, templates],
-  );
+  const filtered = useMemo(() => {
+    const byCategory =
+      category === 'all' ? templates : templates.filter((template) => template.category === category);
+    if (speed === 'fast') return byCategory.filter((template) => template.fastPreview);
+    if (speed === 'slow') return byCategory.filter((template) => !template.fastPreview);
+    return byCategory;
+  }, [category, speed, templates]);
 
   const customCount = templates.filter((template) => template.origin === 'user').length;
   const yours = filtered.filter((template) => template.origin === 'user');
@@ -58,7 +59,7 @@ export default function TemplatesBrowser() {
     <div className="mx-auto max-w-6xl px-6 py-8">
       <DashboardPageHeader
         title="Templates"
-        description="Saved generated sites you can start from again, plus built-in starters. Assign a category, or delete ones you do not use."
+        description="Saved generated sites you can start from again. Instant templates open Fast Track share links immediately; Slow first load still has to freeze on the first client open."
         actions={
           <Link
             href="/dashboard/templates/new"
@@ -92,6 +93,29 @@ export default function TemplatesBrowser() {
         ))}
       </div>
 
+      <div className="mb-6 flex flex-wrap gap-2">
+        {(
+          [
+            { id: 'all', label: 'All speeds' },
+            { id: 'fast', label: 'Instant' },
+            { id: 'slow', label: 'Slow first load' },
+          ] as const
+        ).map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setSpeed(item.id)}
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
+              speed === item.id
+                ? 'bg-gray-900 text-white'
+                : 'bg-white text-gray-600 ring-1 ring-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
       {loading ? <p className="text-sm text-gray-500">Loading…</p> : null}
 
       {yours.length > 0 ? (
@@ -121,6 +145,15 @@ export default function TemplatesBrowser() {
                   <p className="truncate text-[11px] font-medium">{template.brand.name}</p>
                   <p className="truncate text-[10px] opacity-70">{template.hero.title}</p>
                 </div>
+                <span
+                  className={`absolute left-2 top-2 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                    template.fastPreview
+                      ? 'bg-emerald-50 text-emerald-800'
+                      : 'bg-amber-50 text-amber-800'
+                  }`}
+                >
+                  {template.fastPreview ? 'Instant' : 'Slow first load'}
+                </span>
                 {template.origin === 'user' ? (
                   <span className="absolute right-2 top-2 rounded-full bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-gray-700">
                     Yours

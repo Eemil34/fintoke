@@ -11,6 +11,7 @@ import {
   snapshotHasApp,
   writeProjectSnapshot,
 } from './snapshot';
+import { hasStaticExport } from './staticSite';
 import type { ManagedTemplate, TemplateKind, WebsiteTemplate } from './types';
 import { sanitizeWebsiteTemplate, slugifyTemplateId } from './validate';
 import { dataFile } from '@/lib/server/paths';
@@ -218,6 +219,7 @@ async function toManaged(
   origin: ManagedTemplate['origin'] = 'pack',
 ): Promise<ManagedTemplate> {
   const hasSnapshot = await snapshotHasApp(template.id);
+  const fastPreview = hasSnapshot ? await hasStaticExport(template.id) : false;
   return {
     ...template,
     source,
@@ -226,6 +228,7 @@ async function toManaged(
     sourceProjectId: extras.sourceProjectId ?? null,
     sourceUrl: extras.sourceUrl ?? null,
     hasSnapshot,
+    fastPreview,
     origin,
     savedAt: extras.savedAt ?? null,
   };

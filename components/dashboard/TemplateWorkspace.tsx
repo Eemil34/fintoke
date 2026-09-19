@@ -270,6 +270,14 @@ export default function TemplateWorkspace({ templateId }: { templateId: string }
               </div>
             ) : null}
             <div className="flex gap-2">
+              <dt className="w-28 shrink-0 text-gray-400">Preview</dt>
+              <dd>
+                {template.fastPreview
+                  ? 'Instant — Fast Track share links open immediately'
+                  : 'Slow first load — this template still compiles until it is frozen'}
+              </dd>
+            </div>
+            <div className="flex gap-2">
               <dt className="w-28 shrink-0 text-gray-400">Files</dt>
               <dd>{template.hasSnapshot ? 'Ready to copy into new sites' : 'Starter layout generated on create'}</dd>
             </div>

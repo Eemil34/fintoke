@@ -185,6 +185,7 @@ export interface ManagedTemplate extends WebsiteTemplate {
   sourceProjectId?: string | null;
   sourceUrl?: string | null;
   hasSnapshot: boolean;
+  fastPreview?: boolean;
   origin?: 'user' | 'pack';
   savedAt?: string | null;
 }
