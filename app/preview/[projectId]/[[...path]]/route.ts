@@ -106,6 +106,8 @@ function lockPreviewImages(html: string): string {
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${script}`);
   return `${script}${html}`;
 }
+
+function previewSecurityHeaders(headers: Headers) {
   headers.delete('set-cookie');
   headers.set('x-robots-tag', 'noindex, nofollow');
   headers.set('referrer-policy', 'strict-origin-when-cross-origin');
@@ -328,6 +330,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       const packed = await ensureCopySwaps(copyPack);
       body = applyCopyToHtml(body, packed);
     }
+    body = lockPreviewImages(body);
     out.delete('content-length');
     return new Response(body, { status: upstream.status, headers: out });
   }
