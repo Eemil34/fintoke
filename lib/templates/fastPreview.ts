@@ -313,9 +313,10 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
     .replace(/<source\b[^>]*>/gi, hold)
     .replace(/url\(\s*(['"]?)[^)]+\)/gi, hold)
     .replace(/\s(?:src|srcset|srcSet|poster|data-src|data-bg)=["'][^"']*["']/gi, hold);
-  const swaps = [...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack))].sort(
-    (a, b) => b.from.length - a.from.length,
-  );
+  const swaps = [
+    ...buildHtmlCopySwaps(next, pack),
+    ...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack)),
+  ].sort((a, b) => b.from.length - a.from.length);
   const seen = new Set<string>();
   for (const { from, to } of swaps) {
     if (seen.has(from) || isTemplateLabel(to)) continue;
@@ -328,22 +329,79 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
   return next.replace(/<!--FINTOKE_HOLD_(\d+)-->/g, (_, index) => held[Number(index)] || '');
 }
 
+function decodeHtmlText(value: string): string {
+  return value
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractTagTexts(html: string, tag: string): string[] {
+  const out: string[] = [];
+  const re = new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)</${tag}>`, 'gi');
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(html))) {
+    const text = decodeHtmlText(match[1]);
+    if (text) out.push(text);
+  }
+  return out;
+}
+
+function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: string; to: string }> {
+  const keep =
+    /^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Our categories|Categories|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|Reserve)$/i;
+  const h1 = extractTagTexts(html, 'h1');
+  const h3 = extractTagTexts(html, 'h3').concat(extractTagTexts(html, 'h4')).filter((text) => !keep.test(text));
+  const paragraphs = extractTagTexts(html, 'p').filter((text) => text.length > 28);
+  const titles = [
+    ...(pack.menu || []).map((item) => item.title),
+    ...(pack.features || []).map((item) => item.title),
+    ...(pack.events || []).map((item) => item.title),
+  ].filter(Boolean);
+  const bodies = [
+    pack.heroSubtitle,
+    ...(pack.aboutColumns || []),
+    pack.description,
+    ...(pack.menu || []).map((item) => item.body),
+    ...(pack.features || []).map((item) => item.body),
+    pack.ctaSubtitle,
+  ].filter(Boolean);
+  const rows: Array<{ from: string; to: string }> = [];
+  if (h1[0] && (pack.heroTitle || pack.name)) rows.push({ from: h1[0], to: pack.heroTitle || pack.name });
+  paragraphs.forEach((from, index) => {
+    if (bodies[index]) rows.push({ from, to: bodies[index] });
+  });
+  h3.forEach((from, index) => {
+    if (titles[index]) rows.push({ from, to: titles[index] });
+  });
+  return rows.filter((row) => row.from && row.to && row.from !== row.to && row.from.length >= 3);
+}
+
 export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string {
-  const swaps = [...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack))]
-    .filter(
-      (row) =>
-        row.from &&
-        row.to &&
-        row.from !== row.to &&
-        row.from.length >= 4 &&
-        !row.to.includes(row.from) &&
-        !/unsplash|photo-[a-z0-9-]+/i.test(row.from),
-    )
-    .sort((a, b) => b.from.length - a.from.length)
-    .slice(0, 80)
-    .map((row) => [row.from, row.to]);
-  if (!swaps.length) return html;
-  const script = `<script>(function(){var s=${JSON.stringify(swaps)};var skip={SCRIPT:1,STYLE:1,NOSCRIPT:1,TEXTAREA:1};function run(){function walk(n){if(!n)return;if(n.nodeType===3){var t=n.nodeValue,o=t;if(!t)return;for(var i=0;i<s.length;i++){if(t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}if(t!==o)n.nodeValue=t;return;}if(n.nodeType===1&&!skip[n.tagName]){for(var c=n.firstChild;c;c=c.nextSibling)walk(c);}}walk(document.body);var title=document.title;if(title){for(var i=0;i<s.length;i++)title=title.split(s[i][0]).join(s[i][1]);if(title!==document.title)document.title=title;}}run();document.addEventListener("DOMContentLoaded",run);window.addEventListener("load",run);[50,250,800].forEach(function(ms){setTimeout(run,ms);});try{new MutationObserver(run).observe(document.documentElement,{subtree:true,childList:true,characterData:true});}catch(e){}})();</script>`;
+  const data = {
+    name: pack.name,
+    eyebrow: pack.eyebrow,
+    heroTitle: pack.heroTitle,
+    heroSubtitle: pack.heroSubtitle,
+    description: pack.description,
+    address: pack.address,
+    phone: pack.phone,
+    email: pack.email,
+    aboutColumns: pack.aboutColumns || [],
+    menu: pack.menu || [],
+    features: pack.features || [],
+    events: pack.events || [],
+    ctaTitle: pack.ctaTitle,
+    ctaSubtitle: pack.ctaSubtitle,
+    ctaButton: pack.ctaButton,
+    footer: pack.footer,
+    mapsUrl: pack.mapsUrl,
+  };
+  const script = `<script>(function(){var p=${JSON.stringify(data)};var KEEP=/^(About|Menu|Home|Gallery|Reservation|Contact|Book Now|Our Menu|Our story|Our categories|Categories|Events|Interior|Hours|Visit|Starters|Mains|Sides|Sweets|Drinks|Features|Pricing|Team|Blog|Reserve)$/i;function set(el,v){if(el&&v)el.textContent=v;}function run(){set(document.querySelector("h1"),p.heroTitle||p.name);document.title=p.name||document.title;var brand=document.querySelector("header a:not([href*='#']) , [class*='brand'], [class*='logo']");if(brand&&p.name&&!brand.querySelector("img")&&(brand.textContent||"").trim().length<48)set(brand,p.name);var hero=document.querySelector("[class*='hero']")||document.body;var heroPs=[].slice.call(hero.querySelectorAll("p")).filter(function(n){return (n.textContent||"").trim().length>24;});if(heroPs[0])set(heroPs[0],p.heroSubtitle||p.description);var longPs=[].slice.call(document.querySelectorAll("p")).filter(function(n){var t=(n.textContent||"").trim();return t.length>46&&n!==heroPs[0];});var bodies=[].concat(p.aboutColumns||[],[p.description],(p.menu||[]).map(function(i){return i.body;}),(p.features||[]).map(function(i){return i.body;}),[p.ctaSubtitle,p.footer]).filter(Boolean);longPs.forEach(function(el,i){if(bodies[i])set(el,bodies[i]);});var titles=[].concat((p.menu||[]).map(function(i){return i.title;}),(p.features||[]).map(function(i){return i.title;}),(p.events||[]).map(function(i){return i.title;})).filter(Boolean);var ti=0;document.querySelectorAll("h3,h4").forEach(function(el){var t=(el.textContent||"").trim();if(!t||KEEP.test(t))return;if(titles[ti])set(el,titles[ti++]);});if(p.ctaTitle){var h2s=[].slice.call(document.querySelectorAll("h2")).filter(function(el){return !KEEP.test((el.textContent||"").trim());});if(h2s[0])set(h2s[h2s.length-1],p.ctaTitle);}if(p.phone)document.querySelectorAll('a[href^="tel:"]').forEach(function(a){a.textContent=p.phone;a.setAttribute("href","tel:"+String(p.phone).replace(/\\s/g,""));});if(p.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){a.textContent=p.email;a.setAttribute("href","mailto:"+p.email);});if(p.mapsUrl)document.querySelectorAll("iframe[src*='map']").forEach(function(f){f.src=p.mapsUrl;});var btn=[].slice.call(document.querySelectorAll("a,button")).find(function(el){return /book|reserv|table|order/i.test(el.textContent||"");});if(btn&&p.ctaButton)set(btn,p.ctaButton);}run();document.addEventListener("DOMContentLoaded",run);window.addEventListener("load",run);[100,400,1000].forEach(function(ms){setTimeout(run,ms);});try{new MutationObserver(function(){run();}).observe(document.documentElement,{subtree:true,childList:true});}catch(e){}})();</script>`;
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}</body>`);
   return `${html}${script}`;
 }
