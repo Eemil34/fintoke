@@ -8,7 +8,7 @@ import { loadMailSettings } from '@/lib/services/mail';
 import { listEmails, listPeople } from '@/lib/services/workspace';
 import { syncSeedSnapshotsToVolume } from '@/lib/templates/snapshot';
 
-const RELEASE = '2026-09-19-static-all';
+const RELEASE = '2026-09-19-static-build';
 
 export async function GET() {
   void syncSeedSnapshotsToVolume().catch(() => undefined);

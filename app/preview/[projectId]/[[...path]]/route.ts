@@ -185,7 +185,8 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     const headers = previewSecurityHeaders(new Headers());
     headers.set('content-type', type);
     headers.set('cache-control', type.includes('text/html') ? 'no-store' : 'public, max-age=86400');
-    return new Response(body, { status: 200, headers });
+    const payload: BodyInit = typeof body === 'string' ? body : new Uint8Array(body);
+    return new Response(payload, { status: 200, headers });
   }
 
   const previewKey = resolvedTemplate ? `tpl:${resolvedTemplate}` : projectId;
