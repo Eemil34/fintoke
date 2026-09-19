@@ -102,10 +102,7 @@ function patchBrokenImage(img: HTMLImageElement) {
 }
 
 function isBrokenImage(img: HTMLImageElement) {
-  const src = (img.getAttribute('src') || '').trim();
-  if (!src || src === 'undefined' || src === 'null' || src === '#') return true;
-  if (src.startsWith('data:image/')) return false;
-  return img.complete && img.naturalWidth === 0;
+  return false;
 }
 `;
 

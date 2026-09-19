@@ -101,7 +101,11 @@ function childPath(segments?: string[]) {
   return `/${segments.join('/')}`;
 }
 
-function previewSecurityHeaders(headers: Headers) {
+function lockPreviewImages(html: string): string {
+  const script = `<script>(function(){try{var bad=/photo-1497366216548-37526070297c/;var srcDesc=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'src');if(srcDesc&&srcDesc.set){Object.defineProperty(HTMLImageElement.prototype,'src',{configurable:true,enumerable:srcDesc.enumerable,get:srcDesc.get,set:function(v){if(typeof v==='string'&&(bad.test(v)||v.indexOf('data:image/svg+xml')===0))return;srcDesc.set.call(this,v);}});}var setAttr=Element.prototype.setAttribute;Element.prototype.setAttribute=function(name,value){if(this instanceof HTMLImageElement&&String(name).toLowerCase()==='src'&&(bad.test(String(value))||String(value).indexOf('data:image/svg+xml')===0))return;return setAttr.apply(this,arguments);};}catch(e){}})();</script>`;
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${script}`);
+  return `${script}${html}`;
+}
   headers.delete('set-cookie');
   headers.set('x-robots-tag', 'noindex, nofollow');
   headers.set('referrer-policy', 'strict-origin-when-cross-origin');
@@ -179,9 +183,11 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
           text = applyCopyToHtml(text, packed);
         }
         if (type.includes('text/html')) {
-          text = text
-            .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
-            .replace(/\sreferrerpolicy=["'][^"']*["']/gi, '');
+          text = lockPreviewImages(
+            text
+              .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
+              .replace(/\sreferrerpolicy=["'][^"']*["']/gi, ''),
+          );
         }
         body = text;
       }
