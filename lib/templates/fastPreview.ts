@@ -271,16 +271,18 @@ export function buildCopySwaps(
   const src = source || {};
   const brandTo = pack.name && !isTemplateLabel(pack.name) ? pack.name : '';
   const longTo = pack.description || pack.heroSubtitle || pack.tagline;
-  const bodies = [pack.heroSubtitle, pack.description, ...(pack.aboutColumns || [])].filter(Boolean);
+  const bodies = [pack.description, ...(pack.aboutColumns || [])].filter(Boolean);
+  const skipHero = new Set(
+    [src.heroTitle, src.heroSubtitle, src.tagline].filter(Boolean).map((value) => value.replace(/\s+/g, ' ').trim()),
+  );
   const phraseSwaps = (src.phrases || [])
-    .filter((from) => from.length >= 18 && /\s/.test(from) && from !== brandTo)
+    .filter((from) => from.length >= 24 && /\s/.test(from) && from !== brandTo && !skipHero.has(from.replace(/\s+/g, ' ').trim()))
     .map((from, index) => ({
       from,
       to: bodies[index] || longTo,
     }));
   const brands = [
     src.name,
-    src.heroTitle,
     'New Restaurant',
     'NEW RESTAURANT',
     'Hearth & Vale',
@@ -292,8 +294,6 @@ export function buildCopySwaps(
   ];
   return [
     ...brands.map((from) => ({ from: from || '', to: brandTo })),
-    { from: src.tagline || '', to: pack.tagline },
-    { from: src.heroSubtitle || '', to: pack.heroSubtitle },
     { from: src.description || '', to: pack.description },
     ...phraseSwaps,
   ].filter(
@@ -401,6 +401,8 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
     return `<!--FINTOKE_HOLD_${held.length - 1}-->`;
   };
   let next = html
+    .replace(/<h1\b[^>]*>[\s\S]*?<\/h1>/gi, hold)
+    .replace(/<section\b[^>]*>[\s\S]*?<\/section>/i, hold)
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold)
     .replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, hold)
     .replace(/<button\b[^>]*>[\s\S]*?<\/button>/gi, hold)
@@ -459,7 +461,6 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
     ...(pack.events || []).map((item) => item.title),
   ].filter(Boolean);
   const bodies = [
-    pack.heroSubtitle,
     ...(pack.aboutColumns || []),
     pack.description,
     ...(pack.menu || []).map((item) => item.body),
@@ -467,7 +468,6 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
     pack.ctaSubtitle,
   ].filter(Boolean);
   const rows: Array<{ from: string; to: string }> = [];
-  if (h1[0] && (pack.heroTitle || pack.name)) rows.push({ from: h1[0], to: pack.heroTitle || pack.name });
   h2.forEach((from) => {
     const to = headingReplacement(from, pack);
     if (to) rows.push({ from, to });
@@ -477,6 +477,7 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
     if (to) rows.push({ from, to });
   });
   paragraphs.forEach((from, index) => {
+    if (h1[0] && from === h1[0]) return;
     const mapped = headingReplacement(from, pack);
     if (mapped) rows.push({ from, to: mapped });
     else if (bodies[index]) rows.push({ from, to: bodies[index] });
@@ -533,7 +534,14 @@ var s=d.swaps||[];
 var n=0;
 var NAV=/^(menu|home|about|bar|login|bag|search|reservations?|experience|contact|gallery|book now|reservation|our story|hours|visit|order|shop|wine|private)$/i;
 function txt(el){return (el&&(el.textContent||"").replace(/\\s+/g," ").trim())||"";}
-function inHero(el){return !!(el&&el.closest&&el.closest("[class*='hero'],.hero,.hero-copy"));}
+function inHero(el){
+  if(!el)return false;
+  if(el.tagName==="H1"||(el.closest&&el.closest("h1")))return true;
+  if(el.closest&&el.closest("[class*='hero'],.hero,.hero-copy"))return true;
+  var h1=document.querySelector("h1");
+  var sec=h1&&h1.closest("section");
+  return !!(sec&&sec.contains(el));
+}
 function set(el,v){
   if(!el||!v)return;
   if(el.querySelector&&el.querySelector("h2,h3,h4,p,a,button,img,svg,iframe,input,ul,nav")){
@@ -615,7 +623,8 @@ function apply(){
     if(node.nodeType===3){
       var parent=node.parentElement;
       if(parent&&/^(A|BUTTON|NAV|LABEL|SCRIPT|STYLE)$/.test(parent.tagName))return;
-      if(parent&&parent.closest&&parent.closest("a,button,nav,header"))return;
+      if(parent&&parent.closest&&parent.closest("a,button,nav,header,h1"))return;
+      if(inHero(parent))return;
       var t=node.nodeValue,o=t;
       if(!t||t.length<12)return;
       for(var i=0;i<s.length;i++){if(s[i][0].length>=12&&t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}
@@ -632,18 +641,6 @@ function apply(){
     if(el.querySelector&&el.querySelector("img,svg"))return;
     set(el,d.name);
   });
-  var h1=document.querySelector("h1");
-  var hero=(h1&&h1.closest("section"))||document.querySelector("[class*='hero']")||document.querySelector("main section, section");
-  if(hero){
-    if(h1&&d.heroTitle)set(h1,d.heroTitle);
-    var kick=[].slice.call(hero.querySelectorAll("h2,h3")).find(function(el){return el!==h1&&txt(el).length<64;});
-    if(kick&&d.eyebrow)set(kick,d.eyebrow);
-    var ps=[].slice.call(hero.querySelectorAll("p")).filter(function(p){return !p.closest("nav,header,form");});
-    var short=ps.find(function(p){return txt(p).length>0&&txt(p).length<40;});
-    var long=ps.find(function(p){return txt(p).length>=40;});
-    if(short&&d.eyebrow)set(short,d.eyebrow);
-    if(long&&(d.heroSubtitle||d.description))set(long,d.heroSubtitle||d.description);
-  }
   document.querySelectorAll("h2,h3,p").forEach(function(el){
     if(inHero(el))return;
     var k=kind(txt(el));

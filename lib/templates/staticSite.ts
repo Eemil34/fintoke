@@ -188,10 +188,6 @@ img[fetchpriority=high],.hero img,[class*="hero"] img:first-of-type{animation:fi
 .hero-copy>:nth-child(2),[class*="hero"] h1{animation-delay:.16s}
 .hero-copy>:nth-child(3),[class*="hero"] p{animation-delay:.28s}
 .hero-copy>:nth-child(n+4),[class*="hero"] a{animation-delay:.4s}
-[class*="hero"] h1,h1{max-width:100%;overflow-wrap:break-word;word-break:normal;hyphens:none;text-wrap:pretty;white-space:normal;line-height:1.08}
-[class*="hero"] p,.hero-copy p,[class*="hero"] h2,[class*="hero"] h3{max-width:34rem;overflow-wrap:break-word;word-break:normal;hyphens:none;text-wrap:pretty}
-[class*="hero"] h2,[class*="hero"] h3{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-[class*="hero"] p,.hero-copy p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 p,li,blockquote{overflow-wrap:break-word}
 article p,[class*="card"] p,[class*="feature"] p,[class*="menu"] p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
