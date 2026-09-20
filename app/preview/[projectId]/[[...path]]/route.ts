@@ -4,9 +4,9 @@ import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { applyCopyToHtml, ensureCopySwaps, injectLiveCopyOverlay, readFastCopy } from '@/lib/templates/fastPreview';
+import { ensureCopySwaps, injectLiveCopyOverlay, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
-import { prioritizeLcpImage, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
+import { freezePreviewHtml, prioritizeLcpImage, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
 
 export const runtime = 'nodejs';
@@ -197,11 +197,12 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       const rewriteText = type.includes('text/html') || type.includes('text/css') || type.includes('javascript');
       if (rewriteText) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
-        if (copyPack && type.includes('text/html')) {
-          const packed = await ensureCopySwaps(copyPack);
-          text = injectLiveCopyOverlay(text, packed);
-        }
         if (type.includes('text/html')) {
+          text = freezePreviewHtml(text);
+          if (copyPack) {
+            const packed = await ensureCopySwaps(copyPack);
+            text = injectLiveCopyOverlay(text, packed);
+          }
           text = prioritizeLcpImage(
             text
               .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')
@@ -343,7 +344,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   if (contentType.includes('text/html')) {
-    let body = rewriteHtml(await upstream.text(), prefix, preview.port);
+    let body = freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port));
     if (copyPack) {
       const packed = await ensureCopySwaps(copyPack);
       body = injectLiveCopyOverlay(body, packed);

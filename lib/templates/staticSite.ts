@@ -184,12 +184,19 @@ export function prioritizeLcpImage(html: string): string {
   return addHeroEntrance(next);
 }
 
+export function freezePreviewHtml(html: string): string {
+  return html
+    .replace(/<link[^>]+as=["']script["'][^>]*>/gi, '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<script\b[^>]*\/?>/gi, '');
+}
+
 export function addHeroEntrance(html: string): string {
   const css = `<style id="fintoke-enter">
 @keyframes fintokeHero{from{opacity:.35}to{opacity:1}}
 img[fetchpriority=high]{animation:fintokeHero .6s ease-out both}
-.reveal,[class*="reveal"],.hero-rise,[data-reveal],.opacity-0{opacity:1!important;transform:none!important;visibility:visible!important}
-html,body,main{opacity:1!important;visibility:visible!important}
+.reveal,[class*="reveal"],.hero-rise,[data-reveal],.opacity-0{opacity:1!important;transform:none!important;visibility:visible!important;animation:none!important}
+html,body,main,#__next{opacity:1!important;visibility:visible!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>`;
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${css}`);
