@@ -704,9 +704,8 @@ function apply(){
   if(d.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){set(a,d.email);a.href="mailto:"+d.email;});
   if(d.mapsUrl){var f=document.querySelector("iframe[src*='map']");if(f)f.src=d.mapsUrl;}
 }
-document.addEventListener("DOMContentLoaded",apply);
-window.addEventListener("load",apply);
-[0,250,700,1400,2200,3500,5000].forEach(function(ms){setTimeout(apply,ms);});
+window.addEventListener("load",function(){setTimeout(apply,400);});
+[1800,3200].forEach(function(ms){setTimeout(apply,ms);});
 })();</script>`;
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}</body>`);
   return `${html}${script}`;

@@ -199,7 +199,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (copyPack && type.includes('text/html')) {
           const packed = await ensureCopySwaps(copyPack);
-          text = injectLiveCopyOverlay(applyCopyToHtml(text, packed), packed);
+          text = injectLiveCopyOverlay(text, packed);
         }
         if (type.includes('text/html')) {
           text = prioritizeLcpImage(
@@ -346,7 +346,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     let body = rewriteHtml(await upstream.text(), prefix, preview.port);
     if (copyPack) {
       const packed = await ensureCopySwaps(copyPack);
-      body = injectLiveCopyOverlay(applyCopyToHtml(body, packed), packed);
+      body = injectLiveCopyOverlay(body, packed);
     }
     body = prioritizeLcpImage(body);
     out.delete('content-length');

@@ -186,16 +186,10 @@ export function prioritizeLcpImage(html: string): string {
 
 export function addHeroEntrance(html: string): string {
   const css = `<style id="fintoke-enter">
-@keyframes fintokeHero{from{opacity:0;transform:scale(1.08)}to{opacity:1;transform:scale(1)}}
-@keyframes fintokeCopy{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
-img[fetchpriority=high],.hero img,[class*="hero"] img:first-of-type{animation:fintokeHero 1.15s cubic-bezier(.22,1,.36,1) both}
-.hero-copy>*,[class*="hero"] h1,[class*="hero"] p,[class*="hero"] a,[class*="hero"] span{animation:fintokeCopy .85s cubic-bezier(.22,1,.36,1) both}
-.hero-copy>:nth-child(1),[class*="hero"] :is(p,span,a):nth-of-type(1){animation-delay:.05s}
-.hero-copy>:nth-child(2),[class*="hero"] h1{animation-delay:.16s}
-.hero-copy>:nth-child(3),[class*="hero"] p{animation-delay:.28s}
-.hero-copy>:nth-child(n+4),[class*="hero"] a{animation-delay:.4s}
-p,li,blockquote{overflow-wrap:break-word}
-article p,[class*="card"] p,[class*="feature"] p,[class*="menu"] p{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:5;overflow:hidden}
+@keyframes fintokeHero{from{opacity:.35}to{opacity:1}}
+img[fetchpriority=high]{animation:fintokeHero .6s ease-out both}
+.reveal,[class*="reveal"],.hero-rise,[data-reveal],.opacity-0{opacity:1!important;transform:none!important;visibility:visible!important}
+html,body,main{opacity:1!important;visibility:visible!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>`;
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${css}`);
