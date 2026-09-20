@@ -15,6 +15,7 @@ export type FastCopyFile = {
   address: string;
   phone: string;
   email: string;
+  hours: string;
   aboutColumns: string[];
   menu: FastCopyItem[];
   features: FastCopyItem[];
@@ -109,7 +110,7 @@ function sectionCopy(pack: FastCopyFile) {
     categoriesTitle: clipCopy('Our menu', 28),
     newestTitle: clipCopy(`New at ${pack.name}`, 32),
     customersTitle: clipCopy('Our guests', 28),
-    visitTitle: clipCopy(`Find ${pack.name}`, 28),
+    visitTitle: clipCopy('Visit us', 24),
   };
 }
 
@@ -122,7 +123,9 @@ function headingReplacement(from: string, pack: FastCopyFile): string {
     return sections.customersTitle;
   }
   if (/reserve your evening|book your evening|reserve a table|join us for/i.test(text)) return pack.ctaTitle;
-  if (/hours\s*&\s*location|^location$|find us|visit us/i.test(text) && text.length < 48) return sections.visitTitle;
+  if (/^visit(\s+us)?$/i.test(text) || (/find us|hours\s*&\s*location|^location$/i.test(text) && text.length < 48)) {
+    return sections.visitTitle;
+  }
   return '';
 }
 
@@ -151,6 +154,7 @@ export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
     heroTitle: clipWords(pack.heroTitle || pack.name, 4, 22),
     heroSubtitle: clipWords(pack.heroSubtitle, 16, 96),
     address: clipCopy(pack.address, 48),
+    hours: clipCopy(pack.hours || '', 40),
     aboutColumns: (pack.aboutColumns || []).map((column) => clipWords(column, 22, 120)),
     menu: items(pack.menu, 18, 56),
     features: items(pack.features, 18, 64),
@@ -520,6 +524,7 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
     phone: pack.phone,
     email: pack.email,
     address: pack.address,
+    hours: pack.hours,
     mapsUrl: pack.mapsUrl,
     menu: pack.menu || [],
     features: pack.features || [],
@@ -568,7 +573,7 @@ function kind(t){
   if(/newest|explore .{0,24}item|best sellers?/i.test(t))return "newest";
   if(/(^customers$|our customers|what (our )?(customers|guests)|testimonials?)/i.test(t)&&t.length<64)return "customers";
   if(/reserve your evening|book your evening|join us for/i.test(t))return "reserve";
-  if(/(hours\\s*&\\s*location|^location$|find us|visit us)/i.test(t)&&t.length<48)return "location";
+  if(/^visit(\s+us)?$/i.test(t)||/find us|^location$/i.test(t)&&t.length<48)return "location";
   if(d.categoriesTitle&&t===d.categoriesTitle)return "categories";
   if(d.newestTitle&&t===d.newestTitle)return "newest";
   if(d.customersTitle&&t===d.customersTitle)return "customers";
@@ -602,18 +607,23 @@ function fillQuotes(sec){
 }
 function fillPlace(sec){
   if(!sec)return;
-  var loc=[d.address,d.phone,d.email].filter(Boolean);
-  var i=0;
-  sec.querySelectorAll("p,li,address").forEach(function(el){
+  sec.querySelectorAll("h2,h3,h4,p,li,address,span").forEach(function(el){
     var t=txt(el);
-    if(!t||kind(t)||NAV.test(t)||t.length>90||inHero(el)||el.closest("a"))return;
-    if(el.tagName==="P"&&t.length>40&&!/\\d|@|\\+|lane|street|road|ave/i.test(t)){
-      if(d.ctaSubtitle)set(el,d.ctaSubtitle);
+    if(!t||inHero(el)||el.closest("a,nav,header")||t.length>80)return;
+    if(/^visit(\s+us)?$/i.test(t)||kind(t)==="location"&&/h[1-4]/i.test(el.tagName)){
+      if(d.visitTitle)set(el,d.visitTitle);
       return;
     }
-    if(loc[i]&&(/\\d|@|\\+|lane|street|road|avenue|downtown|[A-Z]{2}\\b/.test(t)||t.length<56)){
-      set(el,loc[i]);i+=1;
+    if(d.hours&&/open|daily|hours|closed|late|\\b(am|pm)\\b|mon|tue|wed|week/i.test(t)&&t.length<56){
+      set(el,d.hours);
+      return;
     }
+    if(d.address&&t.length<56&&!/@/.test(t)&&(/,/.test(t)||/street|road|lane|avenue|downtown|bangladesh|finland|helsinki|sylhet|city/i.test(t))){
+      set(el,d.address);
+      return;
+    }
+    if(d.phone&&(/^\\+?\\d/.test(t)||/tel/i.test(t)))set(el,d.phone);
+    if(d.email&&/@/.test(t))set(el,d.email);
   });
 }
 function apply(){

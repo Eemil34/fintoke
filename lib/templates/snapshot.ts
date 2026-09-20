@@ -241,9 +241,11 @@ export async function writeProjectSnapshot(templateId: string, projectPath: stri
   await normalizeGeneratedProject(destination);
   await markUserVolumeSnapshot(templateId);
   const { exportSnapshotStatic } = await import('./exportStatic');
-  void exportSnapshotStatic(destination).catch((error) => {
+  try {
+    await exportSnapshotStatic(destination);
+  } catch (error) {
     console.warn('[snapshot] Static export skipped:', error);
-  });
+  }
   return count;
 }
 

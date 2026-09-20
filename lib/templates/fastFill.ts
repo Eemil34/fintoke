@@ -27,6 +27,7 @@ type CopyPack = {
   address: string;
   phone: string;
   email: string;
+  hours: string;
   aboutColumns: string[];
   menu: CopyItem[];
   features: CopyItem[];
@@ -226,6 +227,7 @@ function localCopyPack(lead: FastFillLead, country?: string): CopyPack {
       220,
     ),
     address,
+    hours: 'Open daily · 12pm–late',
     phone,
     email,
     aboutColumns: [
@@ -373,7 +375,7 @@ features (4 objects {title, body}),
 events (3 objects {title, body}),
 testimonials (2 objects {quote, name, role}),
 team (2 objects {name, role, bio}),
-ctaTitle, ctaSubtitle, ctaButton, footer.`);
+ctaTitle, ctaSubtitle, ctaButton, footer, hours (short opening line like Open daily · 12pm–late).`);
     const menu = asItems(parsed.menu);
     const features = asItems(parsed.features);
     const events = asItems(parsed.events);
@@ -389,6 +391,7 @@ ctaTitle, ctaSubtitle, ctaButton, footer.`);
       heroTitle: asString(parsed.heroTitle) || local.heroTitle,
       heroSubtitle: asString(parsed.heroSubtitle) || local.heroSubtitle,
       address: asString(parsed.address) || local.address,
+      hours: asString(parsed.hours) || local.hours,
       phone: asString(parsed.phone) || local.phone,
       email: asString(parsed.email) || local.email,
       aboutColumns: aboutColumns.length ? aboutColumns : local.aboutColumns,
