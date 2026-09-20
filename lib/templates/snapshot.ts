@@ -170,6 +170,11 @@ export async function resolveSnapshotTemplateId(templateId: string): Promise<str
   if (/^restaurant-?4(?:-2)?$/i.test(requested) || /restaurant\s*(template\s*)?4\b/i.test(requested)) {
     if (await snapshotHasApp('restaurant-4-2')) return 'restaurant-4-2';
   }
+  if (/kebab|pizza|pizzeria|doner|shawarma/i.test(requested)) {
+    const foodIds = await listVolumeSnapshotIds();
+    const foodHit = foodIds.find((id) => /kebab|pizza|pizzeria|doner|shawarma/i.test(id));
+    if (foodHit) return foodHit;
+  }
   if (await snapshotHasApp(requested)) return requested;
   const ids = [...new Set([...(await listVolumeSnapshotIds()), ...(await listSeedSnapshotIds())])];
   const needle = requested.toLowerCase().replace(/[^a-z0-9]+/g, '');

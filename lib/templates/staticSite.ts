@@ -136,7 +136,7 @@ export function disableImagePatcher(source: string): string {
     .replace(/dataset\.clbFallback="1",[a-z]\.src=/g, 'dataset.clbFallback="1";0&&');
 }
 
-function capUnsplashUrl(raw: string, width = 1200): string {
+function capUnsplashUrl(raw: string, width = 640): string {
   const encoded = raw.includes('&amp;');
   try {
     const parsed = new URL(raw.replace(/&amp;/g, '&'));
@@ -144,8 +144,9 @@ function capUnsplashUrl(raw: string, width = 1200): string {
     parsed.searchParams.set('auto', 'format');
     parsed.searchParams.set('fit', 'crop');
     parsed.searchParams.set('w', String(width));
-    parsed.searchParams.set('q', '65');
-    parsed.searchParams.set('fm', 'webp');
+    parsed.searchParams.set('q', width > 800 ? '60' : '50');
+    parsed.searchParams.delete('h');
+    parsed.searchParams.delete('dpr');
     const next = parsed.toString();
     return encoded ? next.replace(/&/g, '&amp;') : next;
   } catch {
@@ -153,31 +154,38 @@ function capUnsplashUrl(raw: string, width = 1200): string {
   }
 }
 
-function capUnsplashInHtml(html: string, width: number): string {
-  return html.replace(/https:\/\/images\.unsplash\.com\/photo-[^"'()\s]+/g, (url) => capUnsplashUrl(url, width));
-}
-
 export function prioritizeLcpImage(html: string): string {
-  let next = capUnsplashInHtml(html, 1200);
   let hero = '';
-  next = next.replace(/<img\b([^>]*)>/i, (_full, attrs: string) => {
+  let index = 0;
+  let next = html.replace(/<img\b([^>]*)>/gi, (_full, attrs: string) => {
+    index += 1;
+    const isHero = index === 1;
     let a = attrs
       .replace(/\sloading=["'][^"']*["']/gi, '')
       .replace(/\sfetchpriority=["'][^"']*["']/gi, '')
-      .replace(/\sfetchPriority=["'][^"']*["']/gi, '');
+      .replace(/\sfetchPriority=["'][^"']*["']/gi, '')
+      .replace(/\ssrcset=["'][^"']*["']/gi, '')
+      .replace(/\ssizes=["'][^"']*["']/gi, '');
     a = a.replace(/https:\/\/images\.unsplash\.com\/photo-[^"'>\s]+/g, (url: string) => {
-      const capped = capUnsplashUrl(url, 1100);
-      if (!hero) hero = capped.replace(/&amp;/g, '&');
+      const capped = capUnsplashUrl(url, isHero ? 900 : 640);
+      if (isHero) hero = capped.replace(/&amp;/g, '&');
       return capped;
     });
-    return `<img loading="eager" fetchpriority="high" decoding="async"${a}>`;
+    if (isHero) return `<img loading="eager" fetchpriority="high" decoding="async"${a}>`;
+    return `<img loading="lazy" decoding="async"${a}>`;
+  });
+  next = next.replace(/https:\/\/images\.unsplash\.com\/photo-[^"'()\s]+/g, (url) => {
+    const current = url.replace(/&amp;/g, '&');
+    if (hero && current.split('?')[0] === hero.split('?')[0]) return capUnsplashUrl(url, 900);
+    return capUnsplashUrl(url, 640);
   });
   if (!hero) {
     const found = next.match(/https:\/\/images\.unsplash\.com\/photo-[^"'<>\s]+/)?.[0];
-    if (found) hero = capUnsplashUrl(found.replace(/&amp;/g, '&'), 1100);
+    if (found) hero = capUnsplashUrl(found.replace(/&amp;/g, '&'), 900);
   }
   const links = [
     '<link rel="preconnect" href="https://images.unsplash.com" crossorigin />',
+    '<link rel="dns-prefetch" href="https://images.unsplash.com" />',
     hero ? `<link rel="preload" as="image" href="${hero.replace(/&/g, '&amp;')}" fetchpriority="high" />` : '',
   ].join('');
   if (/<head[^>]*>/i.test(next)) next = next.replace(/<head[^>]*>/i, (open) => `${open}${links}`);
@@ -194,7 +202,8 @@ export function freezePreviewHtml(html: string): string {
 export function addHeroEntrance(html: string): string {
   const css = `<style id="fintoke-enter">
 @keyframes fintokeHero{from{opacity:.35}to{opacity:1}}
-img[fetchpriority=high]{animation:fintokeHero .6s ease-out both}
+img[fetchpriority=high]{content-visibility:visible}
+img:not([fetchpriority=high]){content-visibility:auto}
 .reveal,[class*="reveal"],.hero-rise,[data-reveal],.opacity-0{opacity:1!important;transform:none!important;visibility:visible!important;animation:none!important}
 html,body,main,#__next{opacity:1!important;visibility:visible!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
