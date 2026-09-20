@@ -136,15 +136,16 @@ export function disableImagePatcher(source: string): string {
     .replace(/dataset\.clbFallback="1",[a-z]\.src=/g, 'dataset.clbFallback="1";0&&');
 }
 
-function capUnsplashUrl(raw: string): string {
+function capUnsplashUrl(raw: string, width = 1200): string {
   const encoded = raw.includes('&amp;');
   try {
     const parsed = new URL(raw.replace(/&amp;/g, '&'));
     if (!parsed.hostname.includes('unsplash.com')) return raw;
     parsed.searchParams.set('auto', 'format');
     parsed.searchParams.set('fit', 'crop');
-    parsed.searchParams.set('w', '1400');
-    parsed.searchParams.set('q', '70');
+    parsed.searchParams.set('w', String(width));
+    parsed.searchParams.set('q', '65');
+    parsed.searchParams.set('fm', 'webp');
     const next = parsed.toString();
     return encoded ? next.replace(/&/g, '&amp;') : next;
   } catch {
@@ -152,15 +153,20 @@ function capUnsplashUrl(raw: string): string {
   }
 }
 
+function capUnsplashInHtml(html: string, width: number): string {
+  return html.replace(/https:\/\/images\.unsplash\.com\/photo-[^"'()\s]+/g, (url) => capUnsplashUrl(url, width));
+}
+
 export function prioritizeLcpImage(html: string): string {
+  let next = capUnsplashInHtml(html, 1200);
   let hero = '';
-  let next = html.replace(/<img\b([^>]*)>/i, (_full, attrs: string) => {
+  next = next.replace(/<img\b([^>]*)>/i, (_full, attrs: string) => {
     let a = attrs
       .replace(/\sloading=["'][^"']*["']/gi, '')
       .replace(/\sfetchpriority=["'][^"']*["']/gi, '')
       .replace(/\sfetchPriority=["'][^"']*["']/gi, '');
     a = a.replace(/https:\/\/images\.unsplash\.com\/photo-[^"'>\s]+/g, (url: string) => {
-      const capped = capUnsplashUrl(url);
+      const capped = capUnsplashUrl(url, 1100);
       if (!hero) hero = capped.replace(/&amp;/g, '&');
       return capped;
     });
@@ -168,7 +174,7 @@ export function prioritizeLcpImage(html: string): string {
   });
   if (!hero) {
     const found = next.match(/https:\/\/images\.unsplash\.com\/photo-[^"'<>\s]+/)?.[0];
-    if (found) hero = capUnsplashUrl(found.replace(/&amp;/g, '&'));
+    if (found) hero = capUnsplashUrl(found.replace(/&amp;/g, '&'), 1100);
   }
   const links = [
     '<link rel="preconnect" href="https://images.unsplash.com" crossorigin />',

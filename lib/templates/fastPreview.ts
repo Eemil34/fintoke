@@ -129,14 +129,15 @@ function headingReplacement(from: string, pack: FastCopyFile): string {
   return '';
 }
 
-function allowHtmlSwap(from: string): boolean {
-  if (from.length < 12 || /unsplash|photo-[a-z0-9-]+|class=|href=|\.(?:png|jpe?g|webp|gif|svg)/i.test(from)) {
+function allowHtmlSwap(from: string, brandFrom?: Set<string>): boolean {
+  if (/unsplash|photo-[a-z0-9-]+|class=|href=|\.(?:png|jpe?g|webp|gif|svg)/i.test(from)) {
     return false;
   }
   if (/^(home|menu|about|bar|login|bag|contact|gallery|reservations?|book now|our story|hours|visit)$/i.test(from.trim())) {
     return false;
   }
-  return true;
+  if (from.length >= 12) return true;
+  return Boolean(brandFrom?.has(from) && from.length >= 3);
 }
 
 export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
@@ -416,13 +417,15 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
     .replace(/<source\b[^>]*>/gi, hold)
     .replace(/url\(\s*(['"]?)[^)]+\)/gi, hold)
     .replace(/\s(?:src|srcset|srcSet|poster|data-src|data-bg)=["'][^"']*["']/gi, hold);
+  const brandSwaps = buildCopySwaps(pack.source, pack).filter((row) => row.from.length < 24);
+  const brandFrom = new Set(brandSwaps.map((row) => row.from));
   const swaps = [
     ...buildHtmlCopySwaps(next, pack),
     ...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack)),
   ].sort((a, b) => b.from.length - a.from.length);
   const seen = new Set<string>();
   for (const { from, to } of swaps) {
-    if (seen.has(from) || isTemplateLabel(to) || !allowHtmlSwap(from)) continue;
+    if (seen.has(from) || isTemplateLabel(to) || !allowHtmlSwap(from, brandFrom)) continue;
     if (/unsplash|photo-[a-z0-9-]+|\.(?:png|jpe?g|webp|gif|svg|avif)/i.test(from)) continue;
     seen.add(from);
     next = next.split(from).join(to);
@@ -498,6 +501,26 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
 export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string {
   pack = fitCopyPack(pack);
   const sections = sectionCopy(pack);
+  const headerBrand = (() => {
+    const header = html.match(/<header\b[\s\S]{0,12000}/i)?.[0] || '';
+    const labels =
+      /^(menu|home|about|bar|login|bag|search|reservations?|experience|contact|gallery|book now|reservation)$/i;
+    return (
+      [...header.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)]
+        .map((match) => decodeHtmlText(match[1]))
+        .find((text) => text.length >= 3 && text.length <= 28 && !labels.test(text)) || ''
+    );
+  })();
+  const brandPairs = [
+    ...buildCopySwaps(pack.source, pack),
+    ...(headerBrand && pack.name && headerBrand !== pack.name
+      ? [{ from: headerBrand, to: pack.name }]
+      : []),
+  ]
+    .filter((row) => row.from.length >= 3 && row.from.length <= 32 && row.from !== pack.name)
+    .sort((a, b) => b.from.length - a.from.length)
+    .slice(0, 16);
+  const brandFrom = new Set(brandPairs.map((row) => row.from));
   const swaps = [
     ...buildHtmlCopySwaps(html, pack),
     ...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack)),
@@ -507,7 +530,7 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
         row.from &&
         row.to &&
         row.from !== row.to &&
-        allowHtmlSwap(row.from) &&
+        allowHtmlSwap(row.from, brandFrom) &&
         !row.to.includes(row.from) &&
         !/unsplash|photo-[a-z0-9-]+|class=|href=/i.test(row.from),
     )
@@ -517,6 +540,7 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
   const data = {
     name: pack.name,
     sourceName: pack.source?.name || '',
+    brands: brandPairs.map((row) => [row.from, pack.name]),
     eyebrow: pack.eyebrow,
     heroTitle: pack.heroTitle,
     heroSubtitle: pack.heroSubtitle,
@@ -538,6 +562,7 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
   const script = `<script>(function(){
 var d=${JSON.stringify(data)};
 var s=d.swaps||[];
+var brands=d.brands||[];
 var n=0;
 var NAV=/^(menu|home|about|bar|login|bag|search|reservations?|experience|contact|gallery|book now|reservation|our story|hours|visit|order|shop|wine|private)$/i;
 function txt(el){return (el&&(el.textContent||"").replace(/\\s+/g," ").trim())||"";}
@@ -635,11 +660,14 @@ function apply(){
     if(node.nodeType===3){
       var parent=node.parentElement;
       if(parent&&/^(A|BUTTON|NAV|LABEL|SCRIPT|STYLE)$/.test(parent.tagName))return;
-      if(parent&&parent.closest&&parent.closest("a,button,nav,header,h1"))return;
+      if(parent&&parent.closest&&parent.closest("a,button,nav,h1"))return;
       if(inHero(parent))return;
       var t=node.nodeValue,o=t;
-      if(!t||t.length<12)return;
-      for(var i=0;i<s.length;i++){if(s[i][0].length>=12&&t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}
+      if(!t||t.length<3)return;
+      for(var i=0;i<brands.length;i++){
+        if(brands[i][0]&&t.indexOf(brands[i][0])!==-1)t=t.split(brands[i][0]).join(brands[i][1]);
+      }
+      for(var j=0;j<s.length;j++){if(s[j][0].length>=12&&t.indexOf(s[j][0])!==-1)t=t.split(s[j][0]).join(s[j][1]);}
       if(t!==o)node.nodeValue=t;
       return;
     }
