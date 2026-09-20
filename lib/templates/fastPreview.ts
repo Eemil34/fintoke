@@ -273,7 +273,9 @@ export function buildCopySwaps(
   const longTo = pack.description || pack.heroSubtitle || pack.tagline;
   const bodies = [pack.description, ...(pack.aboutColumns || [])].filter(Boolean);
   const skipHero = new Set(
-    [src.heroTitle, src.heroSubtitle, src.tagline].filter(Boolean).map((value) => value.replace(/\s+/g, ' ').trim()),
+    [src.heroTitle, src.heroSubtitle, src.tagline]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.replace(/\s+/g, ' ').trim()),
   );
   const phraseSwaps = (src.phrases || [])
     .filter((from) => from.length >= 24 && /\s/.test(from) && from !== brandTo && !skipHero.has(from.replace(/\s+/g, ' ').trim()))
