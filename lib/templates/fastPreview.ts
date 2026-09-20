@@ -94,6 +94,16 @@ function clipCopy(value: string, max: number): string {
   return (space > max * 0.55 ? cut.slice(0, space) : cut).replace(/[,:;–—-]+$/g, '');
 }
 
+function clipWords(value: string, maxWords: number, maxChars: number): string {
+  const words = (value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, maxWords);
+  return clipCopy(words.join(' '), maxChars);
+}
+
 function sectionCopy(pack: FastCopyFile) {
   return {
     categoriesTitle: clipCopy('Our menu', 28),
@@ -117,11 +127,13 @@ function headingReplacement(from: string, pack: FastCopyFile): string {
 }
 
 function allowHtmlSwap(from: string): boolean {
-  if (from.length < 4 || /unsplash|photo-[a-z0-9-]+|class=|href=|\.(?:png|jpe?g|webp|gif|svg)/i.test(from)) {
+  if (from.length < 12 || /unsplash|photo-[a-z0-9-]+|class=|href=|\.(?:png|jpe?g|webp|gif|svg)/i.test(from)) {
     return false;
   }
-  if (from.length >= 10) return true;
-  return from.split(/\s+/).length <= 3 && !/[<>{}]/.test(from);
+  if (/^(home|menu|about|bar|login|bag|contact|gallery|reservations?|book now|our story|hours|visit)$/i.test(from.trim())) {
+    return false;
+  }
+  return true;
 }
 
 export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
@@ -132,19 +144,19 @@ export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
     }));
   const fitted: FastCopyFile = {
     ...pack,
-    name: clipCopy(pack.name, 28),
-    tagline: clipCopy(pack.tagline, 72),
-    description: clipCopy(pack.description, 220),
-    eyebrow: clipCopy(pack.eyebrow, 36),
-    heroTitle: clipCopy(pack.heroTitle || pack.name, 42),
-    heroSubtitle: clipCopy(pack.heroSubtitle, 140),
+    name: clipCopy(pack.name, 22),
+    tagline: clipWords(pack.tagline, 8, 56),
+    description: clipWords(pack.description, 28, 160),
+    eyebrow: clipWords(pack.eyebrow, 5, 28),
+    heroTitle: clipWords(pack.heroTitle || pack.name, 4, 22),
+    heroSubtitle: clipWords(pack.heroSubtitle, 16, 96),
     address: clipCopy(pack.address, 48),
-    aboutColumns: (pack.aboutColumns || []).map((column) => clipCopy(column, 180)),
-    menu: items(pack.menu, 22, 72),
-    features: items(pack.features, 22, 90),
-    events: items(pack.events, 24, 90),
-    ctaTitle: clipCopy(pack.ctaTitle, 32),
-    ctaSubtitle: clipCopy(pack.ctaSubtitle, 100),
+    aboutColumns: (pack.aboutColumns || []).map((column) => clipWords(column, 22, 120)),
+    menu: items(pack.menu, 18, 56),
+    features: items(pack.features, 18, 64),
+    events: items(pack.events, 18, 64),
+    ctaTitle: clipWords(pack.ctaTitle, 4, 24),
+    ctaSubtitle: clipWords(pack.ctaSubtitle, 14, 80),
     ctaButton: clipCopy(pack.ctaButton, 18),
     footer: clipCopy(pack.footer, 56),
     testimonials: (pack.testimonials || []).map((row) => ({
@@ -390,6 +402,8 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
   };
   let next = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold)
+    .replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, hold)
+    .replace(/<button\b[^>]*>[\s\S]*?<\/button>/gi, hold)
     .replace(/<img\b[^>]*>/gi, hold)
     .replace(/<source\b[^>]*>/gi, hold)
     .replace(/url\(\s*(['"]?)[^)]+\)/gi, hold)
@@ -495,6 +509,8 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
     .map((row) => [row.from, row.to]);
   const data = {
     name: pack.name,
+    sourceName: pack.source?.name || '',
+    eyebrow: pack.eyebrow,
     heroTitle: pack.heroTitle,
     heroSubtitle: pack.heroSubtitle,
     description: pack.description,
@@ -515,23 +531,33 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
 var d=${JSON.stringify(data)};
 var s=d.swaps||[];
 var n=0;
-var NAV=/^(menu|home|about|bar|login|bag|search|reservations?|experience|contact|gallery|book now|reservation)$/i;
+var NAV=/^(menu|home|about|bar|login|bag|search|reservations?|experience|contact|gallery|book now|reservation|our story|hours|visit|order|shop|wine|private)$/i;
 function txt(el){return (el&&(el.textContent||"").replace(/\\s+/g," ").trim())||"";}
+function inHero(el){return !!(el&&el.closest&&el.closest("[class*='hero'],.hero,.hero-copy"));}
 function set(el,v){
   if(!el||!v)return;
-  if(el.querySelector&&el.querySelector("img,svg,iframe,input,ul,nav")){
+  if(el.querySelector&&el.querySelector("h2,h3,h4,p,a,button,img,svg,iframe,input,ul,nav")){
     for(var c=el.firstChild;c;c=c.nextSibling){
       if(c.nodeType===3&&c.nodeValue&&c.nodeValue.trim()){c.nodeValue=v;return;}
+      if(c.nodeType===1&&/^(SPAN|EM|STRONG)$/.test(c.tagName)&&!c.querySelector("h2,h3,p,a")){c.textContent=v;return;}
     }
     return;
   }
   el.textContent=v;
 }
+function isLogo(el){
+  if(!el)return false;
+  var href=(el.getAttribute&&el.getAttribute("href")||"").split("?")[0];
+  if(/logo|brand/i.test(el.className||""))return true;
+  if(href==="#top"||href==="/"||href==="#")return true;
+  if(d.sourceName&&txt(el)===d.sourceName)return true;
+  return false;
+}
 function kind(t){
   if(/categor/i.test(t)&&t.length<48)return "categories";
   if(/newest|explore .{0,24}item|best sellers?/i.test(t))return "newest";
   if(/(^customers$|our customers|what (our )?(customers|guests)|testimonials?)/i.test(t)&&t.length<64)return "customers";
-  if(/reserve your evening|book your evening|reserve a table|join us for/i.test(t))return "reserve";
+  if(/reserve your evening|book your evening|join us for/i.test(t))return "reserve";
   if(/(hours\\s*&\\s*location|^location$|find us|visit us)/i.test(t)&&t.length<48)return "location";
   if(d.categoriesTitle&&t===d.categoriesTitle)return "categories";
   if(d.newestTitle&&t===d.newestTitle)return "newest";
@@ -544,9 +570,9 @@ function sectionOf(el){return el.closest("section")||el.parentElement||el;}
 function fillCards(sec,items){
   if(!sec||!items||!items.length)return;
   var i=0;
-  sec.querySelectorAll("h3,h4,article p,article span,figcaption,li p,button,a").forEach(function(el){
+  sec.querySelectorAll("h3,h4,article p,figcaption").forEach(function(el){
     var t=txt(el);
-    if(!t||NAV.test(t)||kind(t)||/view|see all|explore|shop|menu|book|reserv/i.test(t)||el.querySelector&&el.querySelector("img,svg,input"))return;
+    if(!t||NAV.test(t)||kind(t)||inHero(el)||el.querySelector&&el.querySelector("img,svg,input,a"))return;
     var item=items[i];
     if(!item)return;
     if(el.tagName==="P"&&t.length>42){if(item.body)set(el,item.body);i+=1;return;}
@@ -560,7 +586,7 @@ function fillQuotes(sec){
   var i=0;
   sec.querySelectorAll("p,blockquote,figcaption").forEach(function(el){
     var t=txt(el);
-    if(!t||kind(t)||t.length<18||NAV.test(t))return;
+    if(!t||kind(t)||t.length<18||NAV.test(t)||inHero(el))return;
     if(q[i]&&q[i].quote){set(el,q[i].quote);i+=1;}
   });
 }
@@ -568,9 +594,9 @@ function fillPlace(sec){
   if(!sec)return;
   var loc=[d.address,d.phone,d.email].filter(Boolean);
   var i=0;
-  sec.querySelectorAll("p,li,address,span").forEach(function(el){
+  sec.querySelectorAll("p,li,address").forEach(function(el){
     var t=txt(el);
-    if(!t||kind(t)||NAV.test(t)||t.length>90)return;
+    if(!t||kind(t)||NAV.test(t)||t.length>90||inHero(el)||el.closest("a"))return;
     if(el.tagName==="P"&&t.length>40&&!/\\d|@|\\+|lane|street|road|ave/i.test(t)){
       if(d.ctaSubtitle)set(el,d.ctaSubtitle);
       return;
@@ -587,49 +613,59 @@ function apply(){
   function walk(node){
     if(!node)return;
     if(node.nodeType===3){
+      var parent=node.parentElement;
+      if(parent&&/^(A|BUTTON|NAV|LABEL|SCRIPT|STYLE)$/.test(parent.tagName))return;
+      if(parent&&parent.closest&&parent.closest("a,button,nav,header"))return;
       var t=node.nodeValue,o=t;
-      if(!t||t.length<3)return;
-      for(var i=0;i<s.length;i++){if(t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}
+      if(!t||t.length<12)return;
+      for(var i=0;i<s.length;i++){if(s[i][0].length>=12&&t.indexOf(s[i][0])!==-1)t=t.split(s[i][0]).join(s[i][1]);}
       if(t!==o)node.nodeValue=t;
       return;
     }
-    if(node.nodeType===1&&node.tagName!=="SCRIPT"&&node.tagName!=="STYLE"){
+    if(node.nodeType===1&&node.tagName!=="SCRIPT"&&node.tagName!=="STYLE"&&node.tagName!=="NAV"&&node.tagName!=="A"){
       for(var c=node.firstChild;c;c=c.nextSibling)walk(c);
     }
   }
   if(document.body)walk(document.body);
-  document.querySelectorAll("header a, header [class*='logo'], header [class*='brand'], a[href='#top'], footer a, footer p").forEach(function(el){
-    var t=txt(el);
-    if(!t||t.length>36||NAV.test(t)||/login|bag|©|copyright|privacy|terms/i.test(t)||kind(t))return;
+  document.querySelectorAll("header a, header [class*='logo'], header [class*='brand'], a[href='#top'], footer [class*='logo'], footer [class*='brand']").forEach(function(el){
+    if(!isLogo(el))return;
     if(el.querySelector&&el.querySelector("img,svg"))return;
     set(el,d.name);
   });
-  document.querySelectorAll("h1,h2,h3,p").forEach(function(el){
+  var h1=document.querySelector("h1");
+  var hero=(h1&&h1.closest("section"))||document.querySelector("[class*='hero']")||document.querySelector("main section, section");
+  if(hero){
+    if(h1&&d.heroTitle)set(h1,d.heroTitle);
+    var kick=[].slice.call(hero.querySelectorAll("h2,h3")).find(function(el){return el!==h1&&txt(el).length<64;});
+    if(kick&&d.eyebrow)set(kick,d.eyebrow);
+    var ps=[].slice.call(hero.querySelectorAll("p")).filter(function(p){return !p.closest("nav,header,form");});
+    var short=ps.find(function(p){return txt(p).length>0&&txt(p).length<40;});
+    var long=ps.find(function(p){return txt(p).length>=40;});
+    if(short&&d.eyebrow)set(short,d.eyebrow);
+    if(long&&(d.heroSubtitle||d.description))set(long,d.heroSubtitle||d.description);
+  }
+  document.querySelectorAll("h2,h3,p").forEach(function(el){
+    if(inHero(el))return;
     var k=kind(txt(el));
     if(k==="categories")fillCards(sectionOf(el),d.menu||d.features);
     if(k==="newest")fillCards(sectionOf(el),(d.menu||[]).slice().reverse());
     if(k==="customers")fillQuotes(sectionOf(el));
     if(k==="reserve"||k==="location")fillPlace(sectionOf(el));
   });
-  document.querySelectorAll("h1,h2,h3,p").forEach(function(el){
+  document.querySelectorAll("h2,h3").forEach(function(el){
+    if(inHero(el))return;
     var k=kind(txt(el));
     if(k==="categories")set(el,d.categoriesTitle);
     if(k==="newest")set(el,d.newestTitle);
     if(k==="customers")set(el,d.customersTitle);
-    if(k==="reserve"&&/^H[12]$/.test(el.tagName))set(el,d.ctaTitle);
-    if(k==="location"&&/^H[12]$/.test(el.tagName))set(el,d.visitTitle);
+    if(k==="reserve")set(el,d.ctaTitle);
+    if(k==="location")set(el,d.visitTitle);
   });
   var box=document.querySelector("[id*='location'],[class*='location'],[id*='contact'],[class*='contact'],[class*='map']");
   if(box)fillPlace(box);
-  var h1=document.querySelector("h1");
-  if(h1&&d.heroTitle)set(h1,d.heroTitle);
-  var heroP=document.querySelector("[class*='hero'] p, .hero-copy p");
-  if(heroP&&(d.heroSubtitle||d.description))set(heroP,d.heroSubtitle||d.description);
   if(d.phone)document.querySelectorAll('a[href^="tel:"]').forEach(function(a){set(a,d.phone);a.href="tel:"+String(d.phone).replace(/\\s/g,"");});
   if(d.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){set(a,d.email);a.href="mailto:"+d.email;});
   if(d.mapsUrl){var f=document.querySelector("iframe[src*='map']");if(f)f.src=d.mapsUrl;}
-  var btn=[].slice.call(document.querySelectorAll("a,button")).find(function(el){return /book|reserv|table/i.test(txt(el));});
-  if(btn&&d.ctaButton&&txt(btn).length<28)set(btn,d.ctaButton);
 }
 document.addEventListener("DOMContentLoaded",apply);
 window.addEventListener("load",apply);

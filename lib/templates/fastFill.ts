@@ -297,7 +297,7 @@ async function completeFillJson(prompt: string): Promise<Record<string, unknown>
           {
             role: 'system',
             content:
-              'Write a complete restaurant/cafe website copy pack for one real business. JSON only. Keep heroTitle under 6 words, heroSubtitle under 22 words, menu titles under 4 words, and card bodies under 18 words. Never mention Coral Cove, Park Avenue, Unsplash, or image URLs.',
+              'Write a complete restaurant/cafe website copy pack for one real business. JSON only. heroTitle: 2-4 short words, no comma slogans. eyebrow: under 5 words. heroSubtitle: under 16 words. menu titles under 3 words, card bodies under 12 words. Never mention Coral Cove, Park Avenue, Unsplash, or image URLs.',
           },
           { role: 'user', content: prompt },
         ],

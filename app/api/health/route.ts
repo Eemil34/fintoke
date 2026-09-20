@@ -9,7 +9,7 @@ import { listEmails, listPeople } from '@/lib/services/workspace';
 import { syncSeedSnapshotsToVolume } from '@/lib/templates/snapshot';
 import { scheduleMissingStaticExports, staticFreezeStatus } from '@/lib/templates/exportStatic';
 
-const RELEASE = '2026-09-20-copy-sections';
+const RELEASE = '2026-09-20-copy-fit2';
 
 export async function GET() {
   void syncSeedSnapshotsToVolume().catch(() => undefined);
@@ -56,9 +56,7 @@ export async function GET() {
   const staticVersionReady = volumeTemplates.filter((id) =>
     fs.existsSync(path.join(snapshotsRoot, id, '.fintoke-static', '.fintoke-export')),
   );
-  scheduleMissingStaticExports(
-    volumeHasApp.filter((id) => /^restaurant-4/.test(id) && !staticVersionReady.includes(id)),
-  );
+  scheduleMissingStaticExports(volumeHasApp.filter((id) => !staticReady.includes(id)).slice(0, 8));
   const staticFreeze = staticFreezeStatus();
 
   let projectCount = 0;
