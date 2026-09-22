@@ -7,7 +7,8 @@ import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { ensureCopySwaps, injectLiveCopyOverlay, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { freezePreviewHtml, prioritizeLcpImage, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
-import { getWebsiteTemplateId } from '@/lib/templates/settings';
+import { getEditingTemplateId, getWebsiteTemplateId } from '@/lib/templates/settings';
+import { projectWantsLivePreview } from '@/lib/templates/livePreview';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -151,8 +152,12 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   const project = await getProjectById(projectId);
   let copyPack = null as Awaited<ReturnType<typeof readFastCopy>>;
   let templateId = '';
+  let liveEdits = false;
   if (project) {
     const projectPath = await resolveProjectWorkspace(project, projectId);
+    liveEdits =
+      (await projectWantsLivePreview(projectPath)) ||
+      Boolean(getEditingTemplateId((project as { settings?: string | null }).settings));
     copyPack = await readFastCopy(projectPath);
     templateId =
       copyPack?.templateId ||
@@ -162,7 +167,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
-  const staticRoot = resolvedTemplate ? await resolveStaticExportDir(resolvedTemplate) : null;
+  const staticRoot = !liveEdits && resolvedTemplate ? await resolveStaticExportDir(resolvedTemplate) : null;
   if (staticRoot) {
     if (isProbe) {
       return new Response('ready', { status: 200, headers: { 'cache-control': 'no-store' } });
@@ -223,16 +228,17 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     }
   }
 
-  const previewKey = resolvedTemplate ? `tpl:${resolvedTemplate}` : projectId;
-  if (resolvedTemplate) {
-    if (previewManager.getStatus(previewKey).status === 'error' || !previewManager.getStatus(previewKey).port) {
-      void previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
-        console.error('[Preview proxy] Failed to start template:', error);
+  const useProjectRuntime = liveEdits || !resolvedTemplate;
+  const previewKey = useProjectRuntime ? projectId : `tpl:${resolvedTemplate}`;
+  if (useProjectRuntime) {
+    if (previewManager.getStatus(projectId).status === 'error' || !previewManager.getStatus(projectId).port) {
+      void previewManager.start(projectId).catch((error) => {
+        console.error('[Preview proxy] Failed to start:', error);
       });
     }
-  } else if (previewManager.getStatus(projectId).status === 'error' || !previewManager.getStatus(projectId).port) {
-    void previewManager.start(projectId).catch((error) => {
-      console.error('[Preview proxy] Failed to start:', error);
+  } else if (previewManager.getStatus(previewKey).status === 'error' || !previewManager.getStatus(previewKey).port) {
+    void previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
+      console.error('[Preview proxy] Failed to start template:', error);
     });
   }
 
@@ -344,10 +350,13 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   if (contentType.includes('text/html')) {
-    let body = freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port));
-    if (copyPack) {
-      const packed = await ensureCopySwaps(copyPack);
-      body = injectLiveCopyOverlay(body, packed);
+    let body = rewriteHtml(await upstream.text(), prefix, preview.port);
+    if (!liveEdits) {
+      body = freezePreviewHtml(body);
+      if (copyPack) {
+        const packed = await ensureCopySwaps(copyPack);
+        body = injectLiveCopyOverlay(body, packed);
+      }
     }
     body = prioritizeLcpImage(body);
     out.delete('content-length');

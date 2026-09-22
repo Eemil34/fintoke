@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto';
 import type { Message } from '@/types/backend';
 import type { RealtimeMessage } from '@/types';
 import { getProjectById } from '@/lib/services/project';
+import { markProjectLivePreview } from '@/lib/templates/livePreview';
 import { streamManager } from '@/lib/services/stream';
 import { createMessage } from '@/lib/services/message';
 import { serializeMessage, createRealtimeMessage } from '@/lib/serializers/chat';
@@ -218,6 +219,7 @@ async function executeQwen(
     }
     return absoluteProjectPath;
   })();
+  await markProjectLivePreview(repoPath);
 
   publishStatus(projectId, 'ready', requestId, `Qwen CLI detected (${modelDisplayName}). Starting execution...`);
 

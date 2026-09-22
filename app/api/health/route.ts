@@ -9,7 +9,7 @@ import { listEmails, listPeople } from '@/lib/services/workspace';
 import { syncSeedSnapshotsToVolume } from '@/lib/templates/snapshot';
 import { scheduleMissingStaticExports, staticFreezeStatus } from '@/lib/templates/exportStatic';
 
-const RELEASE = '2026-09-21-kebab-fast';
+const RELEASE = '2026-09-22-live-cursor-preview';
 
 export async function GET() {
   void syncSeedSnapshotsToVolume().catch(() => undefined);

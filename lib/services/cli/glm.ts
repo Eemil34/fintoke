@@ -12,6 +12,7 @@ import type { RealtimeMessage } from '@/types';
 import { streamManager } from '@/lib/services/stream';
 import { createMessage } from '@/lib/services/message';
 import { getProjectById } from '@/lib/services/project';
+import { markProjectLivePreview } from '@/lib/templates/livePreview';
 import { serializeMessage, createRealtimeMessage } from '@/lib/serializers/chat';
 import { buildInitialAgentPrompt } from '@/lib/templates/agentPrompt';
 import { SITE_IMAGE_AGENT_RULES, buildSiteImageAgentRules } from '@/lib/templates/siteImages';
@@ -370,6 +371,7 @@ async function executeGLM(
     }
     return absoluteProjectPath;
   })();
+  await markProjectLivePreview(repoPath);
 
   publishStatus(projectId, 'ready', requestId, `GLM detected (${modelDisplayName}). Starting execution...`);
 

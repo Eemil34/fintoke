@@ -35,6 +35,8 @@ import { serializeMessage, createRealtimeMessage } from '@/lib/serializers/chat'
 import { buildInitialAgentPrompt } from '@/lib/templates/agentPrompt';
 import { SITE_IMAGE_AGENT_RULES, buildSiteImageAgentRules } from '@/lib/templates/siteImages';
 import { resolveAndPersistProjectWorkspace, makeTreeWritable } from '@/lib/server/projectWorkspace';
+import { markProjectLivePreview } from '@/lib/templates/livePreview';
+import { previewManager } from '@/lib/services/preview';
 import {
   ensureCursorExecutable,
   resolveCursorApiKey,
@@ -606,6 +608,8 @@ async function executeCursor(
     .access(repoCandidate)
     .then(() => repoCandidate)
     .catch(() => absoluteProjectPath);
+  await markProjectLivePreview(repoPath);
+  await markProjectLivePreview(absoluteProjectPath);
 
   const globalSettings = await loadGlobalSettings();
   const cursorSettings = globalSettings.cli_settings?.cursor ?? {};
@@ -983,5 +987,8 @@ async function runCursorOnce(params: {
     };
   }
 
+  void previewManager.start(projectId, { restart: true }).catch((error) => {
+    console.error('[Cursor] Failed to restart preview after edits:', error);
+  });
   return { success: true };
 }
