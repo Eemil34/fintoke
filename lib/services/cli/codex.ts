@@ -12,7 +12,6 @@ import type { RealtimeMessage } from '@/types';
 import { streamManager } from '@/lib/services/stream';
 import { createMessage } from '@/lib/services/message';
 import { getProjectById } from '@/lib/services/project';
-import { markProjectLivePreview } from '@/lib/templates/livePreview';
 import { getDefaultModelForCli } from '@/lib/constants/cliModels';
 import { CODEX_DEFAULT_MODEL, getCodexModelDisplayName, normalizeCodexModelId } from '@/lib/constants/codexModels';
 import {
@@ -513,7 +512,6 @@ async function executeCodex(
     }
     return absoluteProjectPath;
   })();
-  await markProjectLivePreview(repoPath);
 
   publishStatus(projectId, 'ready', requestId, `Codex CLI detected (${modelDisplayName}). Starting execution...`);
 

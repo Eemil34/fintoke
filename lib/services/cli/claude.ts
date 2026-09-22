@@ -10,7 +10,6 @@ import { streamManager } from '../stream';
 import { serializeMessage, createRealtimeMessage } from '@/lib/serializers/chat';
 import { buildInitialAgentPrompt } from '@/lib/templates/agentPrompt';
 import { SITE_IMAGE_AGENT_RULES, buildSiteImageAgentRules } from '@/lib/templates/siteImages';
-import { markProjectLivePreview } from '@/lib/templates/livePreview';
 import { updateProject, getProjectById } from '../project';
 import { createMessage } from '../message';
 import { CLAUDE_DEFAULT_MODEL, normalizeClaudeModelId, getClaudeModelDisplayName } from '@/lib/constants/claudeModels';
@@ -718,7 +717,6 @@ export async function executeClaude(
     // Start Claude Agent SDK query
     console.log(`[ClaudeService] 🤖 Querying Claude Agent SDK...`);
     console.log(`[ClaudeService] 📁 Working Directory: ${absoluteProjectPath}`);
-    await markProjectLivePreview(absoluteProjectPath);
     const response = query({
       prompt: `${buildSiteImageAgentRules(instruction)}\n\n${instruction}`,
       options: {
