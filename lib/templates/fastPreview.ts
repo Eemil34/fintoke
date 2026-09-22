@@ -192,9 +192,27 @@ export async function readFastCopy(projectPath: string): Promise<FastCopyFile | 
   }
 }
 
-async function readTemplateText(projectPath: string): Promise<string> {
-  const chunks: string[] = [];
+async function siteRoot(dir: string): Promise<string> {
+  for (const candidate of [dir, path.join(dir, 'repo')]) {
+    try {
+      await fs.access(path.join(candidate, 'app', 'page.tsx'));
+      return candidate;
+    } catch {
+      try {
+        await fs.access(path.join(candidate, 'app', 'page.jsx'));
+        return candidate;
+      } catch {
+        // keep looking
+      }
+    }
+  }
+  return dir;
+}
+
+async function listSourceFiles(root: string): Promise<string[]> {
+  const files: string[] = [];
   const walk = async (dir: string) => {
+    if (files.length >= 40) return;
     let entries;
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
@@ -202,6 +220,7 @@ async function readTemplateText(projectPath: string): Promise<string> {
       return;
     }
     for (const entry of entries) {
+      if (files.length >= 40) return;
       if (entry.name === 'node_modules' || entry.name === '.next' || entry.name.startsWith('.')) continue;
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -209,13 +228,156 @@ async function readTemplateText(projectPath: string): Promise<string> {
         continue;
       }
       if (!/\.(ts|tsx|js|jsx)$/.test(entry.name)) continue;
-      if (/imageLibrary|ImageGuard|SiteImage|next-env/.test(entry.name)) continue;
-      chunks.push(await fs.readFile(full, 'utf8').catch(() => ''));
-      if (chunks.length >= 40) return;
+      if (/imageLibrary|ImageGuard|SiteImage|next-env|next\.config|tailwind|postcss|run-dev/.test(entry.name)) continue;
+      files.push(full);
     }
   };
-  await walk(projectPath);
+  await walk(root);
+  return files;
+}
+
+async function readTemplateText(projectPath: string): Promise<string> {
+  const files = await listSourceFiles(projectPath);
+  const chunks = await Promise.all(files.map((file) => fs.readFile(file, 'utf8').catch(() => '')));
   return chunks.join('\n');
+}
+
+function isUtilityText(value: string): boolean {
+  return (
+    /^(flex|grid|inline|block|hidden|contents|sr-only|absolute|relative|sticky|fixed|truncate|italic|underline|antialiased)/.test(
+      value,
+    ) ||
+    /^(sm:|md:|lg:|xl:|2xl:|hover:|focus:|group-|data-|aria-)/.test(value) ||
+    /^https?:/i.test(value) ||
+    /^\/[a-z0-9/_-]+$/i.test(value) ||
+    /^(true|false|null|undefined|use client|use server)$/i.test(value)
+  );
+}
+
+function extractVisibleStrings(source: string): string[] {
+  const stripped = source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+    .replace(/className\s*=\s*\{?`[\s\S]*?`\}?/g, ' ')
+    .replace(/className\s*=\s*["'`][^"'`]*["'`]/g, ' ');
+  const out: string[] = [];
+  const add = (raw: string) => {
+    const text = raw.replace(/\s+/g, ' ').trim();
+    if (text.length < 2 || text.length > 400) return;
+    if (!/[A-Za-zÀ-ÿ]/.test(text)) return;
+    if (isUtilityText(text)) return;
+    if (/[{}=<>]|className|function |return |const |let |import /.test(text)) return;
+    out.push(text);
+  };
+  for (const match of stripped.matchAll(/>([^<>{}]{2,400})</g)) add(match[1]);
+  for (const match of stripped.matchAll(/(['"`])([^"'`\\]{2,400})\1/g)) add(match[2]);
+  return out;
+}
+
+function alignStringSwaps(fromList: string[], toList: string[]): Array<{ from: string; to: string }> {
+  if (fromList.length === toList.length) {
+    return fromList
+      .map((from, index) => ({ from, to: toList[index] || '' }))
+      .filter((row) => row.from && row.to && row.from !== row.to);
+  }
+  const swaps: Array<{ from: string; to: string }> = [];
+  const fromSet = new Set(fromList);
+  const toSet = new Set(toList);
+  let i = 0;
+  let j = 0;
+  while (i < fromList.length && j < toList.length) {
+    if (fromList[i] === toList[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    if (toSet.has(fromList[i]) && !fromSet.has(toList[j])) {
+      j += 1;
+      continue;
+    }
+    if (fromSet.has(toList[j]) && !toSet.has(fromList[i])) {
+      i += 1;
+      continue;
+    }
+    if (fromList[i] && toList[j] && fromList[i] !== toList[j]) {
+      swaps.push({ from: fromList[i], to: toList[j] });
+    }
+    i += 1;
+    j += 1;
+  }
+  return swaps;
+}
+
+function applyTextSwapsToHtml(html: string, swaps: Array<{ from: string; to: string }>): string {
+  const held: string[] = [];
+  const hold = (block: string) => {
+    held.push(block);
+    return `<!--FINTOKE_SRC_${held.length - 1}-->`;
+  };
+  let next = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold)
+    .replace(/\s(?:src|srcset|srcSet|href|poster|data-src)=["'][^"']*["']/gi, hold);
+  const seen = new Set<string>();
+  const ordered = [...swaps]
+    .filter((row) => row.from.length >= 2 && row.to && row.from !== row.to && !row.from.includes('{'))
+    .sort((a, b) => b.from.length - a.from.length);
+  for (const { from, to } of ordered) {
+    if (seen.has(from)) continue;
+    seen.add(from);
+    next = next.split(from).join(to);
+    const encoded = from.replace(/&/g, '&amp;');
+    if (encoded !== from) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
+  }
+  return next.replace(/<!--FINTOKE_SRC_(\d+)-->/g, (_, index) => held[Number(index)] || '');
+}
+
+/** Paint Cursor/GPT file text onto frozen template HTML without starting Next. */
+export async function applyProjectEditsToHtml(
+  html: string,
+  projectPath: string,
+  templateId: string,
+  pack?: FastCopyFile | null,
+): Promise<{ html: string; count: number }> {
+  if (!projectPath || !templateId) return { html, count: 0 };
+  const { resolveSnapshotDir } = await import('@/lib/templates/snapshot');
+  const snapshotDir = await resolveSnapshotDir(templateId);
+  if (!snapshotDir) return { html, count: 0 };
+  const fromRoot = await siteRoot(snapshotDir);
+  const toRoot = await siteRoot(projectPath);
+  const fromFiles = await listSourceFiles(fromRoot);
+  const swaps: Array<{ from: string; to: string }> = [];
+  for (const fromFile of fromFiles) {
+    const rel = path.relative(fromRoot, fromFile);
+    const toFile = path.join(toRoot, rel);
+    const [fromSource, toSource] = await Promise.all([
+      fs.readFile(fromFile, 'utf8').catch(() => ''),
+      fs.readFile(toFile, 'utf8').catch(() => ''),
+    ]);
+    if (!fromSource || !toSource || fromSource === toSource) continue;
+    swaps.push(...alignStringSwaps(extractVisibleStrings(fromSource), extractVisibleStrings(toSource)));
+  }
+  const source =
+    pack?.source?.heroTitle || pack?.source?.heroSubtitle
+      ? pack.source
+      : await captureTemplateSource(fromRoot);
+  const snapshotHero = new Set(
+    [source?.heroTitle, source?.heroSubtitle, source?.tagline]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.replace(/\s+/g, ' ').trim()),
+  );
+  const gptHero = new Set(
+    [pack?.heroTitle, pack?.heroSubtitle, pack?.tagline]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.replace(/\s+/g, ' ').trim()),
+  );
+  const unique = swaps.filter((row) => {
+    const from = row.from.replace(/\s+/g, ' ').trim();
+    const to = row.to.replace(/\s+/g, ' ').trim();
+    if (snapshotHero.has(from) && gptHero.has(to)) return false;
+    return from !== to;
+  });
+  if (!unique.length) return { html, count: 0 };
+  return { html: applyTextSwapsToHtml(html, unique), count: unique.length };
 }
 
 function isDishName(value: string): boolean {

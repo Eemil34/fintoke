@@ -4,7 +4,7 @@ import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { ensureCopySwaps, injectLiveCopyOverlay, readFastCopy } from '@/lib/templates/fastPreview';
+import { applyProjectEditsToHtml, ensureCopySwaps, injectLiveCopyOverlay, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { freezePreviewHtml, prioritizeLcpImage, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
@@ -151,8 +151,9 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   const project = await getProjectById(projectId);
   let copyPack = null as Awaited<ReturnType<typeof readFastCopy>>;
   let templateId = '';
+  let projectPath = '';
   if (project) {
-    const projectPath = await resolveProjectWorkspace(project, projectId);
+    projectPath = await resolveProjectWorkspace(project, projectId);
     copyPack = await readFastCopy(projectPath);
     templateId =
       copyPack?.templateId ||
@@ -199,7 +200,9 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (type.includes('text/html')) {
           text = freezePreviewHtml(text);
-          if (copyPack) {
+          const painted = await applyProjectEditsToHtml(text, projectPath, resolvedTemplate, copyPack);
+          text = painted.html;
+          if (copyPack && painted.count === 0) {
             const packed = await ensureCopySwaps(copyPack);
             text = injectLiveCopyOverlay(text, packed);
           }
@@ -345,7 +348,9 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   if (contentType.includes('text/html')) {
     let body = freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port));
-    if (copyPack) {
+    const painted = await applyProjectEditsToHtml(body, projectPath, resolvedTemplate, copyPack);
+    body = painted.html;
+    if (copyPack && painted.count === 0) {
       const packed = await ensureCopySwaps(copyPack);
       body = injectLiveCopyOverlay(body, packed);
     }
