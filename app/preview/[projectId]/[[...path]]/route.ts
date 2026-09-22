@@ -350,13 +350,10 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   if (contentType.includes('text/html')) {
-    let body = rewriteHtml(await upstream.text(), prefix, preview.port);
-    if (!liveEdits) {
-      body = freezePreviewHtml(body);
-      if (copyPack) {
-        const packed = await ensureCopySwaps(copyPack);
-        body = injectLiveCopyOverlay(body, packed);
-      }
+    let body = freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port));
+    if (!liveEdits && copyPack) {
+      const packed = await ensureCopySwaps(copyPack);
+      body = injectLiveCopyOverlay(body, packed);
     }
     body = prioritizeLcpImage(body);
     out.delete('content-length');
