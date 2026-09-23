@@ -197,6 +197,12 @@ export async function normalizeGeneratedProject(projectPath: string): Promise<bo
   const revealChanged = await ensureRevealVisible(projectPath);
   const images = await ensureSiteImages(projectPath);
   try {
+    const { applyFintokeBrandIcons } = await import('./staticSite');
+    await applyFintokeBrandIcons(projectPath);
+  } catch (error) {
+    console.warn('[Preview] Failed to apply Fintoke favicon:', error);
+  }
+  try {
     await retargetMismatchedRemoteImages(projectPath);
   } catch (error) {
     console.warn('[Preview] Failed to retarget photos:', error);

@@ -194,22 +194,19 @@ export default config;
 
   await writeFile(path.join(projectPath, 'scripts/run-dev.js'), RUN_DEV_SCRIPT);
 
-  await writeFile(
-    path.join(projectPath, 'app/icon.svg'),
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="8" fill="${theme.primary}"/>
-  <circle cx="16" cy="16" r="6" fill="${theme.accent}"/>
+  try {
+    const { applyFintokeBrandIcons } = await import('./staticSite');
+    await applyFintokeBrandIcons(projectPath);
+  } catch {
+    await writeFile(
+      path.join(projectPath, 'app/icon.svg'),
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#FF5A1F"/>
+  <text x="8" y="23" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="#fff">F</text>
 </svg>
 `,
-  );
-
-  await writeFile(
-    path.join(projectPath, 'public/favicon.ico'),
-    Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-      'base64',
-    ),
-  );
+    );
+  }
 
   await writeFile(
     path.join(projectPath, 'app/globals.css'),
@@ -258,7 +255,7 @@ import { site } from '@/lib/site';
 export const metadata = {
   title: site.name,
   description: site.description,
-  icons: { icon: '/favicon.ico' },
+  icons: { icon: '/fintoke-icon.png', apple: '/fintoke-icon.png' },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

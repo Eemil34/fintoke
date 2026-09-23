@@ -215,6 +215,54 @@ export function freezePreviewHtml(html: string): string {
     .replace(/<script\b[^>]*\/?>/gi, '');
 }
 
+export function isBrandIconRequest(segments?: string[]) {
+  const last = segments?.[segments.length - 1] || '';
+  return /^(favicon\.(ico|png|svg)|icon\.svg|icon\.png|apple-icon.*|apple-touch-icon.*)$/i.test(last);
+}
+
+export async function readFintokeBrandIcon(): Promise<{ body: Buffer; contentType: string } | null> {
+  for (const file of [
+    path.join(process.cwd(), 'public', 'fintoke-icon.png'),
+    path.join(process.cwd(), 'app', 'icon.png'),
+  ]) {
+    try {
+      const body = await fs.readFile(file);
+      if (body.length > 32) return { body, contentType: 'image/png' };
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+
+export function injectFintokeFavicon(html: string): string {
+  const tags =
+    '<link rel="icon" href="/fintoke-icon.png" type="image/png"/><link rel="apple-touch-icon" href="/fintoke-icon.png"/>';
+  const next = html.replace(
+    /<link\b[^>]*(?:rel=["'][^"']*icon[^"']*["']|href=["'][^"']*(?:favicon|\/icon\.svg|\/icon\.png)[^"']*["'])[^>]*>/gi,
+    '',
+  );
+  if (/<head[^>]*>/i.test(next)) return next.replace(/<head[^>]*>/i, (open) => `${open}${tags}`);
+  return `${tags}${next}`;
+}
+
+export async function applyFintokeBrandIcons(projectPath: string): Promise<void> {
+  const icon = await readFintokeBrandIcon();
+  if (!icon) return;
+  for (const root of [projectPath, path.join(projectPath, 'repo')]) {
+    try {
+      await fs.access(path.join(root, 'app'));
+    } catch {
+      continue;
+    }
+    await fs.mkdir(path.join(root, 'public'), { recursive: true });
+    await fs.writeFile(path.join(root, 'app', 'icon.png'), icon.body);
+    await fs.rm(path.join(root, 'app', 'icon.svg'), { force: true });
+    await fs.writeFile(path.join(root, 'public', 'favicon.ico'), icon.body);
+    await fs.writeFile(path.join(root, 'public', 'favicon.png'), icon.body);
+  }
+}
+
 export function addHeroEntrance(html: string): string {
   const css = `<style id="fintoke-enter">
 img[fetchpriority=high]{content-visibility:visible}

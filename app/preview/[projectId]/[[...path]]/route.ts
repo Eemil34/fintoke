@@ -6,7 +6,7 @@ import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { paintCopyOnHtml, injectLiveCopyOverlay, previewCopyPack, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
-import { freezePreviewHtml, prioritizeLcpImage, readStaticExportFile, resolveProjectStaticExportDir, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
+import { freezePreviewHtml, injectFintokeFavicon, isBrandIconRequest, prioritizeLcpImage, readFintokeBrandIcon, readStaticExportFile, resolveProjectStaticExportDir, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { freezeProjectPreview, hasAgentPreviewMark } from '@/lib/templates/exportStatic';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
 
@@ -36,6 +36,7 @@ function previewPage(title: string, message: string, logs: string[]) {
 <head>
   <meta charset="utf-8" />
   <title>${escapeHtml(title)}</title>
+  <link rel="icon" href="/fintoke-icon.png" type="image/png" />
   <style>
     body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; min-height: 100vh; background: #111827; color: #f8fafc; display: flex; align-items: center; justify-content: center; }
     main { max-width: 640px; margin: 0 auto; padding: 32px 20px; text-align: center; }
@@ -163,6 +164,16 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       '';
   }
 
+  if (!isProbe && isBrandIconRequest(segments)) {
+    const icon = await readFintokeBrandIcon();
+    if (icon) {
+      const headers = previewSecurityHeaders(new Headers());
+      headers.set('content-type', icon.contentType);
+      headers.set('cache-control', 'public, max-age=86400');
+      return new Response(new Uint8Array(icon.body), { status: 200, headers });
+    }
+  }
+
   const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
   const needsProjectFreeze = projectPath ? await hasAgentPreviewMark(projectPath) : false;
   let projectStatic = projectPath ? await resolveProjectStaticExportDir(projectPath) : null;
@@ -213,7 +224,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       if (rewriteText) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (type.includes('text/html')) {
-          text = freezePreviewHtml(text);
+          text = injectFintokeFavicon(freezePreviewHtml(text));
           const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
           if (packed) {
             text = paintCopyOnHtml(text, packed);
@@ -360,7 +371,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   if (contentType.includes('text/html')) {
-    let body = freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port));
+    let body = injectFintokeFavicon(freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port)));
     const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
     if (packed) {
       body = paintCopyOnHtml(body, packed);
