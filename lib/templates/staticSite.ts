@@ -221,6 +221,12 @@ img[fetchpriority=high]{content-visibility:visible}
 img:not([fetchpriority=high]){content-visibility:auto}
 .reveal,[class*="reveal"],.hero-rise,[data-reveal],.opacity-0{opacity:1!important;transform:none!important;visibility:visible!important;animation:none!important}
 html,body,main,#__next{opacity:1!important;visibility:visible!important}
+footer{width:100%!important;max-width:100%!important;box-sizing:border-box}
+footer > div,footer > section{width:100%!important;max-width:100%!important;margin-left:auto!important;margin-right:auto!important}
+footer [class*="grid-cols"],footer [class*="grid"]{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))!important;justify-content:space-between!important;align-items:start!important;gap:2rem 2.5rem!important;width:100%!important}
+@media (min-width:768px){
+  footer > div > div[class*="flex"]:not(nav):not(form):not(ul){flex-direction:row!important;flex-wrap:wrap!important;justify-content:space-between!important;align-items:flex-start!important;gap:2rem 2.5rem!important;width:100%!important}
+}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>`;
   if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (open) => `${open}${css}`);

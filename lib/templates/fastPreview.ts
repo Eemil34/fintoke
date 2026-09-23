@@ -801,10 +801,18 @@ function copyPairs(pack: FastCopyFile): Array<[string, string]> {
   (pack.swaps || []).forEach((row) => rows.push([row.from, row.to]));
   if (pack.source?.name) rows.push([pack.source.name, pack.name]);
   TEMPLATE_BRANDS.forEach((from) => rows.push([from, pack.name]));
-  return rows.filter(
-    (row): row is [string, string] =>
-      Boolean(row[0] && row[1] && normalizeCopy(row[0]) !== normalizeCopy(row[1]) && !NAV_PAINT.test(row[0])),
+  const brandKey = new Set(
+    [pack.source?.name, ...TEMPLATE_BRANDS].filter(Boolean).map((value) => normalizeCopy(value || '')),
   );
+  return rows.filter((row): row is [string, string] => {
+    const [from, to] = row;
+    if (!from || !to || normalizeCopy(from) === normalizeCopy(to) || NAV_PAINT.test(from)) return false;
+    const fromBrand = brandKey.has(normalizeCopy(from));
+    if (!fromBrand && normalizeCopy(to) === normalizeCopy(pack.name)) return false;
+    if (/@/.test(from) && !/@/.test(to)) return false;
+    if (/^\+?[\d][\d\s().-]{6,}$/.test(from) && !/\d/.test(to)) return false;
+    return true;
+  });
 }
 
 export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
@@ -815,7 +823,10 @@ export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
     held.push(block);
     return `<!--FINTOKE_PAINT_${held.length - 1}-->`;
   };
-  let next = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold).replace(/<svg\b[\s\S]*?<\/svg>/gi, hold);
+  let next = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold)
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, hold)
+    .replace(/<form\b[\s\S]*?<\/form>/gi, hold);
 
   const pairs = copyPairs(pack);
   const exact = new Map<string, string>();
@@ -826,15 +837,18 @@ export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
     exact.set(key, clipToOriginal(to, from, 0.35));
     if (key.length >= 24) prefixes.push({ key, to: exact.get(key) || to });
   }
-  const brands = [...new Set(pairs.filter(([from]) => from.length <= 42).map(([from]) => from))].sort(
-    (a, b) => b.length - a.length,
-  );
+  const brands = [...new Set([pack.source?.name, ...TEMPLATE_BRANDS].filter((value): value is string => Boolean(value)))]
+    .filter((value) => normalizeCopy(value) !== normalizeCopy(pack.name))
+    .sort((a, b) => b.length - a.length);
 
   next = next.replace(
-    /<(a|span|div|p|h1|h2|h3|strong|em|button)(\b[^>]*)>([\s\S]{0,120}?)<\/\1>/gi,
+    /<(a|span|p|h1|h2|h3|strong|em)(\b[^>]*)>([\s\S]{0,80}?)<\/\1>/gi,
     (full, tag: string, attrs: string, inner: string) => {
+      if (/<(a|ul|form|nav|input|button|p|h2|h3)\b/i.test(inner)) return full;
       const text = decodeHtmlText(inner);
-      if (!text || text.length > 42 || NAV_PAINT.test(text)) return full;
+      if (!text || text.length > 42 || NAV_PAINT.test(text) || /@/.test(text) || /^\+?[\d][\d\s().-]{6,}$/.test(text)) {
+        return full;
+      }
       if (brands.some((brand) => normalizeCopy(text) === normalizeCopy(brand))) {
         return `<${tag}${attrs}>${escapeHtml(clipCopy(pack.name, 28))}</${tag}>`;
       }
@@ -850,11 +864,15 @@ export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
     if (!decoded || NAV_PAINT.test(decoded)) return full;
     const key = normalizeCopy(decoded);
     const mapped = exact.get(key);
-    if (mapped) return `>${lead}${escapeHtml(mapped)}${trail}<`;
-    const prefix = prefixes.find(
-      (row) => key.startsWith(row.key.slice(0, 36)) || row.key.startsWith(key.slice(0, 36)),
-    );
-    if (prefix && decoded.length >= 18) return `>${lead}${escapeHtml(clipToOriginal(prefix.to, decoded, 0.35))}${trail}<`;
+    if (mapped) {
+      const mappedIsBrand = normalizeCopy(mapped) === normalizeCopy(pack.name);
+      const fromIsBrand = brands.some((brand) => key === normalizeCopy(brand));
+      if (!mappedIsBrand || fromIsBrand) return `>${lead}${escapeHtml(mapped)}${trail}<`;
+    }
+    const prefix = prefixes.find((row) => decoded.length >= 40 && key.startsWith(row.key.slice(0, 40)));
+    if (prefix && normalizeCopy(prefix.to) !== normalizeCopy(pack.name)) {
+      return `>${lead}${escapeHtml(clipToOriginal(prefix.to, decoded, 0.35))}${trail}<`;
+    }
 
     let updated = decoded;
     for (const brand of brands) {
@@ -1075,20 +1093,21 @@ function apply(){
     }
   }
   if(document.body)walk(document.body);
-  document.querySelectorAll("header *, footer *, nav *, a").forEach(function(el){
+  document.querySelectorAll("header a, header span, footer a, footer p, footer span").forEach(function(el){
+    if(el.querySelector&&el.querySelector("img,svg,input,form,ul,nav"))return;
+    if(el.children&&el.children.length>1)return;
     var t=txt(el);
-    if(!t||NAV.test(t)||t.length>42)return;
+    if(!t||NAV.test(t)||t.length>42||/@/.test(t))return;
     var isBrand=t===d.sourceName||/bun\\s*&\\s*bite/i.test(t);
     for(var i=0;i<brands.length&&!isBrand;i++){if(brands[i][0]&&t===brands[i][0])isBrand=true;}
-    if(!isBrand)return;
-    if(el.querySelector&&el.querySelector("img,svg,nav,ul"))return;
-    set(el,d.name);
+    if(isBrand)set(el,d.name);
   });
-  document.querySelectorAll("header a, header [class*='logo'], header [class*='brand'], a[href='#top'], footer [class*='logo'], footer [class*='brand']").forEach(function(el){
-    if(el.querySelector&&el.querySelector("img,svg"))return;
+  document.querySelectorAll("header a, a[href='#top']").forEach(function(el){
+    if(el.querySelector&&el.querySelector("img,svg,ul,nav"))return;
+    if(el.children&&el.children.length>1)return;
     var t=txt(el);
     if(t&&NAV.test(t))return;
-    if(isLogo(el)||t===d.sourceName||/bun\\s*&\\s*bite/i.test(t))set(el,d.name);
+    if(isLogo(el)&&t&&t.length<=42&&!/@/.test(t))set(el,d.name);
   });
   document.querySelectorAll("section,main,article").forEach(function(sec){
     var count=sec.querySelectorAll("h3,h4").length;
