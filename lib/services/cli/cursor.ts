@@ -606,6 +606,9 @@ async function executeCursor(
     .access(repoCandidate)
     .then(() => repoCandidate)
     .catch(() => absoluteProjectPath);
+  const { markAgentPreview } = await import('@/lib/templates/exportStatic');
+  await markAgentPreview(repoPath);
+  await markAgentPreview(absoluteProjectPath);
 
   const globalSettings = await loadGlobalSettings();
   const cursorSettings = globalSettings.cli_settings?.cursor ?? {};
@@ -983,5 +986,11 @@ async function runCursorOnce(params: {
     };
   }
 
+  try {
+    const { freezeProjectPreview } = await import('@/lib/templates/exportStatic');
+    await freezeProjectPreview(repoPath);
+  } catch (error) {
+    console.warn('[Cursor] Preview freeze failed:', error);
+  }
   return { success: true };
 }

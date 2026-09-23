@@ -6,7 +6,8 @@ import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { applySafeCopySwaps, contentSwapsFromProject, injectLiveCopyOverlay, previewCopyPack, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
-import { freezePreviewHtml, prioritizeLcpImage, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
+import { freezePreviewHtml, prioritizeLcpImage, readStaticExportFile, resolveProjectStaticExportDir, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
+import { freezeProjectPreview, hasAgentPreviewMark } from '@/lib/templates/exportStatic';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
 
 export const runtime = 'nodejs';
@@ -163,7 +164,21 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
-  const staticRoot = resolvedTemplate ? await resolveStaticExportDir(resolvedTemplate) : null;
+  const needsProjectFreeze = projectPath ? await hasAgentPreviewMark(projectPath) : false;
+  let projectStatic = projectPath ? await resolveProjectStaticExportDir(projectPath) : null;
+  if (needsProjectFreeze && projectPath && !projectStatic) {
+    if (isProbe) {
+      void freezeProjectPreview(projectPath).catch(() => null);
+      return new Response('wait', {
+        status: 503,
+        headers: { 'retry-after': '2', 'cache-control': 'no-store' },
+      });
+    }
+    projectStatic = await freezeProjectPreview(projectPath);
+  }
+  const templateStatic = resolvedTemplate ? await resolveStaticExportDir(resolvedTemplate) : null;
+  const staticRoot = projectStatic || templateStatic;
+  const fromProject = Boolean(projectStatic);
   if (staticRoot) {
     if (isProbe) {
       return new Response('ready', { status: 200, headers: { 'cache-control': 'no-store' } });
@@ -200,10 +215,12 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (type.includes('text/html')) {
           text = freezePreviewHtml(text);
-          const fileSwaps = await contentSwapsFromProject(projectPath, resolvedTemplate);
-          text = applySafeCopySwaps(text, fileSwaps);
-          const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
-          if (packed) text = injectLiveCopyOverlay(text, packed);
+          if (!fromProject) {
+            const fileSwaps = await contentSwapsFromProject(projectPath, resolvedTemplate);
+            text = applySafeCopySwaps(text, fileSwaps);
+            const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
+            if (packed) text = injectLiveCopyOverlay(text, packed);
+          }
           text = prioritizeLcpImage(
             text
               .replace(/<meta[^>]+name=["']referrer["'][^>]*>/gi, '')

@@ -867,7 +867,7 @@ const persistProjectPreferences = useCallback(
       await fetch(`${API_BASE}/api/projects/${projectId}/preview/reload`, {
         method: 'POST',
       }).catch(() => null);
-      for (let i = 0; i < 25; i += 1) {
+      for (let i = 0; i < 90; i += 1) {
         try {
           const probe = await fetch(`${base}?fintoke_probe=1&v=${Date.now()}`, { cache: 'no-store' });
           if (probe.ok) {

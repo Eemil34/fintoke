@@ -6,6 +6,8 @@ import { npmInstallEnv, reclaimVolumeSpaceSync } from '@/lib/server/volumeCleanu
 import { GENERATED_IMAGES_CONFIG } from './siteImages';
 import { STATIC_EXPORT_DIR, STATIC_EXPORT_VERSION } from './staticSite';
 
+export const AGENT_PREVIEW_MARK = '.fintoke-agent';
+
 const EXPORT_CONFIG = `const path = require('path');
 
 /** @type {import('next').NextConfig} */
@@ -82,10 +84,20 @@ export async function exportSnapshotStatic(snapshotPath: string): Promise<string
       TMPDIR: os.tmpdir(),
       NEXT_TELEMETRY_DISABLED: '1',
     });
-    await run('npm', ['install', '--include=dev', '--no-audit', '--no-fund'], work, {
-      ...exportEnv,
-      NODE_ENV: 'development',
-    });
+    let hasModules = false;
+    try {
+      await fs.access(path.join(snapshotPath, 'node_modules', 'next', 'package.json'));
+      await fs.symlink(path.join(snapshotPath, 'node_modules'), path.join(work, 'node_modules'));
+      hasModules = true;
+    } catch {
+      hasModules = false;
+    }
+    if (!hasModules) {
+      await run('npm', ['install', '--include=dev', '--no-audit', '--no-fund'], work, {
+        ...exportEnv,
+        NODE_ENV: 'development',
+      });
+    }
     await run('npx', ['next', 'build'], work, {
       ...exportEnv,
       NODE_ENV: 'production',
@@ -99,6 +111,82 @@ export async function exportSnapshotStatic(snapshotPath: string): Promise<string
     return dest;
   } finally {
     await fs.rm(work, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+async function hasAppPage(dir: string): Promise<boolean> {
+  for (const rel of ['app/page.tsx', 'app/page.jsx', 'src/app/page.tsx', 'src/app/page.jsx']) {
+    try {
+      await fs.access(path.join(dir, rel));
+      return true;
+    } catch {
+      // try next
+    }
+  }
+  return false;
+}
+
+export async function resolveSiteRoot(dir: string): Promise<string> {
+  const repo = path.join(dir, 'repo');
+  if (await hasAppPage(repo)) return repo;
+  if (await hasAppPage(dir)) return dir;
+  return dir;
+}
+
+export async function markAgentPreview(projectPath: string): Promise<void> {
+  const root = await resolveSiteRoot(projectPath);
+  await fs.writeFile(path.join(root, AGENT_PREVIEW_MARK), `${Date.now()}\n`).catch(() => undefined);
+  if (root !== projectPath) {
+    await fs.writeFile(path.join(projectPath, AGENT_PREVIEW_MARK), `${Date.now()}\n`).catch(() => undefined);
+  }
+}
+
+export async function hasAgentPreviewMark(projectPath: string): Promise<boolean> {
+  for (const dir of [projectPath, path.join(projectPath, 'repo')]) {
+    try {
+      await fs.access(path.join(dir, AGENT_PREVIEW_MARK));
+      return true;
+    } catch {
+      // keep looking
+    }
+  }
+  return false;
+}
+
+export async function freezeProjectPreview(projectPath: string): Promise<string | null> {
+  const root = await resolveSiteRoot(projectPath);
+  if (!(await hasAppPage(root))) return null;
+  const key = `proj:${root}`;
+  const existing = inFlight.get(key);
+  if (existing) {
+    await existing.catch(() => false);
+    const dest = path.join(root, STATIC_EXPORT_DIR, 'index.html');
+    try {
+      await fs.access(dest);
+      return path.join(root, STATIC_EXPORT_DIR);
+    } catch {
+      return null;
+    }
+  }
+  const work = (async () => {
+    try {
+      await exportSnapshotStatic(root);
+      lastFailAt.delete(key);
+      lastErrors.delete(key);
+      return true;
+    } catch (error) {
+      lastFailAt.set(key, Date.now());
+      lastErrors.set(key, { at: new Date().toISOString(), message: errorMessage(error) });
+      console.warn('[static] Project preview freeze failed:', error);
+      return false;
+    }
+  })();
+  inFlight.set(key, work);
+  try {
+    const ok = await work;
+    return ok ? path.join(root, STATIC_EXPORT_DIR) : null;
+  } finally {
+    inFlight.delete(key);
   }
 }
 

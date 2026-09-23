@@ -39,6 +39,22 @@ export async function resolveStaticExportDir(templateId: string): Promise<string
   return null;
 }
 
+export async function resolveProjectStaticExportDir(projectPath: string): Promise<string | null> {
+  if (!projectPath) return null;
+  for (const root of [path.join(projectPath, 'repo'), projectPath]) {
+    for (const name of [STATIC_EXPORT_DIR, 'out']) {
+      const index = path.join(root, name, 'index.html');
+      try {
+        await fs.access(index);
+        return path.join(root, name);
+      } catch {
+        // try next
+      }
+    }
+  }
+  return null;
+}
+
 export async function hasStaticExport(templateId: string): Promise<boolean> {
   return Boolean(await resolveStaticExportDir(templateId));
 }
@@ -201,7 +217,6 @@ export function freezePreviewHtml(html: string): string {
 
 export function addHeroEntrance(html: string): string {
   const css = `<style id="fintoke-enter">
-@keyframes fintokeHero{from{opacity:.35}to{opacity:1}}
 img[fetchpriority=high]{content-visibility:visible}
 img:not([fetchpriority=high]){content-visibility:auto}
 .reveal,[class*="reveal"],.hero-rise,[data-reveal],.opacity-0{opacity:1!important;transform:none!important;visibility:visible!important;animation:none!important}
