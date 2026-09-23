@@ -178,7 +178,6 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
   const templateStatic = resolvedTemplate ? await resolveStaticExportDir(resolvedTemplate) : null;
   const staticRoot = projectStatic || templateStatic;
-  const fromProject = Boolean(projectStatic);
   if (staticRoot) {
     if (isProbe) {
       return new Response('ready', { status: 200, headers: { 'cache-control': 'no-store' } });
@@ -215,12 +214,10 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (type.includes('text/html')) {
           text = freezePreviewHtml(text);
-          if (!fromProject) {
-            const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
-            if (packed) {
-              text = paintCopyOnHtml(text, packed);
-              text = injectLiveCopyOverlay(text, packed);
-            }
+          const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
+          if (packed) {
+            text = paintCopyOnHtml(text, packed);
+            text = injectLiveCopyOverlay(text, packed);
           }
           text = prioritizeLcpImage(
             text

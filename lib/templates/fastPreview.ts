@@ -193,14 +193,18 @@ export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
 }
 
 export async function readFastCopy(projectPath: string): Promise<FastCopyFile | null> {
-  try {
-    const raw = await fs.readFile(path.join(projectPath, FAST_COPY_FILE), 'utf8');
-    const parsed = JSON.parse(raw) as FastCopyFile;
-    if (!parsed?.name) return null;
-    return parsed;
-  } catch {
-    return null;
+  if (!projectPath) return null;
+  const dirs = [projectPath, path.join(projectPath, 'repo')];
+  for (const dir of dirs) {
+    try {
+      const raw = await fs.readFile(path.join(dir, FAST_COPY_FILE), 'utf8');
+      const parsed = JSON.parse(raw) as FastCopyFile;
+      if (parsed?.name) return parsed;
+    } catch {
+      // try next location
+    }
   }
+  return null;
 }
 
 async function siteRoot(dir: string): Promise<string> {
@@ -672,12 +676,24 @@ export function applyCopyToHtml(html: string, pack: FastCopyFile): string {
 function decodeHtmlText(value: string): string {
   return value
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&quot;/g, '"')
+    .replace(/&amp;/gi, '&')
+    .replace(/&#38;/g, '&')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&#160;/g, ' ')
+    .replace(/&#39;|&apos;|&#x27;/gi, "'")
+    .replace(/&quot;/gi, '"')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeCopy(value: string): string {
+  return decodeHtmlText(value)
+    .replace(/[\u2018\u2019\u02BC]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014\u2212]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 function extractTagTexts(html: string, tag: string): string[] {
@@ -735,63 +751,18 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
 const NAV_PAINT =
   /^(menu|home|about|about us|bar|login|bag|search|contact|gallery|reservations?|book now|our story|hours|visit|order|shop|wine|private|starters|mains|sides|sweets|drinks|quick links|subscribe|locations)$/i;
 
-function leafTexts(block: string, min = 2, max = 400): string[] {
-  return [...block.matchAll(/>([^<]{2,400})</g)]
-    .map((match) => decodeHtmlText(match[1]))
-    .filter((text) => text.length >= min && text.length <= max && !NAV_PAINT.test(text));
-}
+const TEMPLATE_BRANDS = [
+  'Bun & Bite',
+  'Hearth & Vale',
+  'Coral Cove',
+  'Veloura Dining & Lounge',
+  'Veloura Steak',
+  'Veloura',
+  'New Restaurant',
+  'Säde',
+];
 
-export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
-  pack = fitCopyPack(pack);
-  if (!pack.name || isTemplateLabel(pack.name)) return html;
-  const held: string[] = [];
-  const hold = (block: string) => {
-    held.push(block);
-    return `<!--FINTOKE_PAINT_${held.length - 1}-->`;
-  };
-  let next = html
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold)
-    .replace(/<svg\b[\s\S]*?<\/svg>/gi, hold)
-    .replace(/\s(?:class|className|style|src|srcset|srcSet|href|poster|id|data-[\w-]+)=["'][^"']*["']/gi, hold);
-
-  const replace = (from: string, to: string) => {
-    const src = (from || '').replace(/\s+/g, ' ').trim();
-    const dest = (to || '').replace(/\s+/g, ' ').trim();
-    if (!src || !dest || src === dest || src.length < 2) return;
-    if (NAV_PAINT.test(src)) return;
-    if (!next.includes(src) && !next.includes(src.replace(/&/g, '&amp;'))) return;
-    next = next.split(src).join(dest);
-    const encoded = src.replace(/&/g, '&amp;');
-    if (encoded !== src) next = next.split(encoded).join(dest.replace(/&/g, '&amp;'));
-  };
-
-  const header = html.match(/<header\b[\s\S]{0,24000}/i)?.[0] || html.slice(0, 8000);
-  const footer = html.match(/<footer\b[\s\S]{0,24000}/i)?.[0] || '';
-  const brands = new Set<string>();
-  const addBrand = (raw: string) => {
-    const text = decodeHtmlText(raw);
-    if (text.length >= 2 && text.length <= 42 && !NAV_PAINT.test(text) && !/@/.test(text) && text !== pack.name) {
-      brands.add(text);
-    }
-  };
-  addBrand((html.match(/<title>([^<]+)/i)?.[1] || '').split(/[—–\-|•]/)[0] || '');
-  for (const match of html.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)) addBrand(match[1]);
-  leafTexts(header, 2, 42).forEach(addBrand);
-  leafTexts(footer, 2, 42).forEach(addBrand);
-  if (pack.source?.name) addBrand(pack.source.name);
-  for (const extra of [
-    'Bun & Bite',
-    'Hearth & Vale',
-    'Coral Cove',
-    'Veloura Dining & Lounge',
-    'Veloura Steak',
-    'Veloura',
-    'New Restaurant',
-    'Säde',
-  ]) {
-    addBrand(extra);
-  }
-
+function copyPairs(pack: FastCopyFile): Array<[string, string]> {
   const longSlots = [
     pack.heroSubtitle,
     pack.description,
@@ -800,13 +771,9 @@ export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
     pack.tagline,
     pack.footer,
   ].filter((value) => value && value.length >= 8);
-  const exactPairs: Array<[string, string]> = [
+  const rows: Array<[string, string]> = [
     [
       'Fresh ingredients, bold flavors, and handcrafted with love. Our burgers aren\'t just food — they\'re a reason to smile.',
-      pack.heroSubtitle || pack.description,
-    ],
-    [
-      'Fresh ingredients, bold flavors, and handcrafted with love. Our burgers aren’t just food — they’re a reason to smile.',
       pack.heroSubtitle || pack.description,
     ],
     [
@@ -823,56 +790,98 @@ export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
     ['Find Us Near You', pack.ctaTitle],
     ['House 12, Road 2, Dhaka', pack.address],
     ['Dhaka, Bangladesh', pack.address],
+    ['Dhanmondi', pack.address?.split(',')[0] || pack.address],
+    ['hello@bunandbite.com', pack.email],
+    ['+880 1234 567890', pack.phone],
+    ['+358 40 123 4567', pack.phone],
   ];
-  for (const [from, to] of exactPairs) {
-    if (to) replace(from, clipToOriginal(to, from, 0.35));
-  }
   (pack.source?.phrases || []).forEach((from, index) => {
-    const slot = longSlots[index];
-    if (slot) replace(from, clipToOriginal(slot, from, 0.3));
+    rows.push([from, longSlots[index] || pack.description || pack.tagline]);
   });
-
-  for (const from of [...brands].sort((a, b) => b.length - a.length)) {
-    replace(from, clipCopy(pack.name, Math.max(from.length + 10, 28)));
-  }
-
-  const headings = [...extractTagTexts(next, 'h2'), ...extractTagTexts(next, 'h3'), ...extractTagTexts(next, 'h4')].filter(
-    (text) =>
-      text.length >= 3 &&
-      text.length <= 48 &&
-      !NAV_PAINT.test(text) &&
-      !/quick links|stay in the loop|about us|our locations/i.test(text),
+  (pack.swaps || []).forEach((row) => rows.push([row.from, row.to]));
+  if (pack.source?.name) rows.push([pack.source.name, pack.name]);
+  TEMPLATE_BRANDS.forEach((from) => rows.push([from, pack.name]));
+  return rows.filter(
+    (row): row is [string, string] =>
+      Boolean(row[0] && row[1] && normalizeCopy(row[0]) !== normalizeCopy(row[1]) && !NAV_PAINT.test(row[0])),
   );
-  const headingTo = [pack.ctaTitle, pack.eyebrow, ...(pack.menu || []).map((item) => item.title)].filter(Boolean);
-  headings.forEach((from, index) => {
-    if (/bun\s*&\s*bite/i.test(from)) return;
-    const to = headingTo[index];
-    if (to) replace(from, clipToOriginal(to, from, 0.3));
+}
+
+export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
+  pack = fitCopyPack(pack);
+  if (!pack.name || isTemplateLabel(pack.name)) return html;
+  const held: string[] = [];
+  const hold = (block: string) => {
+    held.push(block);
+    return `<!--FINTOKE_PAINT_${held.length - 1}-->`;
+  };
+  let next = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold).replace(/<svg\b[\s\S]*?<\/svg>/gi, hold);
+
+  const pairs = copyPairs(pack);
+  const exact = new Map<string, string>();
+  const prefixes: Array<{ key: string; to: string }> = [];
+  for (const [from, to] of pairs) {
+    const key = normalizeCopy(from);
+    if (!key || exact.has(key)) continue;
+    exact.set(key, clipToOriginal(to, from, 0.35));
+    if (key.length >= 24) prefixes.push({ key, to: exact.get(key) || to });
+  }
+  const brands = [...new Set(pairs.filter(([from]) => from.length <= 42).map(([from]) => from))].sort(
+    (a, b) => b.length - a.length,
+  );
+
+  next = next.replace(
+    /<(a|span|div|p|h1|h2|h3|strong|em|button)(\b[^>]*)>([\s\S]{0,120}?)<\/\1>/gi,
+    (full, tag: string, attrs: string, inner: string) => {
+      const text = decodeHtmlText(inner);
+      if (!text || text.length > 42 || NAV_PAINT.test(text)) return full;
+      if (brands.some((brand) => normalizeCopy(text) === normalizeCopy(brand))) {
+        return `<${tag}${attrs}>${escapeHtml(clipCopy(pack.name, 28))}</${tag}>`;
+      }
+      return full;
+    },
+  );
+
+  next = next.replace(/>([^<]{1,800})</g, (full, raw: string) => {
+    if (!raw.trim() || raw.includes('FINTOKE_PAINT')) return full;
+    const lead = raw.match(/^\s*/)?.[0] || '';
+    const trail = raw.match(/\s*$/)?.[0] || '';
+    const decoded = decodeHtmlText(raw);
+    if (!decoded || NAV_PAINT.test(decoded)) return full;
+    const key = normalizeCopy(decoded);
+    const mapped = exact.get(key);
+    if (mapped) return `>${lead}${escapeHtml(mapped)}${trail}<`;
+    const prefix = prefixes.find(
+      (row) => key.startsWith(row.key.slice(0, 36)) || row.key.startsWith(key.slice(0, 36)),
+    );
+    if (prefix && decoded.length >= 18) return `>${lead}${escapeHtml(clipToOriginal(prefix.to, decoded, 0.35))}${trail}<`;
+
+    let updated = decoded;
+    for (const brand of brands) {
+      if (!brand || brand === pack.name) continue;
+      if (updated.includes(brand)) updated = updated.split(brand).join(pack.name);
+    }
+    updated = updated.replace(/bun\s*&\s*bite/gi, pack.name);
+    if (pack.hours && /open|daily|hours|closed|late|\b(?:am|pm)\b/i.test(decoded) && decoded.length < 56) {
+      updated = clipToOriginal(pack.hours, decoded, 0.45);
+    } else if (
+      pack.address &&
+      decoded.length < 64 &&
+      !/@/.test(decoded) &&
+      (/,/.test(decoded) || /street|road|lane|house|avenue|dhanmondi|dhaka|bangladesh|finland/i.test(decoded))
+    ) {
+      updated = clipToOriginal(pack.address, decoded, 0.5);
+    } else if (pack.phone && /^\+?[\d][\d\s().-]{6,22}$/.test(decoded)) {
+      updated = pack.phone;
+    } else if (pack.email && /@/.test(decoded)) {
+      updated = pack.email;
+    }
+    if (updated === decoded) return full;
+    return `>${lead}${escapeHtml(updated)}${trail}<`;
   });
 
-  if (pack.hours) {
-    next = next.replace(
-      />([^<]*(?:open|daily|hours|closed|late|\b(?:am|pm)\b|mon|tue|wed)[^<]{0,48})</gi,
-      (full, text: string) => {
-        if (text.length > 64 || text.length < 4) return full;
-        return `>${clipToOriginal(pack.hours, text, 0.45)}<`;
-      },
-    );
-  }
-  if (pack.address) {
-    next = next.replace(/>([^<]{6,64})</g, (full, text: string) => {
-      if (/@/.test(text) || NAV_PAINT.test(text)) return full;
-      if (!/,/.test(text) && !/street|road|lane|house|avenue|downtown|dhanmondi|dhaka|city|bangladesh|finland/i.test(text)) {
-        return full;
-      }
-      return `>${clipToOriginal(pack.address, text, 0.5)}<`;
-    });
-  }
-  if (pack.phone) {
-    next = next.replace(/>(\+?[\d][\d\s().-]{6,22})</g, `>${pack.phone}<`);
-  }
-  if (pack.email) {
-    next = next.replace(/>([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})</gi, `>${pack.email}<`);
+  if (pack.name) {
+    next = next.replace(/<title>([^<]*)<\/title>/i, `<title>${escapeHtml(pack.name)}</title>`);
   }
 
   return next.replace(/<!--FINTOKE_PAINT_(\d+)-->/g, (_, index) => held[Number(index)] || '');
@@ -918,7 +927,11 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
   const data = {
     name: pack.name,
     sourceName: pack.source?.name || '',
-    brands: brandPairs.map((row) => [row.from, pack.name]),
+    brands: [
+      ...brandPairs.map((row) => [row.from, pack.name]),
+      ...TEMPLATE_BRANDS.filter((from) => from !== pack.name).map((from) => [from, pack.name]),
+    ],
+    pairs: copyPairs(pack).slice(0, 80),
     eyebrow: pack.eyebrow,
     heroTitle: pack.heroTitle,
     heroSubtitle: pack.heroSubtitle,
@@ -1037,33 +1050,45 @@ function apply(){
   if(n>12)return;
   n+=1;
   if(d.name)document.title=d.name;
+  var pairs=(d.pairs||[]).concat(s||[]);
   function walk(node){
     if(!node)return;
     if(node.nodeType===3){
       var parent=node.parentElement;
-      if(parent&&/^(BUTTON|NAV|LABEL|SCRIPT|STYLE)$/.test(parent.tagName))return;
-      if(parent&&parent.closest&&parent.closest("button,nav"))return;
-      if(parent&&parent.closest&&parent.closest("a")&&!isLogo(parent.closest("a"))&&parent.tagName!=="H1")return;
+      if(parent&&/^(SCRIPT|STYLE)$/.test(parent.tagName))return;
       var t=node.nodeValue,o=t;
-      if(!t||t.length<2)return;
+      if(!t||!t.trim())return;
+      var trimmed=t.replace(/\\s+/g," ").trim();
+      if(NAV.test(trimmed))return;
       for(var i=0;i<brands.length;i++){
         if(brands[i][0]&&t.indexOf(brands[i][0])!==-1)t=t.split(brands[i][0]).join(brands[i][1]);
       }
-      if(!inHero(parent)){
-        for(var j=0;j<s.length;j++){if(s[j][0].length>=3&&t.indexOf(s[j][0])!==-1)t=t.split(s[j][0]).join(s[j][1]);}
+      t=t.replace(/bun\\s*&\\s*bite/gi,d.name||t);
+      for(var j=0;j<pairs.length;j++){
+        if(pairs[j][0]&&pairs[j][0].length>=3&&t.indexOf(pairs[j][0])!==-1)t=t.split(pairs[j][0]).join(pairs[j][1]);
       }
       if(t!==o)node.nodeValue=t;
       return;
     }
-    if(node.nodeType===1&&node.tagName!=="SCRIPT"&&node.tagName!=="STYLE"&&node.tagName!=="NAV"&&node.tagName!=="A"){
+    if(node.nodeType===1&&node.tagName!=="SCRIPT"&&node.tagName!=="STYLE"){
       for(var c=node.firstChild;c;c=c.nextSibling)walk(c);
     }
   }
   if(document.body)walk(document.body);
-  document.querySelectorAll("header a, header [class*='logo'], header [class*='brand'], a[href='#top'], footer [class*='logo'], footer [class*='brand']").forEach(function(el){
-    if(!isLogo(el))return;
-    if(el.querySelector&&el.querySelector("img,svg"))return;
+  document.querySelectorAll("header *, footer *, nav *, a").forEach(function(el){
+    var t=txt(el);
+    if(!t||NAV.test(t)||t.length>42)return;
+    var isBrand=t===d.sourceName||/bun\\s*&\\s*bite/i.test(t);
+    for(var i=0;i<brands.length&&!isBrand;i++){if(brands[i][0]&&t===brands[i][0])isBrand=true;}
+    if(!isBrand)return;
+    if(el.querySelector&&el.querySelector("img,svg,nav,ul"))return;
     set(el,d.name);
+  });
+  document.querySelectorAll("header a, header [class*='logo'], header [class*='brand'], a[href='#top'], footer [class*='logo'], footer [class*='brand']").forEach(function(el){
+    if(el.querySelector&&el.querySelector("img,svg"))return;
+    var t=txt(el);
+    if(t&&NAV.test(t))return;
+    if(isLogo(el)||t===d.sourceName||/bun\\s*&\\s*bite/i.test(t))set(el,d.name);
   });
   document.querySelectorAll("section,main,article").forEach(function(sec){
     var count=sec.querySelectorAll("h3,h4").length;
@@ -1083,8 +1108,9 @@ function apply(){
   if(d.email)document.querySelectorAll('a[href^="mailto:"]').forEach(function(a){set(a,d.email);a.href="mailto:"+d.email;});
   if(d.mapsUrl){var f=document.querySelector("iframe[src*='map']");if(f)f.src=d.mapsUrl;}
 }
-window.addEventListener("load",function(){setTimeout(apply,400);});
-[1800,3200].forEach(function(ms){setTimeout(apply,ms);});
+apply();
+window.addEventListener("load",function(){setTimeout(apply,200);});
+[800,1800].forEach(function(ms){setTimeout(apply,ms);});
 })();</script>`;
   if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, `${script}</body>`);
   return `${html}${script}`;
