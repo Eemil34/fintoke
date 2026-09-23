@@ -242,6 +242,122 @@ async function readTemplateText(projectPath: string): Promise<string> {
   return chunks.join('\n');
 }
 
+const NAV_COPY =
+  /^(home|menu|about|bar|login|bag|search|contact|gallery|reservations?|book now|our story|hours|visit|plates|experience|order|shop|wine|private|starters|mains|sides|sweets|drinks)$/i;
+
+function extractContentStrings(source: string): string[] {
+  const decode = (value: string) =>
+    value
+      .replace(/&amp;/g, '&')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const out: string[] = [];
+  const add = (raw: string) => {
+    const text = decode(raw);
+    if (text.length < 3 || text.length > 280) return;
+    if (/^(use client|use server|true|false|null|undefined)$/i.test(text)) return;
+    if (/^https?:/i.test(text) || text.includes('className') || text.includes('{')) return;
+    if (NAV_COPY.test(text)) return;
+    out.push(text);
+  };
+  for (const match of source.matchAll(
+    /\b(?:name|title|subtitle|desc|description|label|quote|body|role|bio|hours|address|phone|email|tagline|eyebrow|price|note)\s*:\s*['"`]([^'"`]{1,280})['"`]/gi,
+  )) {
+    add(match[1]);
+  }
+  for (const match of source.matchAll(/>([^<>{}]{3,280})</g)) add(match[1]);
+  return out;
+}
+
+function alignContentSwaps(fromList: string[], toList: string[]): Array<{ from: string; to: string }> {
+  if (fromList.length === toList.length) {
+    return fromList
+      .map((from, index) => ({ from, to: toList[index] || '' }))
+      .filter((row) => row.from && row.to && row.from !== row.to);
+  }
+  const swaps: Array<{ from: string; to: string }> = [];
+  const fromSet = new Set(fromList);
+  const toSet = new Set(toList);
+  let i = 0;
+  let j = 0;
+  while (i < fromList.length && j < toList.length) {
+    if (fromList[i] === toList[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    if (toSet.has(fromList[i]) && !fromSet.has(toList[j])) {
+      j += 1;
+      continue;
+    }
+    if (fromSet.has(toList[j]) && !toSet.has(fromList[i])) {
+      i += 1;
+      continue;
+    }
+    if (fromList[i] && toList[j] && fromList[i] !== toList[j]) {
+      swaps.push({ from: fromList[i], to: toList[j] });
+    }
+    i += 1;
+    j += 1;
+  }
+  return swaps;
+}
+
+export function applySafeCopySwaps(html: string, swaps: Array<{ from: string; to: string }>): string {
+  if (!swaps.length) return html;
+  const held: string[] = [];
+  const hold = (block: string) => {
+    held.push(block);
+    return `<!--FINTOKE_ATTR_${held.length - 1}-->`;
+  };
+  let next = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold)
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, hold)
+    .replace(/\s(?:class|className|style|src|srcset|srcSet|href|poster|id|data-[\w-]+)=["'][^"']*["']/gi, hold);
+  const seen = new Set<string>();
+  const ordered = [...swaps]
+    .filter((row) => row.from.length >= 3 && row.to && row.from !== row.to && !NAV_COPY.test(row.from))
+    .sort((a, b) => b.from.length - a.from.length);
+  for (const { from, to } of ordered) {
+    if (seen.has(from) || !next.includes(from)) continue;
+    seen.add(from);
+    next = next.split(from).join(to);
+    const encoded = from.replace(/&/g, '&amp;');
+    if (encoded !== from && next.includes(encoded)) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
+  }
+  return next.replace(/<!--FINTOKE_ATTR_(\d+)-->/g, (_, index) => held[Number(index)] || '');
+}
+
+export async function contentSwapsFromProject(
+  projectPath: string,
+  templateId: string,
+): Promise<Array<{ from: string; to: string }>> {
+  if (!projectPath || !templateId) return [];
+  const { resolveSnapshotDir } = await import('@/lib/templates/snapshot');
+  const snapshotDir = await resolveSnapshotDir(templateId);
+  if (!snapshotDir) return [];
+  const fromRoot = await siteRoot(snapshotDir);
+  const toRoot = await siteRoot(projectPath);
+  const fromFiles = await listSourceFiles(fromRoot);
+  const swaps: Array<{ from: string; to: string }> = [];
+  for (const fromFile of fromFiles) {
+    const rel = path.relative(fromRoot, fromFile);
+    const toFile = path.join(toRoot, rel);
+    const [fromSource, toSource] = await Promise.all([
+      fs.readFile(fromFile, 'utf8').catch(() => ''),
+      fs.readFile(toFile, 'utf8').catch(() => ''),
+    ]);
+    if (!fromSource || !toSource || fromSource === toSource) continue;
+    swaps.push(...alignContentSwaps(extractContentStrings(fromSource), extractContentStrings(toSource)));
+  }
+  const unique = new Map<string, string>();
+  for (const row of swaps) {
+    if (!unique.has(row.from)) unique.set(row.from, row.to);
+  }
+  return [...unique.entries()].map(([from, to]) => ({ from, to }));
+}
+
 function isDishName(value: string): boolean {
   return /loaf|salad|steak|pasta|chicken|oyster|tartare|pizza|soup|wine|cocktail|nigiri|ramen|espresso|bun\b/i.test(
     value,
@@ -389,11 +505,12 @@ export async function previewCopyPack(
     if (from.length < 12 || to.length < 8) continue;
     phraseSwaps.push({ from, to });
   }
+  const fileSwaps = await contentSwapsFromProject(projectPath, templateId);
   const brandSwaps =
     snapshot?.name && name && snapshot.name !== name && !isTemplateLabel(name)
       ? [{ from: snapshot.name, to: name }]
       : [];
-  if (!pack && !name) return null;
+  if (!pack && !name && !fileSwaps.length) return null;
   const next: FastCopyFile = {
     name: name || pack?.name || 'Restaurant',
     tagline: pack?.tagline || live?.tagline || '',
@@ -420,7 +537,7 @@ export async function previewCopyPack(
     mapsUrl: pack?.mapsUrl || '',
     templateId: pack?.templateId || templateId,
     source: snapshot,
-    swaps: [...brandSwaps, ...phraseSwaps],
+    swaps: fileSwaps.length ? [...brandSwaps, ...fileSwaps] : [...brandSwaps, ...phraseSwaps],
   };
   return fitCopyPack(next);
 }
@@ -620,8 +737,9 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
     .slice(0, 16);
   const brandFrom = new Set(brandPairs.map((row) => row.from));
   const swaps = [
-    ...buildHtmlCopySwaps(html, pack),
-    ...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack)),
+    ...(pack.swaps?.length
+      ? pack.swaps
+      : [...buildHtmlCopySwaps(html, pack), ...(buildCopySwaps(pack.source, pack) || [])]),
   ]
     .filter(
       (row) =>
@@ -765,7 +883,7 @@ function apply(){
       for(var i=0;i<brands.length;i++){
         if(brands[i][0]&&t.indexOf(brands[i][0])!==-1)t=t.split(brands[i][0]).join(brands[i][1]);
       }
-      for(var j=0;j<s.length;j++){if(s[j][0].length>=12&&t.indexOf(s[j][0])!==-1)t=t.split(s[j][0]).join(s[j][1]);}
+      for(var j=0;j<s.length;j++){if(s[j][0].length>=3&&t.indexOf(s[j][0])!==-1)t=t.split(s[j][0]).join(s[j][1]);}
       if(t!==o)node.nodeValue=t;
       return;
     }

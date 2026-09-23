@@ -4,7 +4,7 @@ import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { previewCopyPack, injectLiveCopyOverlay, readFastCopy } from '@/lib/templates/fastPreview';
+import { applySafeCopySwaps, contentSwapsFromProject, injectLiveCopyOverlay, previewCopyPack, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { freezePreviewHtml, prioritizeLcpImage, readStaticExportFile, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { getWebsiteTemplateId } from '@/lib/templates/settings';
@@ -200,6 +200,8 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (type.includes('text/html')) {
           text = freezePreviewHtml(text);
+          const fileSwaps = await contentSwapsFromProject(projectPath, resolvedTemplate);
+          text = applySafeCopySwaps(text, fileSwaps);
           const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
           if (packed) text = injectLiveCopyOverlay(text, packed);
           text = prioritizeLcpImage(
@@ -344,6 +346,8 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   if (contentType.includes('text/html')) {
     let body = freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port));
+    const fileSwaps = await contentSwapsFromProject(projectPath, resolvedTemplate);
+    body = applySafeCopySwaps(body, fileSwaps);
     const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
     if (packed) body = injectLiveCopyOverlay(body, packed);
     body = prioritizeLcpImage(body);
