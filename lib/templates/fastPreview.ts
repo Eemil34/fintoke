@@ -105,6 +105,16 @@ function clipWords(value: string, maxWords: number, maxChars: number): string {
   return clipCopy(words.join(' '), maxChars);
 }
 
+export function clipToOriginal(next: string, original: string, slack = 0.2): string {
+  const incoming = (next || '').replace(/\s+/g, ' ').trim();
+  const base = (original || '').replace(/\s+/g, ' ').trim();
+  if (!incoming) return incoming;
+  if (!base) return clipCopy(incoming, 48);
+  const maxChars = Math.max(base.length, Math.ceil(base.length * (1 + slack)));
+  const maxWords = Math.max(1, Math.ceil(base.split(' ').filter(Boolean).length * (1 + slack)));
+  return clipWords(incoming, maxWords, maxChars);
+}
+
 function sectionCopy(pack: FastCopyFile) {
   return {
     categoriesTitle: clipCopy('Our menu', 28),
@@ -141,6 +151,7 @@ function allowHtmlSwap(from: string, brandFrom?: Set<string>): boolean {
 }
 
 export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
+  const src = pack.source || {};
   const items = (rows: FastCopyItem[] | undefined, titleMax: number, bodyMax: number) =>
     (rows || []).map((row) => ({
       title: clipCopy(row.title, titleMax),
@@ -148,12 +159,12 @@ export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
     }));
   const fitted: FastCopyFile = {
     ...pack,
-    name: clipCopy(pack.name, 22),
-    tagline: clipWords(pack.tagline, 8, 56),
-    description: clipWords(pack.description, 28, 160),
+    name: clipToOriginal(pack.name, src.name || pack.name, 0.15) || clipCopy(pack.name, 22),
+    tagline: clipToOriginal(pack.tagline, src.tagline || pack.tagline),
+    description: clipToOriginal(pack.description, src.description || pack.description),
     eyebrow: clipWords(pack.eyebrow, 5, 28),
-    heroTitle: clipWords(pack.heroTitle || pack.name, 4, 22),
-    heroSubtitle: clipWords(pack.heroSubtitle, 16, 96),
+    heroTitle: clipToOriginal(pack.heroTitle || pack.name, src.heroTitle || pack.heroTitle || pack.name),
+    heroSubtitle: clipToOriginal(pack.heroSubtitle, src.heroSubtitle || pack.heroSubtitle),
     address: clipCopy(pack.address, 48),
     hours: clipCopy(pack.hours || '', 40),
     aboutColumns: (pack.aboutColumns || []).map((column) => clipWords(column, 22, 120)),
@@ -319,8 +330,10 @@ export function applySafeCopySwaps(html: string, swaps: Array<{ from: string; to
   const ordered = [...swaps]
     .filter((row) => row.from.length >= 3 && row.to && row.from !== row.to && !NAV_COPY.test(row.from))
     .sort((a, b) => b.from.length - a.from.length);
-  for (const { from, to } of ordered) {
+  for (const { from, to: rawTo } of ordered) {
     if (seen.has(from) || !next.includes(from)) continue;
+    const to = clipToOriginal(rawTo, from);
+    if (!to || to === from) continue;
     seen.add(from);
     next = next.split(from).join(to);
     const encoded = from.replace(/&/g, '&amp;');
@@ -359,7 +372,7 @@ export async function contentSwapsFromProject(
 }
 
 function isDishName(value: string): boolean {
-  return /loaf|salad|steak|pasta|chicken|oyster|tartare|pizza|soup|wine|cocktail|nigiri|ramen|espresso|bun\b/i.test(
+  return /loaf|salad|steak|pasta|chicken|oyster|tartare|pizza|soup|wine|cocktail|nigiri|ramen|espresso|bun\b|smash|fries|cheeseburger|milkshake/i.test(
     value,
   );
 }
@@ -426,7 +439,7 @@ export function buildCopySwaps(
     .filter((from) => from.length >= 24 && /\s/.test(from) && from !== brandTo && !skipHero.has(from.replace(/\s+/g, ' ').trim()))
     .map((from, index) => ({
       from,
-      to: bodies[index] || longTo,
+      to: clipToOriginal(bodies[index] || longTo || '', from),
     }));
   const brands = [
     src.name,
@@ -737,9 +750,7 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
     .slice(0, 16);
   const brandFrom = new Set(brandPairs.map((row) => row.from));
   const swaps = [
-    ...(pack.swaps?.length
-      ? pack.swaps
-      : [...buildHtmlCopySwaps(html, pack), ...(buildCopySwaps(pack.source, pack) || [])]),
+    ...(pack.swaps?.length ? pack.swaps : buildCopySwaps(pack.source, pack)),
   ]
     .filter(
       (row) =>
@@ -792,6 +803,10 @@ function inHero(el){
 }
 function set(el,v){
   if(!el||!v)return;
+  var old=txt(el);
+  if(old&&v.length>old.length+Math.max(4,Math.ceil(old.length*0.2))){
+    v=v.slice(0,old.length).replace(/\\s+\\S*$/,"").trim()||v.slice(0,old.length);
+  }
   if(el.querySelector&&el.querySelector("h2,h3,h4,p,a,button,img,svg,iframe,input,ul,nav")){
     for(var c=el.firstChild;c;c=c.nextSibling){
       if(c.nodeType===3&&c.nodeValue&&c.nodeValue.trim()){c.nodeValue=v;return;}
@@ -904,15 +919,6 @@ function apply(){
     if(k==="newest")fillCards(sectionOf(el),(d.menu||[]).slice().reverse());
     if(k==="customers")fillQuotes(sectionOf(el));
     if(k==="reserve"||k==="location")fillPlace(sectionOf(el));
-  });
-  document.querySelectorAll("h2,h3").forEach(function(el){
-    if(inHero(el))return;
-    var k=kind(txt(el));
-    if(k==="categories")set(el,d.categoriesTitle);
-    if(k==="newest")set(el,d.newestTitle);
-    if(k==="customers")set(el,d.customersTitle);
-    if(k==="reserve")set(el,d.ctaTitle);
-    if(k==="location")set(el,d.visitTitle);
   });
   var box=document.querySelector("[id*='location'],[class*='location'],[id*='contact'],[class*='contact'],[class*='map']");
   if(box)fillPlace(box);

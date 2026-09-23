@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { collectTemplateImages, writeFastCopy, captureTemplateSource, buildCopySwaps, type FastCopyFile } from './fastPreview';
+import { collectTemplateImages, writeFastCopy, captureTemplateSource, buildCopySwaps, clipToOriginal, type FastCopyFile } from './fastPreview';
 import { ensureIsolatedNextConfig } from './isolateNext';
 import { getOpenaiApiKey } from '@/lib/services/leads';
 import type { WorkspaceLead } from '@/types/leads';
@@ -157,6 +157,18 @@ function isTechnicalString(value: string): boolean {
 
 function dishList(what: string, name: string): CopyItem[] {
   const kind = what.toLowerCase();
+  if (/burger|grill|diner|smash|fast\s*food/.test(kind)) {
+    return [
+      { title: 'Smash burger', body: 'Griddle beef, American cheese, pickles, sauce.' },
+      { title: 'Cheeseburger', body: 'Two patties, melted cheddar, soft bun.' },
+      { title: 'Crispy chicken', body: 'Fried thigh, slaw, hot honey.' },
+      { title: 'Loaded fries', body: 'Cheese, onion, house sauce.' },
+      { title: 'Veggie smash', body: 'Crisp patty, lettuce, tomato, mayo.' },
+      { title: 'Milkshake', body: 'Vanilla soft serve, malt.' },
+      { title: 'Onion rings', body: 'Buttermilk batter, dip.' },
+      { title: 'House soda', body: 'Cola, lemon, lots of ice.' },
+    ];
+  }
   if (/pizza/.test(kind)) {
     return [
       { title: `${name} margherita`, body: 'San Marzano tomato, mozzarella, basil, olive oil.' },
@@ -299,7 +311,7 @@ async function completeFillJson(prompt: string): Promise<Record<string, unknown>
           {
             role: 'system',
             content:
-              'Write a complete restaurant/cafe website copy pack for one real business. JSON only. heroTitle: 2-4 short words, no comma slogans. eyebrow: under 5 words. heroSubtitle: under 16 words. menu titles under 3 words, card bodies under 12 words. Never mention Coral Cove, Park Avenue, Unsplash, or image URLs.',
+              'Write a complete restaurant/cafe website copy pack for one real business. JSON only. Match the original slot lengths: dish names 2-3 words, dish lines under 10 words, no long slogans. Do not rewrite nav labels like Menu, Visit, Home. Never mention Coral Cove, Park Avenue, Unsplash, or image URLs.',
           },
           { role: 'user', content: prompt },
         ],
@@ -347,6 +359,7 @@ async function fetchCopyPack(lead: FastFillLead, country?: string, extra?: strin
   const local = localCopyPack(lead, country);
   try {
     const parsed = await completeFillJson(`Write website copy for this business. Fill every field. Photos stay on the template; this is text only.
+Keep each line about the same length as a typical restaurant template: short names, short descriptions. Do not invent extra sentences. Do not change section titles like Menu, Visit, Our story.
 
 ${JSON.stringify(
       {
@@ -493,6 +506,10 @@ function applyCopyPack(source: string, pack: CopyPack): string {
         break;
       case 'title':
       case 'titleAccent':
+        if (counters.title === 0) {
+          counters.title += 1;
+          return full;
+        }
         next = titles[counters.title++ % titles.length] || pack.name;
         break;
       case 'subtitle':
@@ -516,11 +533,13 @@ function applyCopyPack(source: string, pack: CopyPack): string {
         next = alts[counters.alt++ % Math.max(alts.length, 1)] || pack.name;
         break;
       case 'hours':
-        next = 'Tue–Sat 12–22';
+        next = pack.hours || value;
         break;
       default:
         break;
     }
+    if (!next || next === value) return full;
+    next = clipToOriginal(next, value);
     if (!next || next === value) return full;
     return `${key}: ${quote}${escapeQuoted(next, quote)}${quote}`;
   });

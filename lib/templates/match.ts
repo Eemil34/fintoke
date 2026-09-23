@@ -27,10 +27,13 @@ function scoreTemplate(template: PickableTemplate, haystack: string, needle: str
   if (haystack.includes((template.niche || '').toLowerCase())) score += 3;
   if (template.hasSnapshot) score += 8;
   if (template.origin === 'user') score += 6;
-  if (/restaurant|food|cafe|bistro|dining|kebab|pizza|pizzeria/.test(haystack) && /restaurant|food|cafe|hospitality|kebab|pizza|pizzeria/.test(`${template.id} ${template.name} ${template.category}`)) {
+  if (/restaurant|food|cafe|bistro|dining|kebab|pizza|pizzeria|burger/.test(haystack) && /restaurant|food|cafe|hospitality|kebab|pizza|pizzeria|burger/.test(`${template.id} ${template.name} ${template.category}`)) {
     score += 12;
   }
   if (/kebab|doner|shawarma/.test(haystack) && /kebab|doner|shawarma|pizza|pizzeria/.test(`${template.id} ${template.name}`)) {
+    score += 40;
+  }
+  if (/burger|smash|grill|diner|fast\s*food/.test(haystack) && /burger|smash|grill|diner|restaurant|food/.test(`${template.id} ${template.name}`)) {
     score += 40;
   }
   if (/pizza|pizzeria/.test(haystack) && /pizza|pizzeria|kebab/.test(`${template.id} ${template.name}`)) {
