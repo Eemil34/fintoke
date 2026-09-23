@@ -397,10 +397,9 @@ export async function captureTemplateSource(projectPath: string): Promise<NonNul
         .map((match) => decode(match[1]))
         .filter(
           (text) =>
-            text.length >= 12 &&
-            text.length <= 280 &&
+            text.length >= 8 &&
+            text.length <= 320 &&
             !/\n|;/.test(text) &&
-            /\s/.test(text) &&
             /[A-Za-zÀ-ÿ]/.test(text) &&
             !keep.test(text) &&
             !/categor|newest items|reserve your evening/i.test(text) &&
@@ -430,19 +429,16 @@ export function buildCopySwaps(
   const brandTo = pack.name && !isTemplateLabel(pack.name) ? pack.name : '';
   const longTo = pack.description || pack.heroSubtitle || pack.tagline;
   const bodies = [pack.description, ...(pack.aboutColumns || [])].filter(Boolean);
-  const skipHero = new Set(
-    [src.heroTitle, src.heroSubtitle, src.tagline]
-      .filter((value): value is string => Boolean(value))
-      .map((value) => value.replace(/\s+/g, ' ').trim()),
-  );
+  const skipHero = new Set<string>();
   const phraseSwaps = (src.phrases || [])
-    .filter((from) => from.length >= 24 && /\s/.test(from) && from !== brandTo && !skipHero.has(from.replace(/\s+/g, ' ').trim()))
+    .filter((from) => from.length >= 12 && from !== brandTo && !skipHero.has(from.replace(/\s+/g, ' ').trim()))
     .map((from, index) => ({
       from,
       to: clipToOriginal(bodies[index] || longTo || '', from),
     }));
   const brands = [
     src.name,
+    'Bun & Bite',
     'New Restaurant',
     'NEW RESTAURANT',
     'Hearth & Vale',
@@ -737,7 +733,13 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
 }
 
 const NAV_PAINT =
-  /^(menu|home|about|bar|login|bag|search|contact|gallery|reservations?|book now|our story|hours|visit|order|shop|wine|private|starters|mains|sides|sweets|drinks)$/i;
+  /^(menu|home|about|about us|bar|login|bag|search|contact|gallery|reservations?|book now|our story|hours|visit|order|shop|wine|private|starters|mains|sides|sweets|drinks|quick links|subscribe|locations)$/i;
+
+function leafTexts(block: string, min = 2, max = 400): string[] {
+  return [...block.matchAll(/>([^<]{2,400})</g)]
+    .map((match) => decodeHtmlText(match[1]))
+    .filter((text) => text.length >= min && text.length <= max && !NAV_PAINT.test(text));
+}
 
 export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
   pack = fitCopyPack(pack);
@@ -753,27 +755,33 @@ export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
     .replace(/\s(?:class|className|style|src|srcset|srcSet|href|poster|id|data-[\w-]+)=["'][^"']*["']/gi, hold);
 
   const replace = (from: string, to: string) => {
-    if (!from || !to || from === to || from.length < 2) return;
-    if (NAV_PAINT.test(from)) return;
-    if (!next.includes(from) && !next.includes(from.replace(/&/g, '&amp;'))) return;
-    next = next.split(from).join(to);
-    const encoded = from.replace(/&/g, '&amp;');
-    if (encoded !== from) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
+    const src = (from || '').replace(/\s+/g, ' ').trim();
+    const dest = (to || '').replace(/\s+/g, ' ').trim();
+    if (!src || !dest || src === dest || src.length < 2) return;
+    if (NAV_PAINT.test(src)) return;
+    if (!next.includes(src) && !next.includes(src.replace(/&/g, '&amp;'))) return;
+    next = next.split(src).join(dest);
+    const encoded = src.replace(/&/g, '&amp;');
+    if (encoded !== src) next = next.split(encoded).join(dest.replace(/&/g, '&amp;'));
   };
 
+  const header = html.match(/<header\b[\s\S]{0,24000}/i)?.[0] || html.slice(0, 8000);
+  const footer = html.match(/<footer\b[\s\S]{0,24000}/i)?.[0] || '';
   const brands = new Set<string>();
   const addBrand = (raw: string) => {
     const text = decodeHtmlText(raw);
-    if (text.length >= 2 && text.length <= 42 && !NAV_PAINT.test(text) && text !== pack.name) brands.add(text);
+    if (text.length >= 2 && text.length <= 42 && !NAV_PAINT.test(text) && !/@/.test(text) && text !== pack.name) {
+      brands.add(text);
+    }
   };
   addBrand((html.match(/<title>([^<]+)/i)?.[1] || '').split(/[—–\-|•]/)[0] || '');
   for (const match of html.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)) addBrand(match[1]);
-  const header = html.match(/<header\b[\s\S]{0,20000}/i)?.[0] || '';
-  for (const match of header.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)) addBrand(match[1]);
+  leafTexts(header, 2, 42).forEach(addBrand);
+  leafTexts(footer, 2, 42).forEach(addBrand);
   if (pack.source?.name) addBrand(pack.source.name);
   for (const extra of [
+    'Bun & Bite',
     'Hearth & Vale',
-    'Hearth &amp; Vale',
     'Coral Cove',
     'Veloura Dining & Lounge',
     'Veloura Steak',
@@ -783,36 +791,88 @@ export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
   ]) {
     addBrand(extra);
   }
+
+  const longSlots = [
+    pack.heroSubtitle,
+    pack.description,
+    ...(pack.aboutColumns || []),
+    pack.ctaSubtitle,
+    pack.tagline,
+    pack.footer,
+  ].filter((value) => value && value.length >= 8);
+  const exactPairs: Array<[string, string]> = [
+    [
+      'Fresh ingredients, bold flavors, and handcrafted with love. Our burgers aren\'t just food — they\'re a reason to smile.',
+      pack.heroSubtitle || pack.description,
+    ],
+    [
+      'Fresh ingredients, bold flavors, and handcrafted with love. Our burgers aren’t just food — they’re a reason to smile.',
+      pack.heroSubtitle || pack.description,
+    ],
+    [
+      'At Bun & Bite, a great burger brings people together. From farm-fresh produce to flame-grilled patties, every bite is crafted to make your day brighter.',
+      pack.description || pack.aboutColumns?.[0] || '',
+    ],
+    [
+      'Visit our Dhanmondi kitchen for the same flame-grilled favorites — dine in or take out.',
+      pack.ctaSubtitle || pack.description,
+    ],
+    ['Crafting delicious artisan pizzas', pack.tagline || pack.footer],
+    ['Deals and cravings, delivered weekly.', pack.ctaSubtitle || pack.tagline],
+    ['Real Ingredients. Better Burgers.', pack.ctaTitle || pack.aboutColumns?.[0] || ''],
+    ['Find Us Near You', pack.ctaTitle],
+    ['House 12, Road 2, Dhaka', pack.address],
+    ['Dhaka, Bangladesh', pack.address],
+  ];
+  for (const [from, to] of exactPairs) {
+    if (to) replace(from, clipToOriginal(to, from, 0.35));
+  }
+  (pack.source?.phrases || []).forEach((from, index) => {
+    const slot = longSlots[index];
+    if (slot) replace(from, clipToOriginal(slot, from, 0.3));
+  });
+
   for (const from of [...brands].sort((a, b) => b.length - a.length)) {
-    replace(from, clipToOriginal(pack.name, from, 0.45));
+    replace(from, clipCopy(pack.name, Math.max(from.length + 10, 28)));
   }
 
-  const headings = [...extractTagTexts(next, 'h3'), ...extractTagTexts(next, 'h4')].filter(
-    (text) => text.length >= 3 && text.length <= 48 && !NAV_PAINT.test(text),
+  const headings = [...extractTagTexts(next, 'h2'), ...extractTagTexts(next, 'h3'), ...extractTagTexts(next, 'h4')].filter(
+    (text) =>
+      text.length >= 3 &&
+      text.length <= 48 &&
+      !NAV_PAINT.test(text) &&
+      !/quick links|stay in the loop|about us|our locations/i.test(text),
   );
-  (pack.menu || []).forEach((item, index) => {
-    const from = headings[index];
-    if (from && item.title) replace(from, clipToOriginal(item.title, from, 0.3));
+  const headingTo = [pack.ctaTitle, pack.eyebrow, ...(pack.menu || []).map((item) => item.title)].filter(Boolean);
+  headings.forEach((from, index) => {
+    if (/bun\s*&\s*bite/i.test(from)) return;
+    const to = headingTo[index];
+    if (to) replace(from, clipToOriginal(to, from, 0.3));
   });
 
   if (pack.hours) {
     next = next.replace(
-      />([^<]*(?:open|daily|hours|closed|late|\b(?:am|pm)\b|mon|tue|wed)[^<]{0,40})</gi,
+      />([^<]*(?:open|daily|hours|closed|late|\b(?:am|pm)\b|mon|tue|wed)[^<]{0,48})</gi,
       (full, text: string) => {
-        if (text.length > 56 || text.length < 6) return full;
-        return `>${clipToOriginal(pack.hours, text, 0.35)}<`;
+        if (text.length > 64 || text.length < 4) return full;
+        return `>${clipToOriginal(pack.hours, text, 0.45)}<`;
       },
     );
   }
   if (pack.address) {
-    next = next.replace(/>([^<]{8,56})</g, (full, text: string) => {
-      if (!/,/.test(text) && !/street|road|lane|avenue|downtown|city|helsinki|finland/i.test(text)) return full;
+    next = next.replace(/>([^<]{6,64})</g, (full, text: string) => {
       if (/@/.test(text) || NAV_PAINT.test(text)) return full;
-      return `>${clipToOriginal(pack.address, text, 0.35)}<`;
+      if (!/,/.test(text) && !/street|road|lane|house|avenue|downtown|dhanmondi|dhaka|city|bangladesh|finland/i.test(text)) {
+        return full;
+      }
+      return `>${clipToOriginal(pack.address, text, 0.5)}<`;
     });
   }
   if (pack.phone) {
-    next = next.replace(/>(\+?[\d][\d\s().-]{6,18})</g, `>${pack.phone}<`);
+    next = next.replace(/>(\+?[\d][\d\s().-]{6,22})</g, `>${pack.phone}<`);
+  }
+  if (pack.email) {
+    next = next.replace(/>([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})</gi, `>${pack.email}<`);
   }
 
   return next.replace(/<!--FINTOKE_PAINT_(\d+)-->/g, (_, index) => held[Number(index)] || '');
