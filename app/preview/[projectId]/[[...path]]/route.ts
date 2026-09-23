@@ -4,7 +4,7 @@ import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
-import { applySafeCopySwaps, contentSwapsFromProject, injectLiveCopyOverlay, previewCopyPack, readFastCopy } from '@/lib/templates/fastPreview';
+import { paintCopyOnHtml, injectLiveCopyOverlay, previewCopyPack, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { freezePreviewHtml, prioritizeLcpImage, readStaticExportFile, resolveProjectStaticExportDir, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { freezeProjectPreview, hasAgentPreviewMark } from '@/lib/templates/exportStatic';
@@ -216,10 +216,11 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         if (type.includes('text/html')) {
           text = freezePreviewHtml(text);
           if (!fromProject) {
-            const fileSwaps = await contentSwapsFromProject(projectPath, resolvedTemplate);
-            text = applySafeCopySwaps(text, fileSwaps);
             const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
-            if (packed) text = injectLiveCopyOverlay(text, packed);
+            if (packed) {
+              text = paintCopyOnHtml(text, packed);
+              text = injectLiveCopyOverlay(text, packed);
+            }
           }
           text = prioritizeLcpImage(
             text
@@ -363,10 +364,11 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   if (contentType.includes('text/html')) {
     let body = freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port));
-    const fileSwaps = await contentSwapsFromProject(projectPath, resolvedTemplate);
-    body = applySafeCopySwaps(body, fileSwaps);
     const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
-    if (packed) body = injectLiveCopyOverlay(body, packed);
+    if (packed) {
+      body = paintCopyOnHtml(body, packed);
+      body = injectLiveCopyOverlay(body, packed);
+    }
     body = prioritizeLcpImage(body);
     out.delete('content-length');
     return new Response(body, { status: upstream.status, headers: out });

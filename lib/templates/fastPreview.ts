@@ -499,8 +499,18 @@ export async function previewCopyPack(
   const liveRaw = liveRoot ? await readTemplateText(liveRoot) : '';
   const grab = (key: string) =>
     liveRaw.match(new RegExp(`\\b${key}:\\s*['"\`]([^'"\`]{2,160})['"\`]`))?.[1]?.trim() || '';
-  const name =
-    (live?.name && !isTemplateLabel(live.name) ? live.name : '') || pack?.name || '';
+  if (pack?.name && !isTemplateLabel(pack.name)) {
+    return fitCopyPack({
+      ...pack,
+      source: snapshot || pack.source,
+      address: pack.address || grab('address') || pack.address,
+      phone: pack.phone || grab('phone') || pack.phone,
+      email: pack.email || grab('email') || pack.email,
+      hours: pack.hours || grab('hours') || pack.hours,
+      templateId: pack.templateId || templateId,
+    });
+  }
+  const name = live?.name && !isTemplateLabel(live.name) ? live.name : pack?.name || '';
   const skipHero = new Set(
     [snapshot?.heroTitle, snapshot?.heroSubtitle, snapshot?.tagline]
       .filter((value): value is string => Boolean(value))
@@ -726,6 +736,88 @@ function buildHtmlCopySwaps(html: string, pack: FastCopyFile): Array<{ from: str
   return rows.filter((row) => row.from && row.to && row.from !== row.to && allowHtmlSwap(row.from));
 }
 
+const NAV_PAINT =
+  /^(menu|home|about|bar|login|bag|search|contact|gallery|reservations?|book now|our story|hours|visit|order|shop|wine|private|starters|mains|sides|sweets|drinks)$/i;
+
+export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
+  pack = fitCopyPack(pack);
+  if (!pack.name || isTemplateLabel(pack.name)) return html;
+  const held: string[] = [];
+  const hold = (block: string) => {
+    held.push(block);
+    return `<!--FINTOKE_PAINT_${held.length - 1}-->`;
+  };
+  let next = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, hold)
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, hold)
+    .replace(/\s(?:class|className|style|src|srcset|srcSet|href|poster|id|data-[\w-]+)=["'][^"']*["']/gi, hold);
+
+  const replace = (from: string, to: string) => {
+    if (!from || !to || from === to || from.length < 2) return;
+    if (NAV_PAINT.test(from)) return;
+    if (!next.includes(from) && !next.includes(from.replace(/&/g, '&amp;'))) return;
+    next = next.split(from).join(to);
+    const encoded = from.replace(/&/g, '&amp;');
+    if (encoded !== from) next = next.split(encoded).join(to.replace(/&/g, '&amp;'));
+  };
+
+  const brands = new Set<string>();
+  const addBrand = (raw: string) => {
+    const text = decodeHtmlText(raw);
+    if (text.length >= 2 && text.length <= 42 && !NAV_PAINT.test(text) && text !== pack.name) brands.add(text);
+  };
+  addBrand((html.match(/<title>([^<]+)/i)?.[1] || '').split(/[—–\-|•]/)[0] || '');
+  for (const match of html.matchAll(/<h1\b[^>]*>([\s\S]*?)<\/h1>/gi)) addBrand(match[1]);
+  const header = html.match(/<header\b[\s\S]{0,20000}/i)?.[0] || '';
+  for (const match of header.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)) addBrand(match[1]);
+  if (pack.source?.name) addBrand(pack.source.name);
+  for (const extra of [
+    'Hearth & Vale',
+    'Hearth &amp; Vale',
+    'Coral Cove',
+    'Veloura Dining & Lounge',
+    'Veloura Steak',
+    'Veloura',
+    'New Restaurant',
+    'Säde',
+  ]) {
+    addBrand(extra);
+  }
+  for (const from of [...brands].sort((a, b) => b.length - a.length)) {
+    replace(from, clipToOriginal(pack.name, from, 0.45));
+  }
+
+  const headings = [...extractTagTexts(next, 'h3'), ...extractTagTexts(next, 'h4')].filter(
+    (text) => text.length >= 3 && text.length <= 48 && !NAV_PAINT.test(text),
+  );
+  (pack.menu || []).forEach((item, index) => {
+    const from = headings[index];
+    if (from && item.title) replace(from, clipToOriginal(item.title, from, 0.3));
+  });
+
+  if (pack.hours) {
+    next = next.replace(
+      />([^<]*(?:open|daily|hours|closed|late|\b(?:am|pm)\b|mon|tue|wed)[^<]{0,40})</gi,
+      (full, text: string) => {
+        if (text.length > 56 || text.length < 6) return full;
+        return `>${clipToOriginal(pack.hours, text, 0.35)}<`;
+      },
+    );
+  }
+  if (pack.address) {
+    next = next.replace(/>([^<]{8,56})</g, (full, text: string) => {
+      if (!/,/.test(text) && !/street|road|lane|avenue|downtown|city|helsinki|finland/i.test(text)) return full;
+      if (/@/.test(text) || NAV_PAINT.test(text)) return full;
+      return `>${clipToOriginal(pack.address, text, 0.35)}<`;
+    });
+  }
+  if (pack.phone) {
+    next = next.replace(/>(\+?[\d][\d\s().-]{6,18})</g, `>${pack.phone}<`);
+  }
+
+  return next.replace(/<!--FINTOKE_PAINT_(\d+)-->/g, (_, index) => held[Number(index)] || '');
+}
+
 export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string {
   pack = fitCopyPack(pack);
   const sections = sectionCopy(pack);
@@ -758,7 +850,6 @@ export function injectLiveCopyOverlay(html: string, pack: FastCopyFile): string 
         row.to &&
         row.from !== row.to &&
         allowHtmlSwap(row.from, brandFrom) &&
-        !row.to.includes(row.from) &&
         !/unsplash|photo-[a-z0-9-]+|class=|href=/i.test(row.from),
     )
     .sort((a, b) => b.from.length - a.from.length)
@@ -890,15 +981,17 @@ function apply(){
     if(!node)return;
     if(node.nodeType===3){
       var parent=node.parentElement;
-      if(parent&&/^(A|BUTTON|NAV|LABEL|SCRIPT|STYLE)$/.test(parent.tagName))return;
-      if(parent&&parent.closest&&parent.closest("a,button,nav,h1"))return;
-      if(inHero(parent))return;
+      if(parent&&/^(BUTTON|NAV|LABEL|SCRIPT|STYLE)$/.test(parent.tagName))return;
+      if(parent&&parent.closest&&parent.closest("button,nav"))return;
+      if(parent&&parent.closest&&parent.closest("a")&&!isLogo(parent.closest("a"))&&parent.tagName!=="H1")return;
       var t=node.nodeValue,o=t;
-      if(!t||t.length<3)return;
+      if(!t||t.length<2)return;
       for(var i=0;i<brands.length;i++){
         if(brands[i][0]&&t.indexOf(brands[i][0])!==-1)t=t.split(brands[i][0]).join(brands[i][1]);
       }
-      for(var j=0;j<s.length;j++){if(s[j][0].length>=3&&t.indexOf(s[j][0])!==-1)t=t.split(s[j][0]).join(s[j][1]);}
+      if(!inHero(parent)){
+        for(var j=0;j<s.length;j++){if(s[j][0].length>=3&&t.indexOf(s[j][0])!==-1)t=t.split(s[j][0]).join(s[j][1]);}
+      }
       if(t!==o)node.nodeValue=t;
       return;
     }
@@ -911,6 +1004,10 @@ function apply(){
     if(!isLogo(el))return;
     if(el.querySelector&&el.querySelector("img,svg"))return;
     set(el,d.name);
+  });
+  document.querySelectorAll("section,main,article").forEach(function(sec){
+    var count=sec.querySelectorAll("h3,h4").length;
+    if(count>=3)fillCards(sec,d.menu||d.features);
   });
   document.querySelectorAll("h2,h3,p").forEach(function(el){
     if(inHero(el))return;
