@@ -692,6 +692,98 @@ async function completeJson(
   return parsed;
 }
 
+export async function researchRestaurantForFill(
+  lead: {
+    business?: string;
+    whatTheyDo?: string;
+    city?: string;
+    website?: string;
+    email?: string;
+    phone?: string;
+    notes?: string;
+    details?: string;
+  },
+  country?: string,
+): Promise<{
+  officialName: string;
+  cuisine: string;
+  concept: string;
+  neighborhood: string;
+  city: string;
+  address: string;
+  phone: string;
+  email: string;
+  hours: string;
+  website: string;
+  signatureDishes: { name: string; note: string }[];
+  atmosphere: string;
+  facts: string[];
+} | null> {
+  try {
+    const parsed = await completeJson(
+      `Search the public web for this real restaurant, cafe, bakery, or food business. Open the official site, Google Business, and a menu page when they exist. Use only published facts. Empty string if not found. Never invent phone, email, or street address.
+
+Known:
+- name: ${lead.business || ''}
+- what they do: ${lead.whatTheyDo || ''}
+- city: ${lead.city || ''}
+- country: ${country || ''}
+- website: ${lead.website || ''}
+- email: ${lead.email || ''}
+- phone: ${lead.phone || ''}
+- notes: ${lead.notes || lead.details || ''}
+
+Return JSON:
+{
+  "officialName": "trading name as published",
+  "cuisine": "burger / pizza / steak / cafe / kebab / fine dining / other",
+  "concept": "one sentence on what the kitchen is known for",
+  "neighborhood": "",
+  "city": "",
+  "address": "street address if published",
+  "phone": "",
+  "email": "",
+  "hours": "short published hours or empty",
+  "website": "https official URL or empty",
+  "signatureDishes": [{"name":"2-4 words","note":"under 10 words"}],
+  "atmosphere": "casual / family / late-night / fine / takeout",
+  "facts": ["up to 8 short verified facts for website copy"]
+}`,
+      { maxTokens: 1800, country, city: lead.city },
+    );
+    const dishes = Array.isArray(parsed.signatureDishes)
+      ? parsed.signatureDishes
+          .map((item) => {
+            if (!item || typeof item !== 'object') return null;
+            const row = item as Record<string, unknown>;
+            const name = asString(row.name);
+            if (!name) return null;
+            return { name, note: asString(row.note) };
+          })
+          .filter((item): item is { name: string; note: string } => Boolean(item))
+      : [];
+    const facts = Array.isArray(parsed.facts) ? parsed.facts.map((item) => asString(item)).filter(Boolean) : [];
+    return {
+      officialName: asString(parsed.officialName) || asString(parsed.business),
+      cuisine: asString(parsed.cuisine),
+      concept: asString(parsed.concept) || asString(parsed.whatTheyDo),
+      neighborhood: asString(parsed.neighborhood),
+      city: asString(parsed.city),
+      address: asString(parsed.address),
+      phone: asString(parsed.phone),
+      email: asString(parsed.email),
+      hours: asString(parsed.hours),
+      website: asString(parsed.website),
+      signatureDishes: dishes,
+      atmosphere: asString(parsed.atmosphere),
+      facts,
+    };
+  } catch (error) {
+    console.warn('[fastFill] Business research skipped:', error);
+    return null;
+  }
+}
+
 export async function enrichLead(id: string): Promise<WorkspaceLead> {
   const lead = await getLead(id);
   if (!lead) throw new Error('Row not found');

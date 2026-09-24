@@ -5,6 +5,14 @@ import { IMAGE_LIBRARY, unsplashUrl } from './imageLibrary';
 export const FAST_COPY_FILE = '.fintoke-copy.json';
 
 export type FastCopyItem = { title: string; body: string };
+export type TemplateSlot = {
+  section: string;
+  role: string;
+  pack: string;
+  original: string;
+  maxChars: number;
+  maxWords: number;
+};
 export type FastCopyFile = {
   name: string;
   tagline: string;
@@ -39,6 +47,8 @@ export type FastCopyFile = {
     phrases?: string[];
   };
   swaps?: Array<{ from: string; to: string }>;
+  slots?: TemplateSlot[];
+  research?: Record<string, unknown>;
 };
 
 function escapeHtml(value: string) {
@@ -188,7 +198,7 @@ export function fitCopyPack(pack: FastCopyFile): FastCopyFile {
       bio: clipCopy(row.bio, 90),
     })),
   };
-  fitted.swaps = pack.swaps?.length ? pack.swaps : buildCopySwaps(fitted.source, fitted);
+  fitted.swaps = pack.swaps?.length ? pack.swaps : buildCopySwaps(fitted.source, fitted, pack.slots);
   return fitted;
 }
 
@@ -425,21 +435,162 @@ function isTemplateLabel(value: string): boolean {
   return /template|^\s*new restaurant\b|^restaurant\s*\d+\s*$|\s[—–-]\s*restaurant\s*\d+/i.test(value.trim());
 }
 
+function wordCount(value: string): number {
+  return (value || '').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean).length;
+}
+
+export function describeTemplateSlots(source: FastCopyFile['source'] | undefined): TemplateSlot[] {
+  const slots: TemplateSlot[] = [];
+  const seen = new Set<string>();
+  const add = (section: string, role: string, pack: string, original: string) => {
+    const text = (original || '').replace(/\s+/g, ' ').trim();
+    if (!text || text.length < 2) return;
+    const key = text.toLowerCase();
+    if (seen.has(key)) return;
+    if (
+      /^(menu|home|about|about us|contact|gallery|locations?|quick links|subscribe|stay in the loop)$/i.test(text)
+    ) {
+      return;
+    }
+    seen.add(key);
+    slots.push({
+      section,
+      role,
+      pack,
+      original: text,
+      maxChars: text.length,
+      maxWords: Math.max(1, wordCount(text)),
+    });
+  };
+
+  if (source?.name) add('navbar', 'Logo / site name only. Do not put this on Home/Menu/About links.', 'name', source.name);
+  if (source?.heroTitle && source.heroTitle !== source.name) {
+    add('hero', 'Short hero heading. Same word count as original.', 'heroTitle', source.heroTitle);
+  }
+  if (source?.heroSubtitle) {
+    add('hero', 'Hero lede under the photo. 1–2 short sentences, not a paragraph dump.', 'heroSubtitle', source.heroSubtitle);
+  }
+  if (source?.tagline) add('footer', 'One-line brand promise under the name.', 'tagline', source.tagline);
+  if (source?.description) {
+    add('about', 'About body. Warm but compact; match original length.', 'description', source.description);
+  }
+
+  let heroLede = Boolean(source?.heroSubtitle);
+  let aboutCount = source?.description ? 1 : 0;
+  let menuIndex = 0;
+  let awaitingDishBody = false;
+  for (const phrase of source?.phrases || []) {
+    const text = phrase.replace(/\s+/g, ' ').trim();
+    if (/@/.test(text) && text.length < 80) {
+      add('contact', 'Published email only.', 'email', text);
+      continue;
+    }
+    if (/^\+?[\d][\d\s().-]{6,22}$/.test(text)) {
+      add('contact', 'Published phone only.', 'phone', text);
+      continue;
+    }
+    if (/open|daily|hours|closed|late|\b(?:am|pm)\b/i.test(text) && text.length < 56) {
+      add('location', 'Opening hours, one short line.', 'hours', text);
+      continue;
+    }
+    if (/deals|cravings|weekly|stay in the loop|newsletter/i.test(text) && text.length <= 80) {
+      add('newsletter', 'Newsletter one-liner next to Subscribe.', 'ctaSubtitle', text);
+      continue;
+    }
+    if (/crafting|made with love|artisan pizzas|handcrafted/i.test(text) && text.length <= 80) {
+      add('footer', 'Footer tagline under the brand name.', 'tagline', text);
+      continue;
+    }
+    if (
+      text.length < 64 &&
+      /street|road|lane|house|avenue|\d{1,4}/i.test(text) &&
+      (/,/.test(text) || /dhaka|helsinki|finland|bangladesh|city/i.test(text))
+    ) {
+      add('location', 'Street / city line as published.', 'address', text);
+      continue;
+    }
+    if (text.length >= 70 && !heroLede) {
+      add('hero', 'Hero lede under the photo. Keep within original length.', 'heroSubtitle', text);
+      heroLede = true;
+      continue;
+    }
+    if (text.length >= 70 && aboutCount < 2) {
+      add('about', 'About paragraph. Farm/kitchen story, not a slogan.', aboutCount === 0 ? 'description' : 'aboutColumns.0', text);
+      aboutCount += 1;
+      continue;
+    }
+    if (/crafting|made with|artisan|handcrafted|delivered weekly|deals and/i.test(text) && text.length <= 80) {
+      add(
+        /weekly|deals|loop|cravings/i.test(text) ? 'newsletter' : 'footer',
+        /weekly|deals|loop|cravings/i.test(text)
+          ? 'Newsletter one-liner next to Subscribe.'
+          : 'Footer tagline under the brand name.',
+        /weekly|deals|loop|cravings/i.test(text) ? 'ctaSubtitle' : 'tagline',
+        text,
+      );
+      continue;
+    }
+    if (awaitingDishBody && text.length < 90 && text.length >= 12) {
+      add('menu', 'Dish line, under ~10 words.', `menu.${menuIndex}.body`, text);
+      awaitingDishBody = false;
+      menuIndex += 1;
+      continue;
+    }
+    if (text.length <= 40 && wordCount(text) <= 6 && !/find us|real ingredients|better burgers/i.test(text)) {
+      add('menu', 'Dish name, 2–4 words.', `menu.${menuIndex}.title`, text);
+      awaitingDishBody = true;
+      continue;
+    }
+    if (text.length >= 24 && text.length < 70 && aboutCount < 3) {
+      add('about', 'Supporting about/location sentence.', 'aboutColumns.0', text);
+      aboutCount += 1;
+    }
+  }
+  return slots;
+}
+
+export function packValueForSlot(pack: FastCopyFile | Record<string, unknown>, key: string): string {
+  const row = pack as Record<string, unknown>;
+  const menu = Array.isArray(row.menu) ? row.menu : [];
+  const about = Array.isArray(row.aboutColumns) ? row.aboutColumns : [];
+  const menuMatch = key.match(/^menu\.(\d+)\.(title|body)$/);
+  if (menuMatch) {
+    const item = menu[Number(menuMatch[1])] as { title?: string; body?: string } | undefined;
+    return (menuMatch[2] === 'title' ? item?.title : item?.body) || '';
+  }
+  const aboutMatch = key.match(/^aboutColumns\.(\d+)$/);
+  if (aboutMatch) return String(about[Number(aboutMatch[1])] || '');
+  const value = row[key];
+  return typeof value === 'string' ? value : '';
+}
+
 export function buildCopySwaps(
   source: FastCopyFile['source'] | undefined,
-  pack: Pick<FastCopyFile, 'name' | 'tagline' | 'heroTitle' | 'heroSubtitle' | 'description' | 'aboutColumns'>,
+  pack: Pick<
+    FastCopyFile,
+    'name' | 'tagline' | 'heroTitle' | 'heroSubtitle' | 'description' | 'aboutColumns' | 'menu' | 'email' | 'phone' | 'address' | 'hours' | 'ctaSubtitle' | 'footer'
+  >,
+  slots?: TemplateSlot[],
 ): Array<{ from: string; to: string }> {
   const src = source || {};
   const brandTo = pack.name && !isTemplateLabel(pack.name) ? pack.name : '';
   const longTo = pack.description || pack.heroSubtitle || pack.tagline;
   const bodies = [pack.description, ...(pack.aboutColumns || [])].filter(Boolean);
-  const skipHero = new Set<string>();
-  const phraseSwaps = (src.phrases || [])
-    .filter((from) => from.length >= 12 && from !== brandTo && !skipHero.has(from.replace(/\s+/g, ' ').trim()))
-    .map((from, index) => ({
-      from,
-      to: clipToOriginal(bodies[index] || longTo || '', from),
-    }));
+  const slotSwaps = (slots?.length ? slots : describeTemplateSlots(source))
+    .map((slot) => {
+      const to = packValueForSlot(pack, slot.pack);
+      if (!to) return null;
+      return { from: slot.original, to: clipToOriginal(to, slot.original) };
+    })
+    .filter((row): row is { from: string; to: string } => Boolean(row));
+  const phraseSwaps = slotSwaps.length
+    ? slotSwaps
+    : (src.phrases || [])
+        .filter((from) => from.length >= 12 && from !== brandTo)
+        .map((from, index) => ({
+          from,
+          to: clipToOriginal(bodies[index] || longTo || '', from),
+        }));
   const brands = [
     src.name,
     'Bun & Bite',

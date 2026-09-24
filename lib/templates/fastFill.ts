@@ -1,8 +1,9 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { collectTemplateImages, writeFastCopy, captureTemplateSource, buildCopySwaps, clipToOriginal, type FastCopyFile } from './fastPreview';
+import { collectTemplateImages, writeFastCopy, captureTemplateSource, buildCopySwaps, clipToOriginal, describeTemplateSlots, type FastCopyFile, type TemplateSlot } from './fastPreview';
 import { ensureIsolatedNextConfig } from './isolateNext';
 import { getOpenaiApiKey } from '@/lib/services/leads';
+import { researchRestaurantForFill } from '@/lib/services/leadEnrich';
 import type { WorkspaceLead } from '@/types/leads';
 
 const SKIP_DIR = new Set(['node_modules', '.next', '.git', 'dist', 'build', '.turbo', 'public', 'assets']);
@@ -305,18 +306,18 @@ async function completeFillJson(prompt: string): Promise<Record<string, unknown>
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         temperature: 0.7,
-        max_tokens: 2500,
+        max_tokens: 3200,
         response_format: { type: 'json_object' },
         messages: [
           {
             role: 'system',
             content:
-              'Write a complete restaurant/cafe website copy pack for one real business. JSON only. Match the original slot lengths: dish names 2-3 words, dish lines under 10 words, no long slogans. Do not rewrite nav labels like Menu, Visit, Home. Never mention Coral Cove, Park Avenue, Unsplash, or image URLs.',
+              'You fill a restaurant website template from researched facts and a slot list. JSON only. Each slot says the section, the type of line, and the original length — match that length. Dish names 2-4 words. Dish lines under 10 words. Do not rewrite nav labels (Home, Menu, About, Locations, Contact, Quick Links). Never invent phone, email, or street address; copy them from research or the brief, or use "". Never mention Coral Cove, Park Avenue, Unsplash, or image URLs.',
           },
           { role: 'user', content: prompt },
         ],
       }),
-      signal: AbortSignal.timeout(25000),
+      signal: AbortSignal.timeout(40000),
     });
     const payload = (await response.json().catch(() => null)) as {
       choices?: { message?: { content?: string } }[];
@@ -355,12 +356,39 @@ async function completeFillJson(prompt: string): Promise<Record<string, unknown>
   return parsed;
 }
 
-async function fetchCopyPack(lead: FastFillLead, country?: string, extra?: string): Promise<CopyPack> {
+async function fetchCopyPack(
+  lead: FastFillLead,
+  country: string | undefined,
+  extra: string | undefined,
+  slots: TemplateSlot[],
+  research: Awaited<ReturnType<typeof researchRestaurantForFill>>,
+): Promise<CopyPack> {
   const local = localCopyPack(lead, country);
+  if (research?.signatureDishes?.length) {
+    local.menu = [
+      ...research.signatureDishes.map((dish) => ({
+        title: dish.name,
+        body: dish.note || `${dish.name} from the kitchen.`,
+      })),
+      ...local.menu,
+    ].slice(0, 8);
+  }
+  if (research?.officialName) local.name = research.officialName;
+  if (research?.address) local.address = research.address;
+  if (research?.phone) local.phone = research.phone;
+  if (research?.email) local.email = research.email;
+  if (research?.hours) local.hours = research.hours;
+  if (research?.concept) {
+    local.tagline = research.concept.slice(0, 90);
+    local.description = [research.concept, ...(research.facts || []).slice(0, 2)].join(' ').slice(0, 360);
+  }
   try {
-    const parsed = await completeFillJson(`Write website copy for this business. Fill every field. Photos stay on the template; this is text only.
-Keep each line about the same length as a typical restaurant template: short names, short descriptions. Do not invent extra sentences. Do not change section titles like Menu, Visit, Our story.
+    const parsed = await completeFillJson(`Fill this restaurant template with copy for one real business. Photos stay. Text only.
 
+Use RESEARCH facts when they exist. If a contact field is empty in research and the brief, leave it empty rather than inventing it.
+Fit each TEMPLATE SLOT: keep about maxWords / maxChars. Section tells you where the line sits and what kind of line it is.
+
+BRIEF:
 ${JSON.stringify(
       {
         name: lead.business,
@@ -369,6 +397,7 @@ ${JSON.stringify(
         email: lead.email,
         phone: lead.phone,
         city: lead.city,
+        website: lead.website,
         country: country || '',
         notes: lead.notes,
         details: lead.details,
@@ -380,6 +409,12 @@ ${JSON.stringify(
       2,
     )}
 
+RESEARCH:
+${JSON.stringify(research || { note: 'No web research. Use the brief only. Do not invent a street address.' }, null, 2)}
+
+TEMPLATE SLOTS:
+${JSON.stringify(slots, null, 2)}
+
 Return JSON with keys:
 name, tagline, description, eyebrow, heroTitle, heroSubtitle, address, phone, email,
 aboutColumns (2 strings),
@@ -388,12 +423,35 @@ features (4 objects {title, body}),
 events (3 objects {title, body}),
 testimonials (2 objects {quote, name, role}),
 team (2 objects {name, role, bio}),
-ctaTitle, ctaSubtitle, ctaButton, footer, hours (short opening line like Open daily · 12pm–late).`);
+ctaTitle, ctaSubtitle, ctaButton, footer, hours.
+Also include slotReplacements: array of {original, text} matching TEMPLATE SLOTS originals.`);
     const menu = asItems(parsed.menu);
     const features = asItems(parsed.features);
     const events = asItems(parsed.events);
     const aboutColumns = Array.isArray(parsed.aboutColumns)
       ? parsed.aboutColumns.map((item) => asString(item)).filter(Boolean)
+      : [];
+    const quotes = Array.isArray(parsed.testimonials)
+      ? parsed.testimonials
+          .map((item) => {
+            if (!item || typeof item !== 'object') return null;
+            const row = item as Record<string, unknown>;
+            const quote = asString(row.quote);
+            if (!quote) return null;
+            return { quote, name: asString(row.name) || 'Guest', role: asString(row.role) || 'Guest' };
+          })
+          .filter((item): item is { quote: string; name: string; role: string } => Boolean(item))
+      : [];
+    const team = Array.isArray(parsed.team)
+      ? parsed.team
+          .map((item) => {
+            if (!item || typeof item !== 'object') return null;
+            const row = item as Record<string, unknown>;
+            const name = asString(row.name);
+            if (!name) return null;
+            return { name, role: asString(row.role) || 'Kitchen', bio: asString(row.bio) };
+          })
+          .filter((item): item is { name: string; role: string; bio: string } => Boolean(item))
       : [];
     return {
       ...local,
@@ -411,13 +469,15 @@ ctaTitle, ctaSubtitle, ctaButton, footer, hours (short opening line like Open da
       menu: menu.length ? menu : local.menu,
       features: features.length ? features : local.features,
       events: events.length ? events : local.events,
+      testimonials: quotes.length ? quotes : local.testimonials,
+      team: team.length ? team : local.team,
       ctaTitle: asString(parsed.ctaTitle) || local.ctaTitle,
       ctaSubtitle: asString(parsed.ctaSubtitle) || local.ctaSubtitle,
       ctaButton: asString(parsed.ctaButton) || local.ctaButton,
       footer: asString(parsed.footer) || local.footer,
     };
   } catch (error) {
-    console.warn('[fastFill] Copy pack failed, using local restaurant copy:', error);
+    console.warn('[fastFill] Copy pack failed, using researched/local restaurant copy:', error);
     return local;
   }
 }
@@ -687,10 +747,25 @@ export async function fastFillProjectFromLead(options: {
 }): Promise<{ replacements: number; mapsQuery: string }> {
   const images = await collectTemplateImages(options.projectPath);
   const source = await captureTemplateSource(options.projectPath);
+  const slots = describeTemplateSlots(source);
   const templateId = (await fs.readFile(path.join(options.projectPath, '.fintoke-from'), 'utf8').catch(() => '')).trim();
-  const local = localCopyPack(options.lead, options.country);
+  let lead = options.lead;
+  const research = await researchRestaurantForFill(lead, options.country);
+  if (research) {
+    lead = {
+      ...lead,
+      business: research.officialName || lead.business,
+      whatTheyDo: research.concept || lead.whatTheyDo,
+      city: research.city || lead.city,
+      email: lead.email || research.email,
+      phone: lead.phone || research.phone,
+      website: lead.website || research.website,
+      notes: [lead.notes, research.facts.slice(0, 6).join(' ')].filter(Boolean).join(' '),
+    };
+  }
+  const local = localCopyPack(lead, options.country);
   const toFile = (pack: CopyPack): FastCopyFile => {
-    const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
+    const mapsQuery = [pack.name, pack.address || lead.city, options.country].filter(Boolean).join(', ');
     return {
       ...pack,
       images,
@@ -698,21 +773,23 @@ export async function fastFillProjectFromLead(options: {
       mapsUrl: mapsQuery ? mapsEmbed(mapsQuery) : '',
       templateId,
       source,
-      swaps: buildCopySwaps(source, pack),
+      slots,
+      research: research || undefined,
+      swaps: buildCopySwaps(source, pack, slots),
     };
   };
   await writeFastCopy(options.projectPath, toFile(local));
   let pack = local;
   try {
-    pack = await fetchCopyPack(options.lead, options.country, options.websitePrompt);
+    pack = await fetchCopyPack(lead, options.country, options.websitePrompt, slots, research);
     await writeFastCopy(options.projectPath, toFile(pack));
   } catch (error) {
     console.warn('[fastFill] GPT copy pack skipped, instant local copy already written:', error);
   }
   const files = await listTextFiles(options.projectPath);
-  const writes = await writePackToFiles(files, pack, options.lead.city, options.country, source);
+  const writes = await writePackToFiles(files, pack, lead.city, options.country, source, slots);
   await ensureIsolatedNextConfig(options.projectPath);
-  const mapsQuery = [pack.name, pack.address || options.lead.city, options.country].filter(Boolean).join(', ');
+  const mapsQuery = [pack.name, pack.address || lead.city, options.country].filter(Boolean).join(', ');
   return { replacements: writes, mapsQuery };
 }
 
@@ -722,10 +799,11 @@ async function writePackToFiles(
   city?: string,
   country?: string,
   source?: FastCopyFile['source'],
+  slots?: TemplateSlot[],
 ): Promise<number> {
   const mapsQuery = [pack.name, pack.address || city, country].filter(Boolean).join(', ');
   const embed = mapsQuery ? mapsEmbed(mapsQuery) : '';
-  const swaps = buildCopySwaps(source, pack);
+  const swaps = buildCopySwaps(source, pack, slots);
   let writes = 0;
   for (const file of files) {
     if (!/\.(ts|tsx|js|jsx)$/.test(file)) continue;
