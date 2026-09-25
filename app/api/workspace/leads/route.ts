@@ -5,7 +5,17 @@ import { createErrorResponse, createSuccessResponse, handleApiError } from '@/li
 export async function GET(request: NextRequest) {
   try {
     const leads = await listLeads();
-    if (request.nextUrl.searchParams.get('format') === 'csv') {
+    const format = request.nextUrl.searchParams.get('format');
+    if (format === 'emails') {
+      const emails = [...new Set(leads.map((row) => row.email.trim().toLowerCase()).filter(Boolean))];
+      return new Response(`${emails.join('\n')}\n`, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Content-Disposition': 'attachment; filename="work-emails.txt"',
+        },
+      });
+    }
+    if (format === 'csv') {
       return new Response(leadToCsv(leads), {
         headers: {
           'Content-Type': 'text/csv; charset=utf-8',

@@ -87,7 +87,7 @@ export default function WorkBusiness() {
         body: JSON.stringify({ action: 'enrich' }),
       });
       setLead(next);
-      setMessage('ChatGPT filled the business facts.');
+      setMessage('Deep research updated facts, email, and notes from public listings.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Fill failed');
     } finally {
@@ -144,7 +144,11 @@ export default function WorkBusiness() {
       </Link>
       <DashboardPageHeader
         title={lead.business || 'New business'}
-        description="Company file. Fill public facts with ChatGPT, or analyze the live website for look, state, and work to sell."
+        description={
+          lead.hasWebsite
+            ? 'This one already has a website. Analyze it, or keep the dossier for outreach.'
+            : 'No official website found. Deep research hunts a published email on Maps, Facebook, Instagram, and directories.'
+        }
         actions={
           <div className="flex flex-wrap gap-2">
             <button
@@ -155,7 +159,7 @@ export default function WorkBusiness() {
               className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
             >
               <Sparkles size={15} />
-              {saving ? 'Filling…' : 'Fill with ChatGPT'}
+              {saving ? 'Researching…' : 'Deep research'}
             </button>
             <button
               type="button"
@@ -186,21 +190,38 @@ export default function WorkBusiness() {
 
       <div className="space-y-6">
         <section className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5">
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className={`rounded-full px-2 py-0.5 font-medium ${lead.hasWebsite ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-800'}`}>
+              {lead.hasWebsite ? 'Has a website' : 'No official website'}
+            </span>
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 font-medium text-gray-700">
+              {lead.researchStatus === 'ready' ? 'Research ready' : lead.researchStatus === 'partial' ? 'Partial research' : 'Not researched'}
+            </span>
+            {lead.email ? (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800">Email found</span>
+            ) : (
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800">No public email yet</span>
+            )}
+          </div>
           <h2 className="text-sm font-semibold text-gray-900">Business</h2>
           {field('Business name', 'business')}
           {field('Contact person', 'contactName')}
           {field('What they do', 'whatTheyDo')}
           {field('City', 'city')}
+          {field('Address', 'address')}
           {field('Language', 'language')}
           {field('Audience', 'audience')}
         </section>
 
         <section className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5">
-          <h2 className="text-sm font-semibold text-gray-900">Reach them</h2>
+          <h2 className="text-sm font-semibold text-gray-900">Published contacts</h2>
           {field('Email', 'email')}
+          {field('Where the email was published', 'emailSource')}
           {field('Phone', 'phone')}
-          {field('Website', 'website')}
+          {field('Website (official domain only)', 'website')}
+          {field('Facebook', 'facebook')}
           {field('Instagram', 'instagram')}
+          {field('Research sources', 'sources', true)}
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input
               type="checkbox"
@@ -209,6 +230,14 @@ export default function WorkBusiness() {
             />
             They already have a website
           </label>
+        </section>
+
+        <section className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5">
+          <h2 className="text-sm font-semibold text-gray-900">Research dossier</h2>
+          <p className="text-sm text-gray-500">
+            Why they look siteless, what they sell, and how to reach them. Filled from Maps, social About pages, and directories.
+          </p>
+          {field('Research notes', 'researchNotes', true)}
         </section>
 
         <section className="space-y-3 rounded-2xl border border-gray-200 bg-white p-5">

@@ -82,6 +82,19 @@ function normalizeWebsite(value: string): string {
   }
 }
 
+function isDirectoryOrSocial(url: string): boolean {
+  const host = hostnameOf(url);
+  if (!host) return true;
+  return /facebook|instagram|threads\.net|linktr\.ee|tripadvisor|yelp|google\.|maps\.app|fonecta|finder\.fi|kauppalehti|wolt|foodora|thefork|tripadvisor|booking\.com/i.test(
+    host,
+  );
+}
+
+function isRealWebsite(url: string): boolean {
+  const normalized = normalizeWebsite(url);
+  return Boolean(normalized) && !isDirectoryOrSocial(normalized);
+}
+
 function fillPrompt(lead: WorkspaceLead): string {
   return `Search the public web for this local business. Open the official site and the contact / yhteystiedot page. Use only published facts. If a field is not clearly published, return "". Never invent emails, phones, Instagram, or URLs.
 
@@ -784,6 +797,66 @@ Return JSON:
   }
 }
 
+async function deepResearchOneBusiness(lead: WorkspaceLead): Promise<LeadInput | null> {
+  try {
+    const parsed = await completeJson(
+      `Deep-research this real local business on the public web. Goal: they likely have NO official website. Hunt a published email anyway.
+
+Search Google, Google Business/Maps, Facebook About, Instagram bio, Finder, Fonecta, directories, menus, and booking pages.
+Copy only published facts. Empty string if you did not see it. Never invent an email or phone.
+
+Known:
+- name: ${lead.business}
+- city: ${lead.city || ''}
+- what they do: ${lead.whatTheyDo || ''}
+- website: ${lead.website || 'none'}
+- facebook: ${lead.facebook || ''}
+- instagram: ${lead.instagram || ''}
+
+Return JSON:
+{
+  "business": "",
+  "whatTheyDo": "",
+  "city": "",
+  "address": "",
+  "phone": "",
+  "email": "",
+  "emailSource": "page or listing where the email was seen",
+  "website": "official site URL or empty. Facebook/Instagram/Google Maps are not a website.",
+  "hasWebsite": false,
+  "facebook": "",
+  "instagram": "",
+  "sources": "comma-separated URLs you used",
+  "researchNotes": "6-10 sentences: concept, hours if published, why they look like they have no site, how to reach them",
+  "language": "fi or en"
+}`,
+      { maxTokens: 1800, city: lead.city },
+    );
+    const website = asString(parsed.website);
+    const realSite = isRealWebsite(website);
+    return {
+      business: asString(parsed.business) || lead.business,
+      whatTheyDo: asString(parsed.whatTheyDo) || lead.whatTheyDo,
+      city: asString(parsed.city) || lead.city,
+      address: asString(parsed.address) || lead.address,
+      phone: asString(parsed.phone) || lead.phone,
+      email: asString(parsed.email) || lead.email,
+      emailSource: asString(parsed.emailSource) || lead.emailSource,
+      website: realSite ? website : '',
+      hasWebsite: realSite,
+      facebook: asString(parsed.facebook) || lead.facebook,
+      instagram: asString(parsed.instagram) || lead.instagram,
+      sources: asString(parsed.sources) || lead.sources,
+      researchNotes: asString(parsed.researchNotes) || lead.researchNotes,
+      language: asString(parsed.language) || lead.language,
+      researchStatus: (asString(parsed.email) || asString(parsed.phone)) ? 'ready' : 'partial',
+    };
+  } catch (error) {
+    console.warn('[work] Deep research skipped:', error);
+    return null;
+  }
+}
+
 export async function enrichLead(id: string): Promise<WorkspaceLead> {
   const lead = await getLead(id);
   if (!lead) throw new Error('Row not found');
@@ -792,7 +865,7 @@ export async function enrichLead(id: string): Promise<WorkspaceLead> {
   }
 
   const knownSite = normalizeWebsite(lead.website);
-  if (knownSite) {
+  if (knownSite && isRealWebsite(knownSite)) {
     const pages = await fetchSiteAndContactPages(knownSite);
     if (pages.length) {
       const analysis = await analyzeFetchedPages({ ...lead, website: pages[0].url }, pages);
@@ -800,28 +873,22 @@ export async function enrichLead(id: string): Promise<WorkspaceLead> {
     }
   }
 
+  const researched = await deepResearchOneBusiness(lead);
+  if (researched) return updateLead(id, researched);
+
   const parsed = await completeJson(fillPrompt(lead), { country: '', city: lead.city });
   const draft = applyFill(lead, parsed);
-  const grounded = await groundFromWebsite({
-    ...draft,
-    website: draft.website || lead.website,
-  });
-  const website = normalizeWebsite(grounded.website || lead.website);
-  let analysis: LeadInput = {};
-  if (website) {
-    const pages = await fetchSiteAndContactPages(website);
-    if (pages.length) {
-      analysis = await analyzeFetchedPages({ ...lead, ...grounded, website: pages[0].url }, pages);
-    }
+  if (isRealWebsite(draft.website || '')) {
+    const grounded = await groundFromWebsite({
+      ...draft,
+      website: draft.website || lead.website,
+    });
+    return updateLead(id, grounded);
   }
   return updateLead(id, {
     ...draft,
-    ...analysis,
-    website: analysis.website || grounded.website || lead.website,
-    hasWebsite: Boolean(analysis.website || grounded.website || lead.website),
-    email: analysis.email || grounded.email || lead.email,
-    phone: analysis.phone || grounded.phone || lead.phone,
-    instagram: analysis.instagram || grounded.instagram || lead.instagram,
+    website: isRealWebsite(draft.website || '') ? draft.website : '',
+    hasWebsite: isRealWebsite(draft.website || ''),
   });
 }
 
@@ -863,26 +930,30 @@ async function fillMissingContacts(
   rows: LeadInput[],
   options: { place: string; country: string; city: string },
 ): Promise<LeadInput[]> {
-  const missing = rows.filter((row) => row.business && (!row.email || !row.phone));
+  const missing = rows.filter((row) => row.business && (!row.email || !row.phone || !row.address));
   if (!missing.length) return rows;
 
-  const prompt = `Search the public web for the published email and phone of each business. Check the official website, /yhteystiedot, /contact, Google Business, and Facebook About. Copy only what you see. Use "" if it is not published.
+  const prompt = `Deep-search published contact details for businesses that usually have NO official website.
+Check Google Business, Facebook About, Instagram bio, Finder, Fonecta, directories, and any contact page. Copy only what you see. "" if unpublished.
 
 Place: ${options.place}
 ${missing
-    .map((row) => `- ${row.business} | city: ${row.city || options.city || ''} | site: ${row.website || 'unknown'}`)
+    .map(
+      (row) =>
+        `- ${row.business} | city: ${row.city || options.city || ''} | site: ${row.website || 'none'} | facebook: ${row.facebook || ''} | ig: ${row.instagram || ''}`,
+    )
     .join('\n')}
 
 Return JSON:
 {
   "contacts": [
-    { "business": "", "email": "", "phone": "", "website": "", "instagram": "" }
+    { "business": "", "email": "", "emailSource": "", "phone": "", "address": "", "website": "", "facebook": "", "instagram": "", "sources": "" }
   ]
 }`;
 
   try {
     const parsed = await completeJson(prompt, {
-      maxTokens: 3000,
+      maxTokens: 4000,
       country: options.country,
       city: options.city,
     });
@@ -897,20 +968,20 @@ Return JSON:
     return rows.map((row) => {
       const found = byName.get(nameKey(row.business || ''));
       if (!found) return row;
-      const website = row.website || normalizeWebsite(asString(found.website));
+      const websiteRaw = row.website || normalizeWebsite(asString(found.website));
+      const website = isRealWebsite(websiteRaw) ? websiteRaw : '';
       const searchedEmail = normalizeEmail(asString(found.email));
-      const host = hostnameOf(website);
-      const email =
-        row.email ||
-        (host && searchedEmail && emailMatchesHost(searchedEmail, host) ? searchedEmail : '') ||
-        searchedEmail;
       return {
         ...row,
         website,
         hasWebsite: Boolean(website),
-        email,
+        email: row.email || searchedEmail,
+        emailSource: row.emailSource || asString(found.emailSource),
         phone: row.phone || asString(found.phone),
+        address: row.address || asString(found.address),
+        facebook: row.facebook || asString(found.facebook),
         instagram: row.instagram || asString(found.instagram),
+        sources: [row.sources, asString(found.sources)].filter(Boolean).join(', '),
       };
     });
   } catch {
@@ -921,7 +992,7 @@ Return JSON:
 export async function enrichEmptyLeads(): Promise<EnrichBatchResult> {
   const rows = await listLeads();
   const ids = rows
-    .filter((row) => row.business && (!row.whatTheyDo || !row.email || !row.website))
+    .filter((row) => row.business && (!row.email || !row.researchNotes || row.researchStatus !== 'ready'))
     .map((row) => row.id);
   if (!ids.length) throw new Error('No rows look empty. Select rows, or add a business name first.');
   return enrichLeads(ids);
@@ -933,6 +1004,7 @@ export type GenerateWorkInput = {
   country?: string;
   city?: string;
   count?: number;
+  withoutWebsite?: boolean;
 };
 
 export async function generateWorkRows(input: GenerateWorkInput): Promise<{
@@ -940,29 +1012,32 @@ export async function generateWorkRows(input: GenerateWorkInput): Promise<{
   skipped: string[];
 }> {
   const count = Math.min(40, Math.max(1, Math.round(Number(input.count) || 20)));
-  const kind = asString(input.kind) || 'local businesses';
+  const kind = asString(input.kind) || 'restaurants';
   const country = asString(input.country);
   const city = asString(input.city);
   const query = asString(input.query);
-  if (!query && !country && !city && kind === 'local businesses') {
-    throw new Error('Say what to find, for example “cafes in Finland” or set a country and type.');
+  const withoutWebsite = input.withoutWebsite !== false;
+  if (!query && !country && !city) {
+    throw new Error('Say what to find, for example bakeries in Helsinki, or set a country and type.');
   }
 
   const place = [city, country].filter(Boolean).join(', ') || 'the country implied by the request';
   const languageHint = /finland|suomi|finnish|\bfi\b/i.test(`${country} ${city} ${query}`) ? 'fi' : '';
+  const want = Math.min(40, count + 8);
 
-  const prompt = `Search the public web for ${count} currently operating ${kind} in ${place}.
-${query ? `User request: ${query}` : ''}
-The user wants contact details when they are publicly listed.
+  const prompt = `Deep web research: find ${want} currently operating ${kind} in ${place}${query ? ` (${query})` : ''}.
+${withoutWebsite ? 'PRIORITY: businesses with NO official website. Facebook, Instagram, Google Maps, Wolt, and Finder listings are not a website.' : 'Independent local businesses.'}
 
 Hard rules:
-- Every business MUST appear in web search results. Do not recall names from memory.
-- Prefer independent local businesses.
-- website: official site URL from results, or "".
-- Search each venue's official site, yhteystiedot/contact page, Google Business, and Facebook About for email and phone.
-- email and phone: copy only values you actually saw. If you did not see them, use "".
-- instagram: official handle URL or "".
-- whatTheyDo: one short line from the source, or "".
+- Every business MUST appear in live web search results. Do not invent names.
+- Prefer independents over chains.
+- website: only a real owned domain, else "".
+- facebook / instagram: profile URLs if found.
+- Search Google Business, Facebook About, Instagram bio, Finder, Fonecta, and directories for a published EMAIL. This is the most important field.
+- email, phone, address: copy only what you saw. "" if unpublished.
+- emailSource: where the email was published.
+- sources: comma-separated URLs you used.
+- researchNotes: short dossier (hours, cuisine/service, why they look siteless).
 - Skip duplicates.
 
 Return JSON:
@@ -972,16 +1047,21 @@ Return JSON:
       "business": "Exact public name",
       "whatTheyDo": "",
       "city": "",
+      "address": "",
       "website": "",
       "email": "",
+      "emailSource": "",
       "phone": "",
+      "facebook": "",
       "instagram": "",
+      "sources": "",
+      "researchNotes": "",
       "language": "${languageHint || 'en'}"
     }
   ]
 }`;
 
-  const parsed = await completeJson(prompt, { maxTokens: 4000, country, city });
+  const parsed = await completeJson(prompt, { maxTokens: 5000, country, city });
   const list = Array.isArray(parsed.businesses) ? parsed.businesses : Array.isArray(parsed.rows) ? parsed.rows : [];
   if (!list.length) throw new Error('ChatGPT did not return any businesses. Try a narrower city or type.');
 
@@ -1000,19 +1080,32 @@ Return JSON:
       skipped.push(name);
       continue;
     }
+    const websiteRaw = asString(row.website);
+    const realSite = isRealWebsite(websiteRaw);
+    if (withoutWebsite && realSite) {
+      skipped.push(`${name} (has a website)`);
+      continue;
+    }
     if (key) taken.add(key);
     pending.push({
       business: name,
       whatTheyDo: asString(row.whatTheyDo),
       city: asString(row.city) || city,
-      website: asString(row.website),
+      address: asString(row.address),
+      website: realSite ? websiteRaw : '',
       language: asString(row.language) || languageHint,
       email: asString(row.email),
+      emailSource: asString(row.emailSource),
       phone: asString(row.phone),
+      facebook: asString(row.facebook),
       instagram: asString(row.instagram),
+      sources: asString(row.sources),
+      researchNotes: asString(row.researchNotes),
       contactName: asString(row.contactName),
-      hasWebsite: false,
+      hasWebsite: realSite,
+      researchStatus: (asString(row.email) || asString(row.phone)) ? 'ready' : 'partial',
     });
+    if (pending.length >= count) break;
   }
 
   const grounded: LeadInput[] = [];
@@ -1021,7 +1114,11 @@ Return JSON:
     while (queue.length) {
       const next = queue.shift();
       if (!next) return;
-      grounded.push(await groundFromWebsite(next));
+      if (next.website && isRealWebsite(next.website)) {
+        grounded.push(await groundFromWebsite(next));
+      } else {
+        grounded.push({ ...next, hasWebsite: false, website: '' });
+      }
     }
   });
   await Promise.all(workers);
@@ -1030,15 +1127,20 @@ Return JSON:
 
   const created: WorkspaceLead[] = [];
   for (const row of withContacts) {
+    const realSite = isRealWebsite(row.website || '');
+    if (withoutWebsite && realSite) continue;
     created.push(
       await createLead({
         ...row,
+        website: realSite ? row.website : '',
+        hasWebsite: realSite,
         city: row.city || city,
         language: row.language || languageHint,
         offerSent: false,
         responded: 'none',
         called: false,
         messageSent: false,
+        researchStatus: row.email || row.phone ? 'ready' : 'partial',
       }),
     );
   }
@@ -1046,7 +1148,7 @@ Return JSON:
   if (!created.length) {
     throw new Error(
       skipped.length
-        ? 'Those businesses are already in the table.'
+        ? 'Those businesses are already in the table, or they already have websites. Try another city or type.'
         : 'ChatGPT returned no usable names. Try again with a city.',
     );
   }

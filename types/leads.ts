@@ -1,4 +1,5 @@
 export type LeadResponse = 'none' | 'waiting' | 'yes' | 'no';
+export type ResearchStatus = 'none' | 'partial' | 'ready';
 
 export interface WorkspaceLead {
   id: string;
@@ -6,11 +7,17 @@ export interface WorkspaceLead {
   contactName: string;
   whatTheyDo: string;
   email: string;
+  emailSource: string;
   phone: string;
   city: string;
+  address: string;
   website: string;
   hasWebsite: boolean;
+  facebook: string;
   instagram: string;
+  sources: string;
+  researchNotes: string;
+  researchStatus: ResearchStatus;
   language: string;
   style: string;
   audience: string;

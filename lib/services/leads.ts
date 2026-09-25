@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
 import fs from 'fs/promises';
-import type { LeadInput, LeadResponse, WorkspaceLead } from '@/types/leads';
+import type { LeadInput, LeadResponse, ResearchStatus, WorkspaceLead } from '@/types/leads';
 import { dataFile } from '@/lib/server/paths';
 import { writeJsonAtomic } from '@/lib/server/atomicJson';
 
@@ -44,19 +44,36 @@ function asResponse(value: unknown): LeadResponse {
   return 'none';
 }
 
+function asResearchStatus(value: unknown, lead: Partial<WorkspaceLead>): ResearchStatus {
+  if (value === 'ready' || value === 'partial' || value === 'none') return value;
+  if (clean(lead.email) || clean(lead.phone)) return 'ready';
+  if (clean(lead.whatTheyDo) || clean(lead.city) || clean(lead.address)) return 'partial';
+  return 'none';
+}
+
 function normalizeLead(raw: Partial<WorkspaceLead> & { id?: string }): WorkspaceLead {
   const timestamp = nowIso();
-  return {
+  const website = clean(raw.website);
+  const socialSite = /facebook|instagram|linktr\.ee|tripadvisor|yelp|google\.(com|fi).*maps|fonecta|finder\.fi/i.test(
+    website,
+  );
+  const lead: WorkspaceLead = {
     id: clean(raw.id) || randomUUID(),
     business: clean(raw.business),
     contactName: clean(raw.contactName),
     whatTheyDo: clean(raw.whatTheyDo),
     email: clean(raw.email),
+    emailSource: clean(raw.emailSource),
     phone: clean(raw.phone),
     city: clean(raw.city),
-    website: clean(raw.website),
-    hasWebsite: asBool(raw.hasWebsite, Boolean(clean(raw.website))),
+    address: clean(raw.address),
+    website,
+    hasWebsite: asBool(raw.hasWebsite, Boolean(website) && !socialSite),
+    facebook: clean(raw.facebook),
     instagram: clean(raw.instagram),
+    sources: clean(raw.sources),
+    researchNotes: clean(raw.researchNotes),
+    researchStatus: 'none',
     language: clean(raw.language),
     style: clean(raw.style),
     audience: clean(raw.audience),
@@ -79,6 +96,9 @@ function normalizeLead(raw: Partial<WorkspaceLead> & { id?: string }): Workspace
     createdAt: raw.createdAt || timestamp,
     updatedAt: raw.updatedAt || timestamp,
   };
+  if (socialSite) lead.hasWebsite = false;
+  lead.researchStatus = asResearchStatus(raw.researchStatus, lead);
+  return lead;
 }
 
 async function readStore(): Promise<LeadStore> {
@@ -201,11 +221,17 @@ export function leadToCsv(leads: WorkspaceLead[]): string {
     'contactName',
     'whatTheyDo',
     'email',
+    'emailSource',
     'phone',
     'city',
+    'address',
     'website',
     'hasWebsite',
+    'facebook',
     'instagram',
+    'sources',
+    'researchNotes',
+    'researchStatus',
     'language',
     'style',
     'audience',

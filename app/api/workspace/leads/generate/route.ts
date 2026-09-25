@@ -10,6 +10,7 @@ export async function POST(request: NextRequest) {
       country?: string;
       city?: string;
       count?: number;
+      withoutWebsite?: boolean;
     };
     const result = await generateWorkRows(body);
     return createSuccessResponse(result);
