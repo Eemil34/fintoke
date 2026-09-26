@@ -2,17 +2,32 @@ import fs from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 import { projectsDir, volumeDataDir, volumeHeartbeat, writableDataDir } from '@/lib/server/paths';
-import { volumeDiskInfo } from '@/lib/server/volumeCleanup';
+import { reclaimVolumeSpaceSync, volumeDiskInfo, volumeIsLow } from '@/lib/server/volumeCleanup';
 import { getServiceToken } from '@/lib/services/tokens';
 import { loadMailSettings } from '@/lib/services/mail';
 import { listEmails, listPeople } from '@/lib/services/workspace';
 import { syncSeedSnapshotsToVolume } from '@/lib/templates/snapshot';
 import { scheduleMissingStaticExports, staticFreezeStatus } from '@/lib/templates/exportStatic';
 
-const RELEASE = '2026-09-26-work-research';
+const RELEASE = '2026-09-26-preview-enospc';
 
 export async function GET() {
-  void syncSeedSnapshotsToVolume().catch(() => undefined);
+  try {
+    return await healthPayload();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      { ok: false, service: 'fintoke', release: RELEASE, error: message },
+      { status: 200, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } },
+    );
+  }
+}
+
+async function healthPayload() {
+  reclaimVolumeSpaceSync([], { aggressive: volumeIsLow() });
+  if (!volumeIsLow()) {
+    void syncSeedSnapshotsToVolume().catch(() => undefined);
+  }
   const seed = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
   const volume = volumeDataDir();
   const dataDir = writableDataDir();
@@ -58,7 +73,9 @@ export async function GET() {
   );
   const pending = volumeHasApp.filter((id) => !staticReady.includes(id));
   const hot = (id: string) => /restaurant|kebab|pizza|pizzeria|food|cafe|burger|smash|grill|diner/i.test(id);
-  scheduleMissingStaticExports([...pending.filter(hot), ...pending.filter((id) => !hot(id))].slice(0, 20));
+  if (!volumeIsLow(dataDir)) {
+    scheduleMissingStaticExports([...pending.filter(hot), ...pending.filter((id) => !hot(id))].slice(0, 20));
+  }
   const staticFreeze = staticFreezeStatus();
 
   let projectCount = 0;

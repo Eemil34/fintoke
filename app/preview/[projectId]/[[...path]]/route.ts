@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { previewManager } from '@/lib/services/preview';
 import { getProjectById } from '@/lib/services/project';
+import { isNoSpaceError, reclaimVolumeSpaceSync } from '@/lib/server/volumeCleanup';
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { paintCopyOnHtml, injectLiveCopyOverlay, previewCopyPack, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
@@ -389,8 +390,29 @@ async function safeProxy(request: NextRequest, context: RouteContext) {
   try {
     return await proxy(request, context);
   } catch (error) {
+    if (isNoSpaceError(error)) {
+      reclaimVolumeSpaceSync([], { aggressive: true });
+      try {
+        return await proxy(request, context);
+      } catch (retryError) {
+        const retryMessage = retryError instanceof Error ? retryError.message : String(retryError);
+        return previewPage(
+          'Freeing disk space',
+          isNoSpaceError(retryError)
+            ? 'The server disk was full. Space is being cleared — reload this preview in a few seconds.'
+            : retryMessage,
+          [],
+        );
+      }
+    }
     const message = error instanceof Error ? error.message : String(error);
-    return previewPage('Preview error', message, []);
+    return previewPage(
+      isNoSpaceError(error) ? 'Freeing disk space' : 'Preview error',
+      isNoSpaceError(error)
+        ? 'The server disk was full. Space is being cleared — reload this preview in a few seconds.'
+        : message,
+      [],
+    );
   }
 }
 

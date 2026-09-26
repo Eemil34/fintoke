@@ -16,7 +16,7 @@ import { PREVIEW_CONFIG } from '@/lib/config/constants';
 import { projectsDir, writableDataDir } from '@/lib/server/paths';
 import { resolveAndPersistProjectWorkspace, resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { previewBasePath, previewIframeUrl, previewInternalUrl, previewPublicUrl } from '@/lib/server/publicUrl';
-import { npmInstallEnv, reclaimVolumeSpace } from '@/lib/server/volumeCleanup';
+import { npmInstallEnv, reclaimVolumeSpace, withVolumeSpace } from '@/lib/server/volumeCleanup';
 
 function previewChildEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return npmInstallEnv({
@@ -567,13 +567,16 @@ function sharedNodeModulesPath(hash: string): string {
   return path.join(writableDataDir(), 'preview-deps', hash, 'node_modules');
 }
 
-async function cloneDirectory(from: string, to: string): Promise<void> {
+async function linkNodeModules(from: string, to: string): Promise<void> {
   await fs.mkdir(path.dirname(to), { recursive: true });
+  await fs.rm(to, { recursive: true, force: true }).catch(() => undefined);
   try {
-    await execFileAsync('cp', ['-al', from, to]);
+    await fs.symlink(from, to);
+    return;
   } catch {
-    await fs.cp(from, to, { recursive: true });
+    // some filesystems reject directory symlinks
   }
+  await execFileAsync('cp', ['-al', from, to]);
 }
 
 async function reuseSharedNodeModules(
@@ -587,7 +590,7 @@ async function reuseSharedNodeModules(
   const shared = sharedNodeModulesPath(hash);
   if (!(await directoryExists(shared))) return false;
   try {
-    await cloneDirectory(shared, local);
+    await linkNodeModules(shared, local);
     log(Buffer.from(`[PreviewManager] Reused cached dependencies (${hash}).`));
     return true;
   } catch (error) {
@@ -609,14 +612,15 @@ async function saveSharedNodeModules(projectPath: string, log: (chunk: Buffer | 
   const shared = sharedNodeModulesPath(hash);
   if (await directoryExists(shared)) return;
   try {
-    await cloneDirectory(local, shared);
+    await execFileAsync('cp', ['-al', local, shared]);
     log(Buffer.from(`[PreviewManager] Cached dependencies for later sites (${hash}).`));
   } catch (error) {
     log(
       Buffer.from(
-        `[PreviewManager] Could not cache dependencies: ${error instanceof Error ? error.message : String(error)}`,
+        `[PreviewManager] Skipped dependency cache to save disk: ${error instanceof Error ? error.message : String(error)}`,
       ),
     );
+    await fs.rm(shared, { recursive: true, force: true }).catch(() => undefined);
   }
 }
 
@@ -725,13 +729,16 @@ class PreviewManager {
 
     const hadNodeModules = await directoryExists(path.join(projectPath, 'node_modules'));
 
-    await reclaimVolumeSpace([
-      projectId,
-      ...[...this.processes.keys()].filter((id) => {
-        const status = this.processes.get(id)?.status;
-        return status === 'starting' || status === 'running';
-      }),
-    ]);
+    await reclaimVolumeSpace(
+      [
+        projectId,
+        ...[...this.processes.keys()].filter((id) => {
+          const status = this.processes.get(id)?.status;
+          return status === 'starting' || status === 'running';
+        }),
+      ],
+      true,
+    );
 
     const collectFromChunk = (chunk: Buffer | string) => {
       chunk
@@ -1011,23 +1018,7 @@ class PreviewManager {
 
     flushPendingLogs();
     queueLog('Preparing project files...');
-    await ensureProjectRootStructure(projectPath, queueLog);
-    try {
-      await fs.access(path.join(projectPath, 'package.json'));
-    } catch {
-      queueLog('No package.json yet; scaffolding the site.');
-      const project = await getProjectById(projectId);
-      await ensureProjectApp(projectPath, projectId, project?.settings);
-    }
-    await ensureIsolatedNextConfig(projectPath);
-    await ensureGeneratedDevScript(projectPath);
-    const revealChanged = await ensureRevealVisible(projectPath);
-    if (revealChanged) {
-      await clearNextCache(projectPath);
-    }
-    queueLog('Installing dependencies if needed...');
-    flushPendingLogs();
-
+    const keepIds = [projectId, ...this.processes.keys()];
     const ensureWithLock = async () => {
       if (await reuseSharedNodeModules(projectPath, log)) {
         return;
@@ -1053,8 +1044,25 @@ class PreviewManager {
       this.installing.set(projectId, installPromise);
       await installPromise;
     };
-
-    await ensureWithLock();
+    await withVolumeSpace(keepIds, async () => {
+      await ensureProjectRootStructure(projectPath, queueLog);
+      try {
+        await fs.access(path.join(projectPath, 'package.json'));
+      } catch {
+        queueLog('No package.json yet; scaffolding the site.');
+        const project = await getProjectById(projectId);
+        await ensureProjectApp(projectPath, projectId, project?.settings);
+      }
+      await ensureIsolatedNextConfig(projectPath);
+      await ensureGeneratedDevScript(projectPath);
+      const revealChanged = await ensureRevealVisible(projectPath);
+      if (revealChanged) {
+        await clearNextCache(projectPath);
+      }
+      queueLog('Installing dependencies if needed...');
+      flushPendingLogs();
+      await ensureWithLock();
+    });
 
     const packageJson = await readPackageJson(projectPath);
     const hasPredev = Boolean(packageJson?.scripts?.predev);

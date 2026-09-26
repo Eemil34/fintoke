@@ -3,7 +3,7 @@ import os from 'os';
 import path from 'path';
 import { projectsDir, writableDataDir } from '@/lib/server/paths';
 
-const HEAVY_DIR_NAMES = new Set([
+const HEAVY_DIR_NAMES = [
   'node_modules',
   '.next',
   '.turbo',
@@ -12,9 +12,12 @@ const HEAVY_DIR_NAMES = new Set([
   'build',
   'coverage',
   '.pnpm-store',
-]);
+  'out',
+];
 
-const VOLUME_CACHE_DIRS = ['.npm', '.cache', '.turbo', '.pnpm-store'];
+const VOLUME_CACHE_DIRS = ['.npm', '.cache', '.turbo', '.pnpm-store', 'preview-deps'];
+
+const LOW_SPACE_BYTES = 1_200_000_000;
 
 export function isNoSpaceError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException)?.code;
@@ -43,20 +46,49 @@ export function volumeDiskInfo(dir = writableDataDir()): {
   }
 }
 
-function rmDir(dir: string): boolean {
+export function volumeIsLow(dir = writableDataDir()): boolean {
+  const disk = volumeDiskInfo(dir);
+  return !disk || disk.freeBytes < LOW_SPACE_BYTES;
+}
+
+function rmPath(target: string): boolean {
   try {
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(target, { recursive: true, force: true });
     return true;
   } catch {
     return false;
   }
 }
 
-function shouldKeepProject(name: string, keepProjectIds: Set<string>): boolean {
-  return keepProjectIds.has(name);
+function stripHeavy(root: string, skipNodeModules: boolean, removed: string[]) {
+  for (const heavy of HEAVY_DIR_NAMES) {
+    if (skipNodeModules && heavy === 'node_modules') continue;
+    const target = path.join(root, heavy);
+    if (fs.existsSync(target) && rmPath(target)) removed.push(target);
+  }
 }
 
-export function reclaimVolumeSpaceSync(keepProjectIds: string[] = []): {
+function listDirs(dir: string): fs.Dirent[] {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+function cleanTmp(removed: string[]) {
+  const tmp = os.tmpdir();
+  for (const name of listDirs(tmp)) {
+    if (!name.name.startsWith('fintoke-')) continue;
+    const target = path.join(tmp, name.name);
+    if (rmPath(target)) removed.push(target);
+  }
+}
+
+export function reclaimVolumeSpaceSync(
+  keepProjectIds: string[] = [],
+  options: { aggressive?: boolean } = {},
+): {
   removed: string[];
   disk: ReturnType<typeof volumeDiskInfo>;
 } {
@@ -64,67 +96,66 @@ export function reclaimVolumeSpaceSync(keepProjectIds: string[] = []): {
   const removed: string[] = [];
   const dataDir = writableDataDir();
   const projects = projectsDir();
+  const aggressive = Boolean(options.aggressive) || volumeIsLow(dataDir);
 
-  let projectEntries: fs.Dirent[] = [];
-  try {
-    projectEntries = fs.readdirSync(projects, { withFileTypes: true });
-  } catch {
-    projectEntries = [];
-  }
-
-  for (const entry of projectEntries) {
+  for (const entry of listDirs(projects)) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
     const projectPath = path.join(projects, entry.name);
-    if (shouldKeepProject(entry.name, keep)) continue;
-    for (const heavy of HEAVY_DIR_NAMES) {
-      const target = path.join(projectPath, heavy);
-      if (fs.existsSync(target) && rmDir(target)) {
-        removed.push(target);
-      }
-    }
+    const keepThis = keep.has(entry.name);
+    stripHeavy(projectPath, keepThis && !aggressive, removed);
+    stripHeavy(path.join(projectPath, 'repo'), keepThis && !aggressive, removed);
   }
 
   const seedRoot = path.join(process.cwd(), 'seed', 'templates', 'snapshots');
   const volumeSnaps = path.join(dataDir, 'templates', 'snapshots');
-  let snapEntries: fs.Dirent[] = [];
-  try {
-    snapEntries = fs.readdirSync(volumeSnaps, { withFileTypes: true });
-  } catch {
-    snapEntries = [];
-  }
-  for (const entry of snapEntries) {
+  for (const entry of listDirs(volumeSnaps)) {
     if (!entry.isDirectory()) continue;
     const volumePath = path.join(volumeSnaps, entry.name);
     const userMark = path.join(volumePath, '.fintoke-user-snapshot');
     const seedPath = path.join(seedRoot, entry.name, 'package.json');
-    if (fs.existsSync(userMark)) continue;
-    if (!fs.existsSync(seedPath)) continue;
-    if (rmDir(volumePath)) removed.push(volumePath);
+    if (!fs.existsSync(userMark) && fs.existsSync(seedPath)) {
+      if (rmPath(volumePath)) {
+        removed.push(volumePath);
+        continue;
+      }
+    }
+    stripHeavy(volumePath, false, removed);
   }
 
   for (const name of VOLUME_CACHE_DIRS) {
     const target = path.join(dataDir, name);
-    if (fs.existsSync(target) && rmDir(target)) removed.push(target);
+    if (fs.existsSync(target) && rmPath(target)) removed.push(target);
   }
 
-  const tmpCache = path.join(os.tmpdir(), 'fintoke-npm-cache');
-  if (fs.existsSync(tmpCache) && rmDir(tmpCache)) {
-    removed.push(tmpCache);
-  }
-
-  const diskNow = volumeDiskInfo(dataDir);
-  if (diskNow && diskNow.freeBytes < 400_000_000) {
-    const previewDeps = path.join(dataDir, 'preview-deps');
-    if (fs.existsSync(previewDeps) && rmDir(previewDeps)) {
-      removed.push(previewDeps);
+  const runtime = path.join(dataDir, 'preview-runtime');
+  for (const entry of listDirs(runtime)) {
+    if (!entry.isDirectory()) continue;
+    if (keep.has(entry.name) || keep.has(`tpl:${entry.name}`)) {
+      stripHeavy(path.join(runtime, entry.name), !aggressive, removed);
+      continue;
     }
+    const target = path.join(runtime, entry.name);
+    if (rmPath(target)) removed.push(target);
   }
+
+  cleanTmp(removed);
 
   return { removed, disk: volumeDiskInfo(dataDir) };
 }
 
-export async function reclaimVolumeSpace(keepProjectIds: string[] = []) {
-  return reclaimVolumeSpaceSync(keepProjectIds);
+export async function reclaimVolumeSpace(keepProjectIds: string[] = [], aggressive = false) {
+  return reclaimVolumeSpaceSync(keepProjectIds, { aggressive });
+}
+
+export async function withVolumeSpace<T>(keepProjectIds: string[], work: () => Promise<T>): Promise<T> {
+  if (volumeIsLow()) reclaimVolumeSpaceSync(keepProjectIds, { aggressive: true });
+  try {
+    return await work();
+  } catch (error) {
+    if (!isNoSpaceError(error)) throw error;
+    reclaimVolumeSpaceSync(keepProjectIds, { aggressive: true });
+    return work();
+  }
 }
 
 export function npmInstallEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
@@ -135,5 +166,6 @@ export function npmInstallEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.Proc
     NPM_CONFIG_CACHE: cache,
     npm_config_update_notifier: 'false',
     NPM_CONFIG_UPDATE_NOTIFIER: 'false',
+    TMPDIR: os.tmpdir(),
   };
 }

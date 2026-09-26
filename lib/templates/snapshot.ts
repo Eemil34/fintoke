@@ -66,37 +66,9 @@ export async function resolveSnapshotDir(templateId: string): Promise<string | n
 }
 
 export async function syncSeedSnapshotsToVolume(): Promise<number> {
-  let copied = 0;
-  let entries;
-  try {
-    entries = await fs.readdir(SEED_SNAPSHOTS_DIR, { withFileTypes: true });
-  } catch {
-    return 0;
-  }
-  await fs.mkdir(SNAPSHOTS_DIR, { recursive: true });
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const from = path.join(SEED_SNAPSHOTS_DIR, entry.name);
-    const to = path.join(SNAPSHOTS_DIR, entry.name);
-    if (!(await directoryHasApp(from))) continue;
-    try {
-      await fs.access(path.join(to, 'app', 'page.tsx'));
-    } catch {
-      await fs.cp(from, to, { recursive: true });
-      copied += 1;
-    }
-    if (await isUserVolumeSnapshot(entry.name)) continue;
-    const staticFrom = path.join(from, STATIC_EXPORT_DIR);
-    try {
-      await fs.access(path.join(staticFrom, 'index.html'));
-      const staticTo = path.join(to, STATIC_EXPORT_DIR);
-      await fs.rm(staticTo, { recursive: true, force: true });
-      await fs.cp(staticFrom, staticTo, { recursive: true });
-    } catch {
-      // seed has no frozen HTML yet
-    }
-  }
-  return copied;
+  // Seed templates already live in the app image. Copying them onto the Railway
+  // volume filled the disk and broke previews (ENOSPC).
+  return 0;
 }
 
 function shouldIgnore(name: string): boolean {

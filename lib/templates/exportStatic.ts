@@ -2,7 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import { npmInstallEnv, reclaimVolumeSpaceSync } from '@/lib/server/volumeCleanup';
+import { npmInstallEnv, reclaimVolumeSpaceSync, volumeIsLow } from '@/lib/server/volumeCleanup';
 import { GENERATED_IMAGES_CONFIG } from './siteImages';
 import { STATIC_EXPORT_DIR, STATIC_EXPORT_VERSION } from './staticSite';
 
@@ -78,7 +78,7 @@ export async function exportSnapshotStatic(snapshotPath: string): Promise<string
     await copyTree(snapshotPath, work);
     await stripImagePatchers(work);
     await fs.writeFile(path.join(work, 'next.config.js'), EXPORT_CONFIG);
-    reclaimVolumeSpaceSync();
+    reclaimVolumeSpaceSync([], { aggressive: true });
     const exportEnv = npmInstallEnv({
       ...process.env,
       TMPDIR: os.tmpdir(),
@@ -218,6 +218,10 @@ export async function ensureTemplateStatic(templateId: string): Promise<boolean>
     const { hasStaticExport, hasCurrentStaticExport } = await import('./staticSite');
     const { resolveSnapshotDir } = await import('./snapshot');
     if (await hasCurrentStaticExport(templateId)) return true;
+    if (volumeIsLow()) {
+      reclaimVolumeSpaceSync([], { aggressive: true });
+      if (volumeIsLow()) return false;
+    }
     const failedAt = lastFailAt.get(templateId) || 0;
     if (failedAt && Date.now() - failedAt < FAIL_COOLDOWN_MS) return false;
     const dir = await resolveSnapshotDir(templateId);

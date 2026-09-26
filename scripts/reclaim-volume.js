@@ -2,7 +2,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const HEAVY = new Set([
+const HEAVY = [
   'node_modules',
   '.next',
   '.turbo',
@@ -11,9 +11,10 @@ const HEAVY = new Set([
   'build',
   'coverage',
   '.pnpm-store',
-]);
+  'out',
+];
 
-function rmDir(dir) {
+function rmPath(dir) {
   try {
     fs.rmSync(dir, { recursive: true, force: true });
     return true;
@@ -22,47 +23,64 @@ function rmDir(dir) {
   }
 }
 
+function listDirs(dir) {
+  try {
+    return fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+function stripHeavy(root, removed) {
+  for (const name of HEAVY) {
+    const target = path.join(root, name);
+    if (fs.existsSync(target) && rmPath(target)) removed.push(target);
+  }
+}
+
 function reclaimVolume(dataDir, repoRoot) {
   const removed = [];
   const projects = path.join(dataDir, 'projects');
-  let entries = [];
-  try {
-    entries = fs.readdirSync(projects, { withFileTypes: true });
-  } catch {
-    entries = [];
-  }
-  for (const entry of entries) {
+  for (const entry of listDirs(projects)) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
     const projectPath = path.join(projects, entry.name);
-    for (const name of HEAVY) {
-      const target = path.join(projectPath, name);
-      if (fs.existsSync(target) && rmDir(target)) removed.push(target);
-    }
+    stripHeavy(projectPath, removed);
+    stripHeavy(path.join(projectPath, 'repo'), removed);
   }
 
   const seedRoot = path.join(repoRoot, 'seed', 'templates', 'snapshots');
   const volumeSnaps = path.join(dataDir, 'templates', 'snapshots');
-  let snaps = [];
-  try {
-    snaps = fs.readdirSync(volumeSnaps, { withFileTypes: true });
-  } catch {
-    snaps = [];
-  }
-  for (const entry of snaps) {
+  for (const entry of listDirs(volumeSnaps)) {
     if (!entry.isDirectory()) continue;
     const volumePath = path.join(volumeSnaps, entry.name);
-    if (fs.existsSync(path.join(volumePath, '.fintoke-user-snapshot'))) continue;
-    if (!fs.existsSync(path.join(seedRoot, entry.name, 'package.json'))) continue;
-    if (rmDir(volumePath)) removed.push(volumePath);
+    if (fs.existsSync(path.join(volumePath, '.fintoke-user-snapshot'))) {
+      stripHeavy(volumePath, removed);
+      continue;
+    }
+    if (fs.existsSync(path.join(seedRoot, entry.name, 'package.json'))) {
+      if (rmPath(volumePath)) removed.push(volumePath);
+      continue;
+    }
+    stripHeavy(volumePath, removed);
   }
 
-  for (const name of ['.npm', '.cache', '.turbo', '.pnpm-store']) {
+  for (const name of ['.npm', '.cache', '.turbo', '.pnpm-store', 'preview-deps']) {
     const target = path.join(dataDir, name);
-    if (fs.existsSync(target) && rmDir(target)) removed.push(target);
+    if (fs.existsSync(target) && rmPath(target)) removed.push(target);
   }
 
-  const tmpCache = path.join(os.tmpdir(), 'fintoke-npm-cache');
-  if (fs.existsSync(tmpCache) && rmDir(tmpCache)) removed.push(tmpCache);
+  const runtime = path.join(dataDir, 'preview-runtime');
+  for (const entry of listDirs(runtime)) {
+    const target = path.join(runtime, entry.name);
+    if (rmPath(target)) removed.push(target);
+  }
+
+  const tmp = os.tmpdir();
+  for (const entry of listDirs(tmp)) {
+    if (!entry.name.startsWith('fintoke-')) continue;
+    const target = path.join(tmp, entry.name);
+    if (rmPath(target)) removed.push(target);
+  }
 
   console.log(`[start-prod] Freed ${removed.length} heavy folders on the volume`);
   return removed;
