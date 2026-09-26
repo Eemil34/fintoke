@@ -9,7 +9,7 @@ import { paintCopyOnHtml, injectLiveCopyOverlay, previewCopyPack, readFastCopy }
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { freezePreviewHtml, injectFintokeFavicon, isBrandIconRequest, prioritizeLcpImage, readFintokeBrandIcon, readStaticExportFile, resolveProjectStaticExportDir, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { freezeProjectPreview, hasAgentPreviewMark } from '@/lib/templates/exportStatic';
-import { getWebsiteTemplateId } from '@/lib/templates/settings';
+import { getWebsiteTemplateId, getEditingTemplateId } from '@/lib/templates/settings';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -175,6 +175,9 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     }
   }
 
+  const editingTemplate = project
+    ? getEditingTemplateId((project as { settings?: string | null }).settings)
+    : null;
   const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
   const needsProjectFreeze = projectPath ? await hasAgentPreviewMark(projectPath) : false;
   let projectStatic = projectPath ? await resolveProjectStaticExportDir(projectPath) : null;
@@ -226,7 +229,9 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (type.includes('text/html')) {
           text = injectFintokeFavicon(freezePreviewHtml(text));
-          const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
+          const packed = editingTemplate
+            ? null
+            : await previewCopyPack(projectPath, resolvedTemplate, copyPack);
           if (packed) {
             text = paintCopyOnHtml(text, packed);
             text = injectLiveCopyOverlay(text, packed);
@@ -373,7 +378,9 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   if (contentType.includes('text/html')) {
     let body = injectFintokeFavicon(freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port)));
-    const packed = await previewCopyPack(projectPath, resolvedTemplate, copyPack);
+    const packed = editingTemplate
+      ? null
+      : await previewCopyPack(projectPath, resolvedTemplate, copyPack);
     if (packed) {
       body = paintCopyOnHtml(body, packed);
       body = injectLiveCopyOverlay(body, packed);

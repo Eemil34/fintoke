@@ -981,12 +981,10 @@ export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
 
   const pairs = copyPairs(pack);
   const exact = new Map<string, string>();
-  const prefixes: Array<{ key: string; to: string }> = [];
   for (const [from, to] of pairs) {
     const key = normalizeCopy(from);
     if (!key || exact.has(key)) continue;
     exact.set(key, clipToOriginal(to, from, 0.35));
-    if (key.length >= 24) prefixes.push({ key, to: exact.get(key) || to });
   }
   const brands = [...new Set([pack.source?.name, ...TEMPLATE_BRANDS].filter((value): value is string => Boolean(value)))]
     .filter((value) => normalizeCopy(value) !== normalizeCopy(pack.name))
@@ -1019,10 +1017,6 @@ export function paintCopyOnHtml(html: string, pack: FastCopyFile): string {
       const mappedIsBrand = normalizeCopy(mapped) === normalizeCopy(pack.name);
       const fromIsBrand = brands.some((brand) => key === normalizeCopy(brand));
       if (!mappedIsBrand || fromIsBrand) return `>${lead}${escapeHtml(mapped)}${trail}<`;
-    }
-    const prefix = prefixes.find((row) => decoded.length >= 40 && key.startsWith(row.key.slice(0, 40)));
-    if (prefix && normalizeCopy(prefix.to) !== normalizeCopy(pack.name)) {
-      return `>${lead}${escapeHtml(clipToOriginal(prefix.to, decoded, 0.35))}${trail}<`;
     }
 
     let updated = decoded;
@@ -1124,6 +1118,7 @@ var d=${JSON.stringify(data)};
 var s=d.swaps||[];
 var brands=d.brands||[];
 var n=0;
+var walked=false;
 var NAV=/^(menu|home|about|bar|login|bag|search|reservations?|experience|contact|gallery|book now|reservation|our story|hours|visit|order|shop|wine|private)$/i;
 function txt(el){return (el&&(el.textContent||"").replace(/\\s+/g," ").trim())||"";}
 function inHero(el){
@@ -1229,12 +1224,23 @@ function apply(){
       if(!t||!t.trim())return;
       var trimmed=t.replace(/\\s+/g," ").trim();
       if(NAV.test(trimmed))return;
-      for(var i=0;i<brands.length;i++){
-        if(brands[i][0]&&t.indexOf(brands[i][0])!==-1)t=t.split(brands[i][0]).join(brands[i][1]);
+      function norm(v){return String(v||"").replace(/\\s+/g," ").trim().toLowerCase();}
+      function swap(text,from,to){
+        if(!from||!to||from===to)return text;
+        var nt=norm(text),nf=norm(from),nto=norm(to);
+        if(!nf||nt===nto)return text;
+        if(nt===nf)return text.replace(text.trim(),to);
+        if(nto.indexOf(nf)!==-1&&nf.length>=8)return text;
+        if(text.indexOf(from)===-1)return text;
+        if(nt.indexOf(nto)!==-1&&nto.length>=nf.length)return text;
+        return text.split(from).join(to);
       }
-      t=t.replace(/bun\\s*&\\s*bite/gi,d.name||t);
+      for(var i=0;i<brands.length;i++){
+        t=swap(t,brands[i][0],brands[i][1]);
+      }
+      if(d.name&&!/bun\\s*&\\s*bite/i.test(d.name))t=t.replace(/bun\\s*&\\s*bite/gi,d.name);
       for(var j=0;j<pairs.length;j++){
-        if(pairs[j][0]&&pairs[j][0].length>=3&&t.indexOf(pairs[j][0])!==-1)t=t.split(pairs[j][0]).join(pairs[j][1]);
+        if(pairs[j][0]&&pairs[j][0].length>=3)t=swap(t,pairs[j][0],pairs[j][1]);
       }
       if(t!==o)node.nodeValue=t;
       return;
@@ -1243,7 +1249,10 @@ function apply(){
       for(var c=node.firstChild;c;c=c.nextSibling)walk(c);
     }
   }
-  if(document.body)walk(document.body);
+  if(document.body&&!walked){
+    walk(document.body);
+    walked=true;
+  }
   document.querySelectorAll("header a, header span, footer a, footer p, footer span").forEach(function(el){
     if(el.querySelector&&el.querySelector("img,svg,input,form,ul,nav"))return;
     if(el.children&&el.children.length>1)return;
