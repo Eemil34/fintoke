@@ -74,6 +74,8 @@ const AUTO_INSTRUCTIONS = `Act autonomously to complete the task without asking 
 Work directly inside the provided project directory. Do not create additional top-level folders unless explicitly requested.
 You MUST edit the existing Next.js source files (app/page.tsx, components, CSS). Do not only describe changes. Apply the edits.
 Do not start a new app in a subdirectory.
+When the user asks for new sections, pages, galleries, or photos, add them in app/ and components/ — do not only rewrite strings in lib/site.ts.
+You may create files under app/, components/, lib/, and public/.
 Keep responses concise and focus on the code or command outputs that unblock the user.
 The platform already installs dependencies and runs the live preview. Never run npm install, npm run dev, next dev, or start another server.
 ${SITE_IMAGE_AGENT_RULES}`;
@@ -120,7 +122,7 @@ The repository is currently empty. Work directly in this directory.
 
 <current_project_context>
 Current files in repository: ${visible.sort().join(', ')}
-Modify files in-place. Only create new directories if the user instructs you to.
+Edit this site in place. Add components, sections, pages, and images when the user asks. Do not scaffold a second app.
 </current_project_context>`;
   } catch {
     return baseInstruction;

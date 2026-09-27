@@ -8,7 +8,7 @@ import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { paintCopyOnHtml, injectLiveCopyOverlay, previewCopyPack, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
 import { freezePreviewHtml, injectFintokeFavicon, isBrandIconRequest, prioritizeLcpImage, readFintokeBrandIcon, readStaticExportFile, resolveProjectStaticExportDir, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
-import { freezeProjectPreview, hasAgentPreviewMark } from '@/lib/templates/exportStatic';
+import { hasAgentPreviewMark } from '@/lib/templates/exportStatic';
 import { getWebsiteTemplateId, getEditingTemplateId } from '@/lib/templates/settings';
 
 export const runtime = 'nodejs';
@@ -180,18 +180,10 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     : null;
   const resolvedTemplate = templateId ? await resolveSnapshotTemplateId(templateId) : '';
   const needsProjectFreeze = projectPath ? await hasAgentPreviewMark(projectPath) : false;
-  let projectStatic = projectPath ? await resolveProjectStaticExportDir(projectPath) : null;
-  if (needsProjectFreeze && projectPath && !projectStatic) {
-    if (isProbe) {
-      void freezeProjectPreview(projectPath).catch(() => null);
-      return new Response('wait', {
-        status: 503,
-        headers: { 'retry-after': '2', 'cache-control': 'no-store' },
-      });
-    }
-    projectStatic = await freezeProjectPreview(projectPath);
-  }
-  const templateStatic = resolvedTemplate ? await resolveStaticExportDir(resolvedTemplate) : null;
+  const agentLivePreview = Boolean(needsProjectFreeze || editingTemplate);
+  let projectStatic = agentLivePreview ? null : projectPath ? await resolveProjectStaticExportDir(projectPath) : null;
+  const templateStatic =
+    agentLivePreview || !resolvedTemplate ? null : await resolveStaticExportDir(resolvedTemplate);
   const staticRoot = projectStatic || templateStatic;
   if (staticRoot) {
     if (isProbe) {
@@ -229,7 +221,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (type.includes('text/html')) {
           text = injectFintokeFavicon(freezePreviewHtml(text));
-          const packed = editingTemplate
+          const packed = agentLivePreview
             ? null
             : await previewCopyPack(projectPath, resolvedTemplate, copyPack);
           if (packed) {
@@ -378,7 +370,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
 
   if (contentType.includes('text/html')) {
     let body = injectFintokeFavicon(freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port)));
-    const packed = editingTemplate
+    const packed = agentLivePreview
       ? null
       : await previewCopyPack(projectPath, resolvedTemplate, copyPack);
     if (packed) {

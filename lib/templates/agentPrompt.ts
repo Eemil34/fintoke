@@ -61,8 +61,8 @@ ${initialPrompt}
 
 Your job:
 1. Keep the existing multi-page App Router structure and Tailwind CSS 3.4 setup. Do not recreate the app from scratch. Do not upgrade to Tailwind v4.
-2. Rewrite branding, copy, colors, and layout details so the site matches the user's request. Primary content lives in lib/site.ts — update that file and any components needed for visual changes.
-3. Replace all placeholder business names, testimonials, metrics, and contact details with content that fits the request.
+2. Change more than copy when the user asks: add or remove sections, update layout, and swap or add photos. Primary copy can live in lib/site.ts, but new sections and images must be wired in app/page.tsx and components/.
+3. Replace placeholder business names, testimonials, metrics, and contact details with content that fits the request.
 4. Keep the site compiling and production-looking. Forms can stay as demo UI unless the user asked for a backend. ${buildSiteImageAgentRules(initialPrompt)}
 5. Do not add authentication, a database, or billing unless the user asked for them.
 6. Do not run npm install, npm run dev, next dev, or start another server. The builder already runs the live preview.
@@ -84,8 +84,8 @@ ${initialPrompt}
 
 Your job:
 1. Keep the existing project structure, Tailwind CSS 3.4, and working pages. Do not recreate the app from scratch. Do not upgrade to Tailwind v4.
-2. Adapt branding, copy, colors, images, and section content so the site matches the user's request. ${buildSiteImageAgentRules(initialPrompt)}
-3. Keep the layout quality of the template. Add or remove pages only when the request needs it.
+2. Adapt branding, copy, colors, images, and layout. If the user wants new sections, galleries, or pages, create them in components and app routes — do not only edit lib/site.ts. ${buildSiteImageAgentRules(initialPrompt)}
+3. Keep the visual quality of the template, but you may add or remove sections and pages when the request needs it.
 4. Keep the site compiling and production-looking.
 5. Do not add authentication, a database, or billing unless the user asked for them.
 6. Do not run npm install, npm run dev, next dev, or start another server. The builder already runs the live preview.

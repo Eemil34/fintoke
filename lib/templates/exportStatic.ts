@@ -139,6 +139,10 @@ export async function markAgentPreview(projectPath: string): Promise<void> {
   if (root !== projectPath) {
     await fs.writeFile(path.join(projectPath, AGENT_PREVIEW_MARK), `${Date.now()}\n`).catch(() => undefined);
   }
+  for (const dir of [root, projectPath]) {
+    await fs.rm(path.join(dir, STATIC_EXPORT_DIR), { recursive: true, force: true }).catch(() => undefined);
+    await fs.rm(path.join(dir, 'out'), { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 export async function hasAgentPreviewMark(projectPath: string): Promise<boolean> {
