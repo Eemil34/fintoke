@@ -7,7 +7,7 @@ import { isNoSpaceError, reclaimVolumeSpaceSync } from '@/lib/server/volumeClean
 import { resolveProjectWorkspace } from '@/lib/server/projectWorkspace';
 import { paintCopyOnHtml, injectLiveCopyOverlay, previewCopyPack, readFastCopy } from '@/lib/templates/fastPreview';
 import { resolveSnapshotTemplateId } from '@/lib/templates/snapshot';
-import { freezePreviewHtml, injectFintokeFavicon, isBrandIconRequest, prioritizeLcpImage, readFintokeBrandIcon, readStaticExportFile, resolveProjectStaticExportDir, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
+import { injectFintokeFavicon, inlineStylesheets, isBrandIconRequest, prioritizeLcpImage, readFintokeBrandIcon, readStaticExportFile, resolveProjectStaticExportDir, resolveStaticExportDir, rewriteStaticUrls } from '@/lib/templates/staticSite';
 import { hasAgentPreviewMark } from '@/lib/templates/exportStatic';
 import { getWebsiteTemplateId, getEditingTemplateId } from '@/lib/templates/settings';
 
@@ -215,7 +215,16 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       if (rewriteText) {
         let text = rewriteStaticUrls(body.toString('utf8'), prefix);
         if (type.includes('text/html')) {
-          text = injectFintokeFavicon(freezePreviewHtml(text));
+          text = await inlineStylesheets(
+            text,
+            async (pathname) => {
+              const cssFile = await readStaticExportFile(staticRoot, pathname.split('/').filter(Boolean));
+              if (!cssFile || !cssFile.contentType.includes('css')) return null;
+              return cssFile.body.toString('utf8');
+            },
+            prefix,
+          );
+          text = injectFintokeFavicon(text);
           const packed = agentLivePreview
             ? null
             : await previewCopyPack(projectPath, resolvedTemplate, copyPack);
@@ -237,9 +246,6 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
       headers.set('cache-control', type.includes('text/html') ? 'no-store' : 'public, max-age=86400, immutable');
       const payload: BodyInit = typeof body === 'string' ? body : new Uint8Array(body);
       return new Response(payload, { status: 200, headers });
-    }
-    if (isAssetRequest(segments)) {
-      return new Response('Not found', { status: 404, headers: { 'cache-control': 'no-store' } });
     }
   }
 
@@ -368,7 +374,23 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   if (contentType.includes('text/html')) {
-    let body = injectFintokeFavicon(rewriteLive(await upstream.text(), prefix, preview.port));
+    let body = rewriteLive(await upstream.text(), prefix, preview.port);
+    body = await inlineStylesheets(
+      body,
+      async (pathname) => {
+        try {
+          const cssRes = await fetch(`http://127.0.0.1:${preview.port}${pathname}`, {
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!cssRes.ok) return null;
+          return cssRes.text();
+        } catch {
+          return null;
+        }
+      },
+      prefix,
+    );
+    body = injectFintokeFavicon(body);
     const packed = agentLivePreview
       ? null
       : await previewCopyPack(projectPath, resolvedTemplate, copyPack);

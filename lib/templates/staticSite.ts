@@ -107,6 +107,27 @@ export async function readStaticExportFile(
   return null;
 }
 
+export async function inlineStylesheets(
+  html: string,
+  loadCss: (pathname: string) => Promise<string | null>,
+  prefix = '',
+): Promise<string> {
+  const tags = [...html.matchAll(/<link\b[^>]*rel=["']stylesheet["'][^>]*>/gi)].map((match) => match[0]);
+  let next = html;
+  for (const tag of tags) {
+    const href = tag.match(/href=["']([^"']+)["']/i)?.[1];
+    if (!href || !/\.css(\?|#|$)/i.test(href)) continue;
+    const pathname = href.replace(/^https?:\/\/[^/]+/i, '').replace(/^\/preview\/[^/]+/i, '').split('?')[0];
+    if (!pathname.startsWith('/')) continue;
+    const css = await loadCss(pathname);
+    if (!css) continue;
+    const rewritten = prefix ? rewriteStaticUrls(css, prefix) : css;
+    const safe = rewritten.replace(/<\/style/gi, '<\\/style');
+    next = next.replace(tag, `<style data-fintoke-css="1">${safe}</style>`);
+  }
+  return next;
+}
+
 export function rewriteStaticUrls(source: string, prefix: string): string {
   const base = prefix.replace(/\/$/, '');
   const prefixed = source
@@ -260,6 +281,7 @@ export async function applyFintokeBrandIcons(projectPath: string): Promise<void>
     await fs.rm(path.join(root, 'app', 'icon.svg'), { force: true });
     await fs.writeFile(path.join(root, 'public', 'favicon.ico'), icon.body);
     await fs.writeFile(path.join(root, 'public', 'favicon.png'), icon.body);
+    await fs.writeFile(path.join(root, 'public', 'fintoke-icon.png'), icon.body);
   }
 }
 
