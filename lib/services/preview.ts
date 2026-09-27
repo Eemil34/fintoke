@@ -251,6 +251,32 @@ async function directoryExists(targetPath: string): Promise<boolean> {
   }
 }
 
+async function nodeModulesReady(projectPath: string): Promise<boolean> {
+  const nm = path.join(projectPath, 'node_modules');
+  try {
+    const stat = await fs.lstat(nm);
+    if (stat.isSymbolicLink()) {
+      await fs.realpath(nm);
+    } else if (!stat.isDirectory()) {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+  for (const rel of ['next/package.json', 'react/package.json', 'styled-jsx/package.json']) {
+    try {
+      await fs.access(path.join(nm, rel));
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+function previewLooksBroken(info: PreviewProcess): boolean {
+  return /MODULE_NOT_FOUND|Cannot find module|styled-jsx/i.test(info.logs.join('\n'));
+}
+
 async function fileExists(targetPath: string): Promise<boolean> {
   try {
     const stat = await fs.stat(targetPath);
@@ -583,25 +609,28 @@ async function reuseSharedNodeModules(
   projectPath: string,
   log: (chunk: Buffer | string) => void,
 ): Promise<boolean> {
+  if (await nodeModulesReady(projectPath)) return true;
   const local = path.join(projectPath, 'node_modules');
-  if (await directoryExists(local)) return true;
+  await fs.rm(local, { recursive: true, force: true }).catch(() => undefined);
   const hash = await lockfileHash(projectPath);
   if (!hash) return false;
   const shared = sharedNodeModulesPath(hash);
-  if (!(await directoryExists(shared))) return false;
+  if (!(await nodeModulesReady(path.dirname(shared)))) return false;
   try {
     await linkNodeModules(shared, local);
-    log(Buffer.from(`[PreviewManager] Reused cached dependencies (${hash}).`));
-    return true;
+    if (await nodeModulesReady(projectPath)) {
+      log(Buffer.from(`[PreviewManager] Reused cached dependencies (${hash}).`));
+      return true;
+    }
   } catch (error) {
     log(
       Buffer.from(
         `[PreviewManager] Could not reuse cached dependencies: ${error instanceof Error ? error.message : String(error)}`,
       ),
     );
-    await fs.rm(local, { recursive: true, force: true }).catch(() => undefined);
-    return false;
   }
+  await fs.rm(local, { recursive: true, force: true }).catch(() => undefined);
+  return false;
 }
 
 async function saveSharedNodeModules(projectPath: string, log: (chunk: Buffer | string) => void): Promise<void> {
@@ -727,7 +756,7 @@ class PreviewManager {
       await ensureProjectApp(projectPath, projectId, project.settings);
     }
 
-    const hadNodeModules = await directoryExists(path.join(projectPath, 'node_modules'));
+    const hadNodeModules = await nodeModulesReady(projectPath);
 
     await reclaimVolumeSpace(
       [
@@ -790,7 +819,8 @@ class PreviewManager {
     if (!options?.restart) {
       const live = this.processes.get(projectId);
       if (live?.process && live.status !== 'error' && live.status !== 'stopped' && live.port) {
-        return this.toInfo(live);
+        if (!previewLooksBroken(live)) return this.toInfo(live);
+        options = { restart: true };
       }
     }
 
@@ -816,8 +846,16 @@ class PreviewManager {
   public async startSharedTemplate(templateId: string): Promise<PreviewInfo> {
     const key = `tpl:${templateId}`;
     const live = this.processes.get(key);
+    const runtimePath = path.join(
+      writableDataDir(),
+      'preview-runtime',
+      (await resolveSnapshotTemplateId(templateId)).replace(/[^a-zA-Z0-9-_]/g, '-'),
+    );
     if (live?.process && live.status !== 'error' && live.status !== 'stopped' && live.port) {
-      return this.toInfo(live);
+      if (!previewLooksBroken(live) && (await nodeModulesReady(runtimePath))) {
+        return this.toInfo(live);
+      }
+      await this.stop(key);
     }
     const inflight = this.starting.get(key);
     if (inflight) return inflight;
@@ -841,7 +879,10 @@ class PreviewManager {
 
     const live = this.processes.get(key);
     if (live?.process && live.status !== 'error' && live.status !== 'stopped' && live.port) {
-      return this.toInfo(live);
+      if (!previewLooksBroken(live) && (await nodeModulesReady(projectPath))) {
+        return this.toInfo(live);
+      }
+      await this.stop(key);
     }
     if (live && !live.process) this.processes.delete(key);
 
@@ -925,7 +966,10 @@ class PreviewManager {
 
     const live = this.processes.get(projectId);
     if (live?.process && live.status !== 'error' && live.status !== 'stopped' && live.port) {
-      return this.toInfo(live);
+      if (!previewLooksBroken(live) && (await nodeModulesReady(projectPath))) {
+        return this.toInfo(live);
+      }
+      await this.stop(projectId);
     }
     if (live && !live.process) {
       this.processes.delete(projectId);

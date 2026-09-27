@@ -248,17 +248,21 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     }
   }
 
-  const previewKey = resolvedTemplate ? `tpl:${resolvedTemplate}` : projectId;
-  if (resolvedTemplate) {
+  const previewKey = project ? projectId : resolvedTemplate ? `tpl:${resolvedTemplate}` : projectId;
+  if (project) {
+    const current = previewManager.getStatus(projectId);
+    const broken = /MODULE_NOT_FOUND|styled-jsx|Cannot find module/i.test((current.logs || []).join('\n'));
+    if (broken || current.status === 'error' || !current.port) {
+      void previewManager.start(projectId, broken ? { restart: true } : undefined).catch((error) => {
+        console.error('[Preview proxy] Failed to start:', error);
+      });
+    }
+  } else if (resolvedTemplate) {
     if (previewManager.getStatus(previewKey).status === 'error' || !previewManager.getStatus(previewKey).port) {
       void previewManager.startSharedTemplate(resolvedTemplate).catch((error) => {
         console.error('[Preview proxy] Failed to start template:', error);
       });
     }
-  } else if (previewManager.getStatus(projectId).status === 'error' || !previewManager.getStatus(projectId).port) {
-    void previewManager.start(projectId).catch((error) => {
-      console.error('[Preview proxy] Failed to start:', error);
-    });
   }
 
   const logs = () => previewManager.getLogs(previewKey);
