@@ -14,7 +14,12 @@ import { deliverEmail, loadMailSettings } from '@/lib/services/mail';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const recentSends: number[] = [];
 const SEND_WINDOW_MS = 60 * 60 * 1000;
-const SEND_LIMIT = 40;
+
+function sendLimit(): number {
+  const fromEnv = Number(process.env.MAIL_SEND_LIMIT_PER_HOUR);
+  if (Number.isFinite(fromEnv) && fromEnv > 0) return Math.floor(fromEnv);
+  return 200;
+}
 
 export type ComposeEmailInput = {
   to?: string;
@@ -77,8 +82,8 @@ function assertCanSend(): void {
   while (recentSends.length && now - recentSends[0] > SEND_WINDOW_MS) {
     recentSends.shift();
   }
-  if (recentSends.length >= SEND_LIMIT) {
-    throw new Error(`Too many emails in the last hour (limit ${SEND_LIMIT}). Wait and try again.`);
+  if (recentSends.length >= sendLimit()) {
+    throw new Error(`Too many emails in the last hour (limit ${sendLimit()}). Wait and try again.`);
   }
 }
 
