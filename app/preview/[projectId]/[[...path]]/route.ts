@@ -87,15 +87,10 @@ function isAssetRequest(segments?: string[]) {
   return /\.[a-z0-9]+$/i.test(segments[segments.length - 1] || '');
 }
 
-function rewriteHtml(source: string, prefix: string, port: number) {
-  const base = prefix.replace(/\/$/, '');
+function rewriteLive(source: string, prefix: string, port: number) {
   const origin = new RegExp(`(https?:|wss?:)//(?:127\\.0\\.0\\.1|localhost):${port}`, 'g');
-  return source
-    .replace(origin, '')
-    .replace(/(["'`(=])\/_next\//g, `$1${base}/_next/`)
-    .replace(/(\s(?:href|src|srcset|srcSet))="\/(?!\/|preview\/)/gi, `$1="${base}/`)
-    .replace(/https?:\/\/(?:www\.)?fintoke\.com\/(?:dashboard|studio|login|api)[^"'>\s]*/gi, '#')
-    .replace(/(\s(?:href|src))="(?:\/preview\/[^/]+)?\/(?:dashboard|studio|login)(?:\/[^"]*)?"/gi, '$1="#"');
+  return rewriteStaticUrls(source.replace(origin, ''), prefix)
+    .replace(/https?:\/\/(?:www\.)?fintoke\.com\/(?:dashboard|studio|login|api)[^"'>\s]*/gi, '#');
 }
 
 function childPath(segments?: string[]) {
@@ -373,7 +368,7 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
   }
 
   if (contentType.includes('text/html')) {
-    let body = injectFintokeFavicon(freezePreviewHtml(rewriteHtml(await upstream.text(), prefix, preview.port)));
+    let body = injectFintokeFavicon(rewriteLive(await upstream.text(), prefix, preview.port));
     const packed = agentLivePreview
       ? null
       : await previewCopyPack(projectPath, resolvedTemplate, copyPack);
@@ -384,6 +379,16 @@ async function proxy(request: NextRequest, { params }: RouteContext) {
     body = prioritizeLcpImage(body);
     out.delete('content-length');
     return new Response(body, { status: upstream.status, headers: out });
+  }
+
+  if (
+    contentType.includes('text/css') ||
+    contentType.includes('javascript') ||
+    contentType.includes('application/json')
+  ) {
+    const text = rewriteLive(await upstream.text(), prefix, preview.port);
+    out.delete('content-length');
+    return new Response(text, { status: upstream.status, headers: out });
   }
 
   return new Response(upstream.body, { status: upstream.status, headers: out });
