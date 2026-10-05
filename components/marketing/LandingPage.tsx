@@ -67,9 +67,6 @@ export default function LandingPage() {
           <a href={`mailto:${copy.contactEmail}`} className="hidden hover:text-white sm:inline">
             {copy.underAttack}
           </a>
-          <Link href="/login" className="hover:text-white">
-            {copy.login}
-          </Link>
           <div className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] p-0.5 text-[11px]">
             {(['en', 'fi'] as const).map((code) => (
               <button
@@ -112,14 +109,14 @@ export default function LandingPage() {
                 {copy.contactUs}
               </a>
             )}
-            <Link
-              href="/login"
+            <a
+              href="#contact"
               className={`inline-flex whitespace-nowrap rounded-full px-4 py-2 text-[13px] font-medium ${
                 scrolled ? 'bg-white font-semibold text-black' : 'bg-[#ff5c00]'
               }`}
             >
-              {copy.signUp}
-            </Link>
+              {copy.contactUs}
+            </a>
           </div>
         </div>
       </header>
@@ -146,9 +143,9 @@ export default function LandingPage() {
             {copy.heroBody}
           </p>
           <div className="mt-8 flex justify-center gap-3">
-            <Link href="/login" className="rounded-full bg-[#ff5c00] px-6 py-[11px] text-[14px] font-medium">
+            <a href="#contact" className="rounded-full bg-[#ff5c00] px-6 py-[11px] text-[14px] font-medium">
               {copy.getStarted}
-            </Link>
+            </a>
             <a href="#contact" className="rounded-full border border-white/[0.08] bg-transparent px-6 py-[11px] text-[14px]">
               {copy.bookDemo}
             </a>

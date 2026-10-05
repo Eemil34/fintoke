@@ -116,11 +116,4 @@ const child = spawn(
 );
 child.on('exit', (code) => process.exit(code || 0));
 
-try {
-  const { install } = require('./install-cursor-cli');
-  install().catch((error) => {
-    console.error('[start-prod] Cursor CLI install failed:', error);
-  });
-} catch (error) {
-  console.error('[start-prod] Cursor CLI installer missing:', error);
-}
+console.log('[start-prod] Landing-only host — skipping Cursor CLI install');

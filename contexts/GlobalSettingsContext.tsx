@@ -55,6 +55,7 @@ export default function GlobalSettingsProvider({ children }: { children: React.R
 
   // Load once on mount
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname === '/') return;
     refresh();
   }, [refresh]);
 
